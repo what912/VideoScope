@@ -1,0 +1,61 @@
+name: False negative
+description: Report an observable interval that a detector did not find
+title: "[False negative] "
+labels:
+  - false-negative
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not upload confidential video. A reproducible synthetic sample and
+        precise interval annotation are the most useful evidence.
+  - type: dropdown
+    id: detector
+    attributes:
+      label: Expected detector
+      options:
+        - near_black
+        - possible_freeze
+        - scene_relative_blur
+        - global_flicker
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: VideoScope version
+    validations:
+      required: true
+  - type: input
+    id: interval
+    attributes:
+      label: Human-annotated time interval
+      placeholder: "2.0–4.0 seconds, ±0.2 seconds"
+    validations:
+      required: true
+  - type: textarea
+    id: observation
+    attributes:
+      label: Observable phenomenon
+      description: Describe what a reviewer can see, without claiming an unknown cause.
+    validations:
+      required: true
+  - type: textarea
+    id: config
+    attributes:
+      label: Sanitized detector configuration
+      render: json
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Shareable reproduction
+      description: Explain how to generate an equivalent non-private input.
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy and consent
+      options:
+        - label: Any attached media is authorized for public sharing and contains no private information.
+          required: true

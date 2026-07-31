@@ -1,0 +1,33 @@
+name: Feature request
+description: Propose a scoped improvement consistent with the product boundaries
+title: "[Feature] "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What user workflow is difficult today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Describe inputs, outputs, and observable acceptance criteria.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Product boundaries
+      options:
+        - label: The proposal preserves local-first defaults and does not require automatic model downloads.
+          required: true
+        - label: The proposal does not present heuristic observations as certain facts.
+          required: true

@@ -1,0 +1,203 @@
+.static-page {
+  width: min(100%, 74rem);
+  margin-inline: auto;
+  display: grid;
+  gap: var(--space-12);
+}
+
+.static-page__header {
+  max-width: 58rem;
+  padding-block: var(--space-8);
+}
+
+.static-page__header h1,
+.not-found-page h1 {
+  max-width: 14ch;
+  margin: var(--space-3) 0 var(--space-5);
+  font-size: var(--font-size-2xl);
+  line-height: var(--line-height-tight);
+  letter-spacing: var(--tracking-tight);
+}
+
+.static-page__header > p:last-child,
+.not-found-page p,
+.static-page p {
+  color: var(--color-text-muted);
+}
+
+.static-page__sections {
+  border-top: 1px solid var(--color-border);
+}
+
+.static-page__sections section {
+  padding-block: var(--space-8);
+  border-bottom: 1px solid var(--color-border);
+  display: grid;
+  grid-template-columns: 3rem minmax(0, 1fr);
+  gap: var(--space-4);
+}
+
+.static-page__index {
+  color: var(--color-accent);
+  font-size: var(--font-size-xs);
+}
+
+.static-page h2,
+.static-page h3,
+.static-page p {
+  margin-top: 0;
+}
+
+.static-page__action,
+.static-page__boundary-grid section {
+  padding: var(--space-6);
+  border: 1px solid var(--color-border);
+  background:
+    linear-gradient(145deg, rgb(98 234 216 / 7%), transparent 50%),
+    var(--color-surface-elevated);
+}
+
+.static-page__action {
+  display: grid;
+  gap: var(--space-5);
+  align-items: center;
+}
+
+.static-page__action .button {
+  justify-self: start;
+}
+
+.privacy-usage,
+.privacy-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.privacy-usage span {
+  color: var(--color-text-muted);
+}
+
+.privacy-confirm {
+  padding: var(--space-6);
+  border: 1px solid var(--color-warning-amber);
+  background: var(--color-surface-elevated);
+}
+
+.privacy-confirm > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.static-page__boundary-grid {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.static-table-wrap {
+  overflow-x: auto;
+}
+
+.static-table-wrap table {
+  width: 100%;
+  min-width: 38rem;
+  border-collapse: collapse;
+}
+
+.static-table-wrap th,
+.static-table-wrap td {
+  padding: var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+}
+
+.static-table-wrap thead th {
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.recovery-guide ol {
+  padding: 0;
+  margin: 0;
+  display: grid;
+  list-style: none;
+}
+
+.recovery-guide li {
+  padding-block: var(--space-5);
+  border-bottom: 1px solid var(--color-border);
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr);
+  gap: var(--space-4);
+}
+
+.recovery-guide__signal {
+  width: 1.75rem;
+  height: 1.75rem;
+  border: 1px solid var(--color-warning-amber);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--color-warning-amber);
+  font-family: var(--font-mono);
+  font-weight: 800;
+}
+
+.recovery-guide h3 {
+  margin-bottom: var(--space-1);
+}
+
+.not-found-page {
+  min-height: min(68vh, 44rem);
+  display: grid;
+  align-items: center;
+  gap: var(--space-10);
+}
+
+.not-found-page__scope {
+  position: relative;
+  width: min(70vw, 24rem);
+  aspect-ratio: 1;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: radial-gradient(circle, rgb(98 234 216 / 12%), transparent 60%);
+}
+
+.not-found-page__scope span {
+  position: absolute;
+  width: min(48vw, 16rem);
+  border-top: 1px solid var(--color-accent);
+}
+
+.not-found-page__scope span:nth-child(2) {
+  transform: rotate(60deg);
+}
+
+.not-found-page__scope span:nth-child(3) {
+  transform: rotate(-60deg);
+}
+
+@media (min-width: 48rem) {
+  .static-page__sections section {
+    grid-template-columns: 4rem minmax(0, 1fr);
+  }
+
+  .static-page__action {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .static-page__boundary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .not-found-page {
+    grid-template-columns: minmax(16rem, 0.8fr) minmax(0, 1fr);
+  }
+}

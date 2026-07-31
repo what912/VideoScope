@@ -1,0 +1,466 @@
+<!doctype html>
+<html lang="{{ locale }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VideoScope report — {{ report.metadata.filename }}</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b0f17;
+      --panel: #141b27;
+      --panel-strong: #1c2636;
+      --text: #eef3fb;
+      --muted: #a8b5c7;
+      --border: #344154;
+      --accent: #69a7ff;
+      --info: #6ca7ff;
+      --low: #64c7a7;
+      --medium: #e9bd56;
+      --high: #f08058;
+      --critical: #ef5b73;
+      --ok: #64c7a7;
+      --error: #ef5b73;
+      --skipped: #a8b5c7;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+    a { color: var(--accent); }
+    button, select { font: inherit; }
+    button, select, [tabindex="0"] { outline: 3px solid transparent; outline-offset: 3px; }
+    button:focus-visible, select:focus-visible, [tabindex="0"]:focus-visible {
+      outline-color: var(--accent);
+    }
+    .page { width: min(1180px, calc(100% - 32px)); margin: 0 auto; padding: 34px 0 64px; }
+    .eyebrow { margin: 0 0 6px; color: var(--accent); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+    h1 { margin: 0; font-size: clamp(2rem, 5vw, 3.8rem); line-height: 1.05; overflow-wrap: anywhere; }
+    h2 { margin: 0 0 18px; font-size: 1.35rem; }
+    h3 { margin: 0; font-size: 1.05rem; }
+    .subtitle { max-width: 780px; color: var(--muted); }
+    .panel {
+      margin-top: 22px;
+      padding: 22px;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      background: var(--panel);
+    }
+    .meta-grid, .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 12px;
+      margin: 0;
+    }
+    .metric { padding: 14px; border-radius: 10px; background: var(--panel-strong); }
+    .metric dt { color: var(--muted); font-size: .82rem; }
+    .metric dd { margin: 4px 0 0; font-size: 1.08rem; font-weight: 700; overflow-wrap: anywhere; }
+    .prompt { white-space: pre-wrap; overflow-wrap: anywhere; }
+    .filters { display: flex; flex-wrap: wrap; gap: 14px; align-items: end; }
+    .filter { display: grid; gap: 5px; color: var(--muted); }
+    select, .button {
+      min-height: 42px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 12px;
+      background: var(--panel-strong);
+      color: var(--text);
+    }
+    .button { cursor: pointer; }
+    .timeline-wrap { overflow-x: auto; padding: 10px 3px; }
+    .timeline {
+      position: relative;
+      min-width: 640px;
+      height: 86px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background:
+        linear-gradient(90deg, transparent 24.8%, var(--border) 25%, transparent 25.2%),
+        linear-gradient(90deg, transparent 49.8%, var(--border) 50%, transparent 50.2%),
+        linear-gradient(90deg, transparent 74.8%, var(--border) 75%, transparent 75.2%),
+        var(--panel-strong);
+    }
+    .timeline-label { position: absolute; bottom: 7px; color: var(--muted); font-size: .75rem; }
+    .timeline-label.end { right: 8px; }
+    .timeline-label.start { left: 8px; }
+    .timeline-finding {
+      position: absolute;
+      top: 18px;
+      height: 28px;
+      min-width: 5px;
+      border: 2px solid rgba(255, 255, 255, .5);
+      border-radius: 7px;
+      color: #081018;
+      cursor: pointer;
+      overflow: hidden;
+      text-indent: -9999px;
+    }
+    .timeline-finding.is-selected { outline: 4px solid #fff; outline-offset: 3px; z-index: 2; }
+    [data-severity="info"] { --severity-color: var(--info); }
+    [data-severity="low"] { --severity-color: var(--low); }
+    [data-severity="medium"] { --severity-color: var(--medium); }
+    [data-severity="high"] { --severity-color: var(--high); }
+    [data-severity="critical"] { --severity-color: var(--critical); }
+    .timeline-finding { background: var(--severity-color); }
+    .finding-list { display: grid; gap: 14px; }
+    .finding-card {
+      border: 1px solid var(--border);
+      border-left: 7px solid var(--severity-color);
+      border-radius: 12px;
+      padding: 18px;
+      background: var(--panel-strong);
+    }
+    .finding-card.is-selected { box-shadow: 0 0 0 3px var(--accent); }
+    .finding-card[hidden], .timeline-finding[hidden] { display: none; }
+    .finding-header { display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; align-items: start; }
+    .finding-select { padding: 0; border: 0; background: transparent; color: var(--text); text-align: left; cursor: pointer; }
+    .badges { display: flex; flex-wrap: wrap; gap: 7px; margin: 10px 0; }
+    .badge { display: inline-flex; border: 1px solid var(--border); border-radius: 999px; padding: 3px 9px; font-size: .8rem; }
+    .severity-badge { border-color: var(--severity-color); }
+    .finding-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, .45fr); gap: 18px; }
+    .muted { color: var(--muted); }
+    .details { border-top: 1px solid var(--border); padding-top: 12px; }
+    pre { overflow: auto; padding: 12px; border-radius: 8px; background: var(--bg); color: var(--text); }
+    .evidence-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+    .evidence { margin: 0; padding: 10px; border: 1px solid var(--border); border-radius: 10px; }
+    .evidence-open { position: relative; width: 100%; padding: 0; border: 0; border-radius: 7px; overflow: hidden; background: var(--bg); cursor: zoom-in; }
+    .evidence img { display: block; width: 100%; height: auto; max-height: 220px; background: var(--bg); }
+    .ocr-box {
+      position: absolute;
+      border: 2px solid #56e0ff;
+      background: rgba(21, 167, 202, .12);
+      box-shadow: 0 0 0 1px rgba(0, 0, 0, .65);
+      pointer-events: none;
+    }
+    .evidence-missing { min-height: 90px; display: grid; place-items: center; color: var(--muted); }
+    .evidence figcaption { margin-top: 8px; font-size: .85rem; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 10px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+    .status { font-weight: 800; text-transform: uppercase; }
+    .status-ok { color: var(--ok); }
+    .status-detector_error { color: var(--error); }
+    .status-skipped { color: var(--skipped); }
+    .error-list { display: grid; gap: 10px; }
+    .error-card { padding: 14px; border: 1px solid var(--error); border-radius: 10px; }
+    .video-preview { width: 100%; max-height: 560px; background: #000; }
+    dialog { width: min(920px, calc(100% - 32px)); border: 1px solid var(--border); border-radius: 14px; padding: 16px; background: var(--panel); color: var(--text); }
+    dialog::backdrop { background: rgba(0, 0, 0, .82); }
+    dialog img { display: block; max-width: 100%; max-height: 76vh; margin: 0 auto; }
+    .dialog-actions { display: flex; justify-content: end; margin-bottom: 10px; }
+    .empty { padding: 22px; border: 1px dashed var(--border); border-radius: 10px; color: var(--muted); }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+    @media (max-width: 720px) {
+      .finding-grid { grid-template-columns: 1fr; }
+      .panel { padding: 16px; }
+    }
+    @media print {
+      :root { color-scheme: light; --bg: #fff; --panel: #fff; --panel-strong: #f3f5f8; --text: #111; --muted: #4a5260; --border: #aab1bc; }
+      .filters, .copy-time, dialog { display: none; }
+      .page { width: 100%; padding: 0; }
+      .finding-card { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header>
+      <p class="eyebrow">VideoScope offline report</p>
+      <h1>{{ report.metadata.filename }}</h1>
+      <p class="subtitle">Local CPU analysis · schema {{ report.schema_version }} · tool {{ report.tool_version }} · analysis {{ report.analysis_id }}</p>
+    </header>
+
+    <section class="panel" aria-labelledby="summary-title">
+      <h2 id="summary-title">Video summary</h2>
+      <dl class="meta-grid">
+        <div class="metric"><dt>Duration</dt><dd>{{ duration_label }}</dd></div>
+        <div class="metric"><dt>Dimensions</dt><dd>{{ report.metadata.width }} × {{ report.metadata.height }}</dd></div>
+        <div class="metric"><dt>Codec / container</dt><dd>{{ report.metadata.codec }} / {{ report.metadata.container_format }}</dd></div>
+        <div class="metric"><dt>Average frame rate</dt><dd>{{ "%.3f"|format(report.metadata.average_frame_rate) }} fps</dd></div>
+        <div class="metric"><dt>Estimated frames</dt><dd>{{ report.metadata.estimated_frame_count }}</dd></div>
+        <div class="metric"><dt>Audio</dt><dd>{{ "Present" if report.metadata.has_audio else "Not detected" }}</dd></div>
+      </dl>
+      {% if report.prompt %}
+      <h3>Recorded prompt</h3>
+      <p class="prompt">{{ report.prompt }}</p>
+      {% endif %}
+      {% if bundled_video_url %}
+      <h3>Bundled source video</h3>
+      <video class="video-preview" controls preload="metadata" src="{{ bundled_video_url }}">Your browser cannot play the bundled local video.</video>
+      {% endif %}
+    </section>
+
+    <section class="panel" aria-labelledby="distribution-title">
+      <h2 id="distribution-title">Finding overview</h2>
+      <dl class="summary-grid">
+        <div class="metric"><dt>Total findings</dt><dd>{{ report.findings|length }}</dd></div>
+        {% for severity in severity_values %}
+        <div class="metric" data-severity="{{ severity }}"><dt>{{ severity|capitalize }}</dt><dd>{{ severity_counts[severity] }}</dd></div>
+        {% endfor %}
+      </dl>
+    </section>
+
+    <section class="panel" aria-labelledby="timeline-title">
+      <h2 id="timeline-title">Timeline</h2>
+      <div class="filters" aria-label="Finding filters">
+        <label class="filter">Detector
+          <select id="detector-filter">
+            <option value="">All detectors</option>
+            {% for detector_id in detector_ids %}<option value="{{ detector_id }}">{{ detector_id }}</option>{% endfor %}
+          </select>
+        </label>
+        <label class="filter">Severity
+          <select id="severity-filter">
+            <option value="">All severities</option>
+            {% for severity in severity_values %}<option value="{{ severity }}">{{ severity|capitalize }}</option>{% endfor %}
+          </select>
+        </label>
+        <button class="button" id="clear-filters" type="button">Clear filters</button>
+      </div>
+      <div class="timeline-wrap">
+        <div class="timeline" aria-label="Findings across {{ duration_label }}">
+          {% for item in findings %}
+          <button
+            class="timeline-finding"
+            type="button"
+            style="left: {{ item.left_percent }}%; width: {{ item.width_percent }}%;"
+            data-finding-id="{{ item.model.id }}"
+            data-detector="{{ item.model.detector_id }}"
+            data-severity="{{ item.model.severity.value }}"
+            data-start="{{ item.model.time_range.start_seconds }}"
+            data-end="{{ item.model.time_range.end_seconds }}"
+            aria-label="{{ item.model.severity.value|capitalize }}: {{ item.model.title }}, {{ item.start_label }} to {{ item.end_label }}"
+          >{{ item.model.severity.value }}</button>
+          {% endfor %}
+          <span class="timeline-label start">00:00:00.000</span>
+          <span class="timeline-label end">{{ duration_label }}</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="findings-title">
+      <h2 id="findings-title">Findings</h2>
+      <div class="finding-list" id="finding-list">
+        {% for item in findings %}
+        <article
+          class="finding-card"
+          id="card-{{ item.model.id }}"
+          data-finding-id="{{ item.model.id }}"
+          data-detector="{{ item.model.detector_id }}"
+          data-severity="{{ item.model.severity.value }}"
+          data-start="{{ item.model.time_range.start_seconds }}"
+          data-end="{{ item.model.time_range.end_seconds }}"
+        >
+          <div class="finding-header">
+            <div>
+              <button class="finding-select" type="button" data-select-finding="{{ item.model.id }}">
+                <h3>{{ item.model.title }}</h3>
+              </button>
+              <div class="badges">
+                <span class="badge severity-badge">{{ item.model.severity.value|upper }} severity</span>
+                <span class="badge">{{ item.model.detector_id }} · v{{ item.model.detector_version }}</span>
+                <span class="badge">{{ item.start_label }} – {{ item.end_label }}</span>
+              </div>
+            </div>
+            <button class="button copy-time" type="button" data-copy-text="{{ item.start_label }}">Copy start timestamp</button>
+          </div>
+          <div class="finding-grid">
+            <div>
+              <p>{{ item.model.description }}</p>
+              <p><strong>Score:</strong> {{ "%.3f"|format(item.model.score) }} · <strong>Confidence:</strong> {{ "%.3f"|format(item.model.confidence) }}</p>
+              {% if item.model.limitations %}
+              <h3>Limitations</h3>
+              <ul>{% for limitation in item.model.limitations %}<li>{{ limitation }}</li>{% endfor %}</ul>
+              {% endif %}
+              {% if item.model.tags %}
+              <p class="muted">Tags: {{ item.model.tags|join(", ") }}</p>
+              {% endif %}
+              <details class="details">
+                <summary>Detector parameters</summary>
+                <pre>{{ item.parameters_json }}</pre>
+              </details>
+            </div>
+            <div>
+              <h3>Evidence</h3>
+              <div class="evidence-grid">
+                {% for evidence in item.evidence %}
+                <figure class="evidence">
+                  {% if evidence.url %}
+                  <button class="evidence-open" type="button" data-src="{{ evidence.url }}" data-alt="{{ evidence.model.description }}">
+                    <img src="{{ evidence.url }}" alt="{{ evidence.model.description }} at {{ evidence.timestamp_label }}" loading="lazy">
+                    {% for box in evidence.ocr_boxes %}
+                    <span
+                      class="ocr-box"
+                      data-ocr-box
+                      style="left: {{ box.left }}%; top: {{ box.top }}%; width: {{ box.width }}%; height: {{ box.height }}%;"
+                      title="{{ box.label }}"
+                    ><span class="sr-only">{{ box.label }}</span></span>
+                    {% endfor %}
+                  </button>
+                  <div class="evidence-missing" hidden>Evidence image is unavailable.</div>
+                  {% else %}
+                  <div class="evidence-missing">No local evidence image is available.</div>
+                  {% endif %}
+                  <figcaption>
+                    <strong>{{ evidence.timestamp_label }}</strong><br>
+                    {{ evidence.model.description }}
+                    {% if evidence.model.metadata %}<details><summary>Evidence metadata</summary><pre>{{ evidence.metadata_json }}</pre></details>{% endif %}
+                  </figcaption>
+                </figure>
+                {% endfor %}
+              </div>
+            </div>
+          </div>
+        </article>
+        {% else %}
+        <p class="empty">No findings were produced by the completed detectors. Review detector status below for checks that did not run successfully.</p>
+        {% endfor %}
+      </div>
+      <p id="no-filter-results" class="empty" hidden>No findings match the selected filters.</p>
+    </section>
+
+    <section class="panel" aria-labelledby="detectors-title">
+      <h2 id="detectors-title">Detector execution status</h2>
+      <div style="overflow-x: auto">
+        <table>
+          <thead><tr><th>Detector</th><th>Status</th><th>Findings</th><th>Elapsed</th></tr></thead>
+          <tbody>
+            {% for execution in report.detector_executions %}
+            <tr>
+              <td>{{ execution.detector_id }}</td>
+              <td><span class="status status-{{ execution.status.value }}">{{ execution.status.value }}</span></td>
+              <td>{{ execution.findings_count }}</td>
+              <td>{{ "%.3f"|format(execution.elapsed_seconds) }} s</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="4">No detector execution records are available.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    {% if failed_executions %}
+    <section class="panel" aria-labelledby="errors-title">
+      <h2 id="errors-title">Detector errors</h2>
+      <p class="muted">These checks failed. They are not equivalent to checks that completed with no findings.</p>
+      <div class="error-list">
+        {% for execution in failed_executions %}
+        <article class="error-card" data-detector-error="{{ execution.detector_id }}">
+          <h3>{{ execution.detector_id }}</h3>
+          <p><strong>{{ execution.error_type }}</strong>: {{ execution.error_message }}</p>
+        </article>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+
+    {% if report.warnings %}
+    <section class="panel" aria-labelledby="warnings-title">
+      <h2 id="warnings-title">Warnings</h2>
+      <ul>{% for warning in report.warnings %}<li>{{ warning }}</li>{% endfor %}</ul>
+    </section>
+    {% endif %}
+  </main>
+
+  <dialog id="evidence-dialog" aria-labelledby="dialog-title">
+    <div class="dialog-actions"><button class="button" id="close-dialog" type="button">Close image</button></div>
+    <h2 id="dialog-title" class="sr-only">Evidence image preview</h2>
+    <img id="dialog-image" alt="">
+  </dialog>
+  <div id="live-status" class="sr-only" aria-live="polite"></div>
+
+  <script>
+    (() => {
+      "use strict";
+      const detectorFilter = document.querySelector("#detector-filter");
+      const severityFilter = document.querySelector("#severity-filter");
+      const noResults = document.querySelector("#no-filter-results");
+      const liveStatus = document.querySelector("#live-status");
+      const cards = Array.from(document.querySelectorAll(".finding-card"));
+      const markers = Array.from(document.querySelectorAll(".timeline-finding"));
+
+      function selectFinding(id) {
+        for (const element of [...cards, ...markers]) {
+          element.classList.toggle("is-selected", element.dataset.findingId === id);
+        }
+        const card = document.getElementById(`card-${id}`);
+        if (card && !card.hidden) {
+          card.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        }
+      }
+
+      function applyFilters() {
+        const detector = detectorFilter.value;
+        const severity = severityFilter.value;
+        let visibleCount = 0;
+        for (const element of [...cards, ...markers]) {
+          const visible = (!detector || element.dataset.detector === detector)
+            && (!severity || element.dataset.severity === severity);
+          element.hidden = !visible;
+          if (visible && element.classList.contains("finding-card")) visibleCount += 1;
+        }
+        noResults.hidden = visibleCount !== 0 || cards.length === 0;
+        liveStatus.textContent = `${visibleCount} finding${visibleCount === 1 ? "" : "s"} shown`;
+      }
+
+      detectorFilter.addEventListener("change", applyFilters);
+      severityFilter.addEventListener("change", applyFilters);
+      document.querySelector("#clear-filters").addEventListener("click", () => {
+        detectorFilter.value = "";
+        severityFilter.value = "";
+        applyFilters();
+        detectorFilter.focus();
+      });
+      for (const marker of markers) {
+        marker.addEventListener("click", () => selectFinding(marker.dataset.findingId));
+      }
+      for (const button of document.querySelectorAll("[data-select-finding]")) {
+        button.addEventListener("click", () => selectFinding(button.dataset.selectFinding));
+      }
+
+      async function copyText(text) {
+        try {
+          await navigator.clipboard.writeText(text);
+        } catch (_error) {
+          const textarea = document.createElement("textarea");
+          textarea.value = text;
+          textarea.setAttribute("readonly", "");
+          textarea.style.position = "fixed";
+          textarea.style.opacity = "0";
+          document.body.appendChild(textarea);
+          textarea.select();
+          document.execCommand("copy");
+          textarea.remove();
+        }
+        liveStatus.textContent = `Copied ${text}`;
+      }
+      for (const button of document.querySelectorAll("[data-copy-text]")) {
+        button.addEventListener("click", () => copyText(button.dataset.copyText));
+      }
+
+      const dialog = document.querySelector("#evidence-dialog");
+      const dialogImage = document.querySelector("#dialog-image");
+      for (const button of document.querySelectorAll(".evidence-open")) {
+        button.addEventListener("click", () => {
+          dialogImage.src = button.dataset.src;
+          dialogImage.alt = button.dataset.alt;
+          dialog.showModal();
+        });
+        const image = button.querySelector("img");
+        image.addEventListener("error", () => {
+          button.hidden = true;
+          const fallback = button.parentElement.querySelector(".evidence-missing");
+          if (fallback) fallback.hidden = false;
+        });
+      }
+      document.querySelector("#close-dialog").addEventListener("click", () => dialog.close());
+      dialog.addEventListener("click", (event) => {
+        if (event.target === dialog) dialog.close();
+      });
+    })();
+  </script>
+</body>
+</html>

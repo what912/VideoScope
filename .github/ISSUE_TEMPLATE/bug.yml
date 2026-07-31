@@ -1,0 +1,57 @@
+name: Bug report
+description: Report a reproducible VideoScope software failure
+title: "[Bug] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not upload private videos, reports, prompts, credentials, or absolute
+        personal paths. A synthetic reproduction is strongly preferred.
+  - type: input
+    id: version
+    attributes:
+      label: VideoScope version
+      placeholder: "0.2.0rc1"
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, CPU architecture, Python version, and FFmpeg version
+      placeholder: "Windows 11, x86_64, Python 3.12, FFmpeg 7.x"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      description: Include the smallest command and sanitized configuration.
+      placeholder: |
+        1. Generate a synthetic input...
+        2. Run videoscope analyze...
+        3. Observe...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Paste a short, sanitized error excerpt rather than a full private report.
+    validations:
+      required: true
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy check
+      options:
+        - label: I removed private media, prompts, credentials, and absolute personal paths.
+          required: true

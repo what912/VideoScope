@@ -1,0 +1,90 @@
+{
+  "generation": {
+    "audio": false,
+    "frame_rate": 10,
+    "height": 180,
+    "source": "FFmpeg lavfi and program-generated Pillow frames",
+    "video_codec": "mpeg4",
+    "width": 320
+  },
+  "schema_version": "1.0",
+  "videos": {
+    "black_segment.mp4": {
+      "duration_seconds": 6.0,
+      "expected_anomaly_type": "black_segment",
+      "expected_time_ranges": [
+        {
+          "end_seconds": 3.5,
+          "start_seconds": 2.0
+        }
+      ],
+      "tolerance_seconds": 0.11
+    },
+    "blur_segment.mp4": {
+      "duration_seconds": 6.0,
+      "expected_anomaly_type": "blur_segment",
+      "expected_time_ranges": [
+        {
+          "end_seconds": 4.0,
+          "start_seconds": 2.0
+        }
+      ],
+      "tolerance_seconds": 0.11
+    },
+    "changing_text.mp4": {
+      "duration_seconds": 6.0,
+      "expected_anomaly_type": "text_stability",
+      "expected_time_ranges": [
+        {
+          "end_seconds": 4.0,
+          "start_seconds": 2.0
+        }
+      ],
+      "tolerance_seconds": 0.11
+    },
+    "clean_motion.mp4": {
+      "duration_seconds": 6.0,
+      "expected_anomaly_type": "none",
+      "expected_time_ranges": [],
+      "tolerance_seconds": 0.11
+    },
+    "flicker_segment.mp4": {
+      "duration_seconds": 6.0,
+      "expected_anomaly_type": "flicker_segment",
+      "expected_time_ranges": [
+        {
+          "end_seconds": 4.0,
+          "start_seconds": 2.0
+        }
+      ],
+      "tolerance_seconds": 0.11
+    },
+    "freeze_segment.mp4": {
+      "duration_seconds": 6.0,
+      "expected_anomaly_type": "freeze_segment",
+      "expected_time_ranges": [
+        {
+          "end_seconds": 4.0,
+          "start_seconds": 2.0
+        }
+      ],
+      "tolerance_seconds": 0.11
+    },
+    "scene_cut.mp4": {
+      "duration_seconds": 6.0,
+      "expected_anomaly_type": "none",
+      "expected_scene_cuts_seconds": [
+        2.0,
+        4.0
+      ],
+      "expected_time_ranges": [],
+      "tolerance_seconds": 0.11
+    },
+    "stable_text.mp4": {
+      "duration_seconds": 6.0,
+      "expected_anomaly_type": "none",
+      "expected_time_ranges": [],
+      "tolerance_seconds": 0.11
+    }
+  }
+}
