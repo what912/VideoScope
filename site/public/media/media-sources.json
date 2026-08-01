@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "generatorVersion": "1.0.0",
+  "license": "Apache-2.0 project-authored media",
+  "items": [
+    { "role": "hero", "scene": "optical-aperture", "workingWidth": 1920, "workingHeight": 1080, "outputWidth": 1280, "outputHeight": 720, "frameRate": 24, "durationSeconds": 8, "video": "hero-optical.mp4", "poster": "hero-optical.webp", "posterTimestampSeconds": 2.25 },
+    { "role": "product-proof", "scene": "night-observation-grid", "workingWidth": 1920, "workingHeight": 1080, "outputWidth": 1280, "outputHeight": 720, "frameRate": 24, "durationSeconds": 6, "video": "city-nightlife.mp4", "poster": "city-nightlife.webp", "posterTimestampSeconds": 2.0 },
+    { "role": "upload-lab", "scene": "fluid-spectrum", "workingWidth": 1920, "workingHeight": 1080, "outputWidth": 1280, "outputHeight": 720, "frameRate": 24, "durationSeconds": 6, "video": "upload-liquid.mp4", "poster": "upload-liquid.webp", "posterTimestampSeconds": 2.0 },
+    { "role": "diagnosis", "scene": "diagnostic-mesh", "workingWidth": 1920, "workingHeight": 1080, "outputWidth": 1280, "outputHeight": 720, "frameRate": 24, "durationSeconds": 6, "video": "diagnosis-fashion.mp4", "poster": "diagnosis-fashion.webp", "posterTimestampSeconds": 2.0 },
+    { "role": "compare-a", "scene": "cool-topography", "workingWidth": 1920, "workingHeight": 1080, "outputWidth": 1280, "outputHeight": 720, "frameRate": 24, "durationSeconds": 6, "video": "compare-hills.mp4", "poster": "compare-hills.webp", "posterTimestampSeconds": 2.0 },
+    { "role": "compare-b", "scene": "dawn-spectrum", "workingWidth": 1920, "workingHeight": 1080, "outputWidth": 1280, "outputHeight": 720, "frameRate": 24, "durationSeconds": 6, "video": "compare-sunrise.mp4", "poster": "compare-sunrise.webp", "posterTimestampSeconds": 2.0 },
+    { "role": "evidence-a", "scene": "cyan-caustic", "workingWidth": 1920, "workingHeight": 1080, "outputWidth": 1280, "outputHeight": 720, "frameRate": 24, "poster": "evidence-lake.webp", "stillTimeSeconds": 2.0 },
+    { "role": "evidence-b", "scene": "violet-lattice", "workingWidth": 1920, "workingHeight": 1080, "outputWidth": 1280, "outputHeight": 720, "frameRate": 24, "poster": "evidence-city.webp", "stillTimeSeconds": 2.0 },
+    { "role": "evidence-c", "scene": "amber-contour", "workingWidth": 1920, "workingHeight": 1080, "outputWidth": 1280, "outputHeight": 720, "frameRate": 24, "poster": "evidence-studio.webp", "stillTimeSeconds": 2.0 }
+  ]
+}

@@ -1,0 +1,61 @@
+name: False positive
+description: Report a detector Finding that does not match the reviewed content
+title: "[False positive] "
+labels:
+  - false-positive
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A Finding is a heuristic observation, not a confirmed defect. Prefer a
+        newly generated, shareable reproduction over uploading the original video.
+  - type: dropdown
+    id: detector
+    attributes:
+      label: Detector
+      options:
+        - near_black
+        - possible_freeze
+        - scene_relative_blur
+        - global_flicker
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: VideoScope version
+    validations:
+      required: true
+  - type: input
+    id: interval
+    attributes:
+      label: Reported time interval
+      placeholder: "2.0–3.5 seconds"
+    validations:
+      required: true
+  - type: textarea
+    id: observation
+    attributes:
+      label: Why the Finding appears incorrect
+      description: Describe observable content and likely intentional effects.
+    validations:
+      required: true
+  - type: textarea
+    id: config
+    attributes:
+      label: Sanitized detector configuration
+      render: json
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Shareable reproduction
+      description: Provide generation steps or a small synthetic input only if you own and consent to sharing it.
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy and consent
+      options:
+        - label: Any attached media is authorized for public sharing and contains no private information.
+          required: true

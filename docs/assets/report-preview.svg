@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="640" viewBox="0 0 1200 640" role="img" aria-labelledby="title desc">
+  <title id="title">VideoScope offline report preview placeholder</title>
+  <desc id="desc">A schematic preview showing video metadata, a finding timeline, detector status, and evidence frames. It contains no claimed benchmark or detection result.</desc>
+  <rect width="1200" height="640" fill="#0b0f17"/>
+  <rect x="55" y="48" width="1090" height="544" rx="22" fill="#141b27" stroke="#344154" stroke-width="2"/>
+  <text x="95" y="105" fill="#69a7ff" font-family="system-ui, sans-serif" font-size="19" font-weight="700">VIDEOSCOPE OFFLINE REPORT</text>
+  <text x="95" y="148" fill="#eef3fb" font-family="system-ui, sans-serif" font-size="34" font-weight="700">report preview placeholder</text>
+  <text x="95" y="178" fill="#a8b5c7" font-family="system-ui, sans-serif" font-size="16">Run videoscope analyze on a local video to generate the real report.</text>
+
+  <g transform="translate(95 215)">
+    <rect width="310" height="105" rx="12" fill="#1c2636"/>
+    <text x="20" y="30" fill="#a8b5c7" font-family="system-ui, sans-serif" font-size="14">VIDEO SUMMARY</text>
+    <text x="20" y="62" fill="#eef3fb" font-family="system-ui, sans-serif" font-size="19">Duration · codec · dimensions</text>
+    <text x="20" y="87" fill="#eef3fb" font-family="system-ui, sans-serif" font-size="19">Frame rate · audio status</text>
+  </g>
+
+  <g transform="translate(425 215)">
+    <rect width="680" height="105" rx="12" fill="#1c2636"/>
+    <text x="20" y="30" fill="#a8b5c7" font-family="system-ui, sans-serif" font-size="14">TIMELINE</text>
+    <rect x="20" y="48" width="640" height="34" rx="8" fill="#0b0f17" stroke="#344154"/>
+    <rect x="220" y="51" width="120" height="28" rx="6" fill="#e9bd56"/>
+    <rect x="455" y="51" width="80" height="28" rx="6" fill="#f08058"/>
+  </g>
+
+  <g transform="translate(95 340)">
+    <rect width="650" height="205" rx="12" fill="#1c2636"/>
+    <text x="20" y="32" fill="#a8b5c7" font-family="system-ui, sans-serif" font-size="14">FINDING DETAILS</text>
+    <rect x="20" y="52" width="9" height="132" rx="4" fill="#e9bd56"/>
+    <text x="48" y="78" fill="#eef3fb" font-family="system-ui, sans-serif" font-size="21" font-weight="700">Observable interval title</text>
+    <text x="48" y="108" fill="#a8b5c7" font-family="system-ui, sans-serif" font-size="16">Severity label · start/end · score · confidence</text>
+    <text x="48" y="139" fill="#eef3fb" font-family="system-ui, sans-serif" font-size="16">Explanation, limitations, detector version and parameters</text>
+    <text x="48" y="170" fill="#a8b5c7" font-family="system-ui, sans-serif" font-size="16">This graphic is UI structure only—not a detector result.</text>
+  </g>
+
+  <g transform="translate(765 340)">
+    <rect width="340" height="205" rx="12" fill="#1c2636"/>
+    <text x="20" y="32" fill="#a8b5c7" font-family="system-ui, sans-serif" font-size="14">EVIDENCE</text>
+    <rect x="20" y="52" width="92" height="92" rx="8" fill="#26364a"/>
+    <rect x="124" y="52" width="92" height="92" rx="8" fill="#2e4057"/>
+    <rect x="228" y="52" width="92" height="92" rx="8" fill="#374b64"/>
+    <text x="20" y="176" fill="#eef3fb" font-family="system-ui, sans-serif" font-size="16">Front · middle · final frames</text>
+  </g>
+</svg>

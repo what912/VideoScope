@@ -1,0 +1,15 @@
+cff-version: 1.2.0
+message: "If you use VideoScope in research, please cite this software."
+type: software
+title: "VideoScope"
+abstract: "A local-first CPU tool for time-localized diagnostic analysis of generated videos."
+authors:
+  - name: "VideoScope contributors"
+version: 0.2.0-rc1
+date-released: 2026-07-29
+license: Apache-2.0
+keywords:
+  - video quality
+  - temporal diagnostics
+  - local-first
+  - reproducible benchmark

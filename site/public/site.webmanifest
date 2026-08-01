@@ -1,0 +1,18 @@
+{
+  "name": "VideoScope",
+  "short_name": "VideoScope",
+  "description": "Local-first browser video diagnostics with frame-level evidence.",
+  "start_url": "/VideoScope/",
+  "scope": "/VideoScope/",
+  "display": "standalone",
+  "background_color": "#090b0f",
+  "theme_color": "#090b0f",
+  "icons": [
+    {
+      "src": "/VideoScope/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

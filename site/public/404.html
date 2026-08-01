@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self' 'wasm-unsafe-eval' 'sha256-7P2uGCKvk1eVx76Uk5x/hjEkYUlB7lX9PBAmyKnlfDM='; style-src 'self'; style-src-attr 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' https:; font-src 'self'; manifest-src 'self'; worker-src 'self' blob:; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex" />
+    <title>Opening VideoScope…</title>
+  </head>
+  <body>
+    <p>Opening VideoScope…</p>
+    <script>
+      (function () {
+        var appBase = "/VideoScope/";
+        var storageKey = "videoscope:pages-route";
+        var payload = {
+          origin: window.location.origin,
+          pathname: window.location.pathname,
+          search: window.location.search,
+          hash: window.location.hash
+        };
+
+        try {
+          window.sessionStorage.setItem(storageKey, JSON.stringify(payload));
+        } catch (_error) {
+          try {
+            window.sessionStorage.removeItem(storageKey);
+          } catch (_storageError) {
+            // Continue to the app shell when storage is blocked.
+          }
+        }
+
+        window.location.replace(window.location.origin + appBase);
+      })();
+    </script>
+  </body>
+</html>

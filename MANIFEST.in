@@ -1,0 +1,21 @@
+include README.md
+include CHANGELOG.md
+include CODE_OF_CONDUCT.md
+include CONTRIBUTING.md
+include CITATION.cff
+include LICENSE
+include NOTICE
+include SECURITY.md
+include release-audit.md
+recursive-include docs *.md *.svg
+recursive-include docs *.jpg
+exclude docs/CODEX-HANDOFF-*.md
+recursive-include examples *.py *.ps1 *.sh *.yaml
+recursive-include scripts *.py
+recursive-include tests *.py *.json
+recursive-include src/videoscope/web/static *
+prune runs
+prune videoscope-output
+prune tests/fixtures/generated
+global-exclude *.mp4 *.mov *.avi *.mkv *.webm
+global-exclude __pycache__ *.py[cod] *.log

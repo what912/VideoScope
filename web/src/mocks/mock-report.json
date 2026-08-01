@@ -1,0 +1,172 @@
+{
+  "schema_version": "0.1",
+  "tool_version": "0.2.0rc1",
+  "analysis_id": "mock-dashboard-review",
+  "created_at": "2026-07-29T09:30:00Z",
+  "input_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "prompt": "A paper boat crossing a moonlit harbor",
+  "metadata": {
+    "filename": "harbor-study.mp4",
+    "container_format": "mov,mp4,m4a,3gp,3g2,mj2",
+    "codec": "h264",
+    "width": 1280,
+    "height": 720,
+    "duration_seconds": 18,
+    "average_frame_rate": 24,
+    "estimated_frame_count": 432,
+    "has_audio": false,
+    "file_size_bytes": 4823440
+  },
+  "configuration": {
+    "sample_fps": 2,
+    "thumbnail_max_size": 640,
+    "enabled_detectors": [
+      "near_black",
+      "possible_freeze",
+      "scene_relative_blur",
+      "global_flicker"
+    ]
+  },
+  "detector_executions": [
+    {
+      "detector_id": "near_black",
+      "status": "ok",
+      "elapsed_seconds": 0.31,
+      "findings_count": 1,
+      "error_type": null,
+      "error_message": null
+    },
+    {
+      "detector_id": "possible_freeze",
+      "status": "ok",
+      "elapsed_seconds": 0.44,
+      "findings_count": 1,
+      "error_type": null,
+      "error_message": null
+    },
+    {
+      "detector_id": "scene_relative_blur",
+      "status": "ok",
+      "elapsed_seconds": 0.38,
+      "findings_count": 1,
+      "error_type": null,
+      "error_message": null
+    },
+    {
+      "detector_id": "global_flicker",
+      "status": "detector_error",
+      "elapsed_seconds": 0.05,
+      "findings_count": 0,
+      "error_type": "FrameSequenceError",
+      "error_message": "Brightness samples were incomplete for this local review."
+    }
+  ],
+  "findings": [
+    {
+      "id": "finding_1111111111111111111111111111111111111111111111111111111111111111",
+      "detector_id": "near_black",
+      "detector_version": "1.0.0",
+      "title": "Near-black interval detected",
+      "description": "Most sampled pixels remain near black across this interval.",
+      "severity": "high",
+      "score": 0.91,
+      "confidence": 0.88,
+      "time_range": {
+        "start_seconds": 2.2,
+        "end_seconds": 4.8,
+        "start_frame": 53,
+        "end_frame": 115
+      },
+      "evidence": [
+        {
+          "evidence_type": "frame",
+          "timestamp_seconds": 3.5,
+          "relative_path": "mock-evidence.svg",
+          "description": "Midpoint evidence frame",
+          "metadata": {}
+        }
+      ],
+      "tags": ["luminance", "interval"],
+      "parameters": {
+        "mean_luma_threshold": 0.08,
+        "dark_pixel_ratio": 0.95
+      },
+      "limitations": [
+        "The interval may be an intentional black field, fade, or night scene."
+      ]
+    },
+    {
+      "id": "finding_2222222222222222222222222222222222222222222222222222222222222222",
+      "detector_id": "possible_freeze",
+      "detector_version": "1.0.0",
+      "title": "Possible frozen or repeated frames",
+      "description": "Adjacent sampled frames show very little pixel or structural change.",
+      "severity": "medium",
+      "score": 0.76,
+      "confidence": 0.73,
+      "time_range": {
+        "start_seconds": 7.1,
+        "end_seconds": 10.4,
+        "start_frame": 170,
+        "end_frame": 250
+      },
+      "evidence": [
+        {
+          "evidence_type": "frame",
+          "timestamp_seconds": 8.7,
+          "relative_path": "mock-evidence.svg",
+          "description": "Repeated-frame midpoint",
+          "metadata": {}
+        }
+      ],
+      "tags": ["temporal", "repetition"],
+      "parameters": {
+        "max_pixel_difference": 0.012,
+        "max_hash_distance": 3
+      },
+      "limitations": [
+        "A deliberately static shot may produce the same observable signal."
+      ]
+    },
+    {
+      "id": "finding_3333333333333333333333333333333333333333333333333333333333333333",
+      "detector_id": "scene_relative_blur",
+      "detector_version": "1.0.0",
+      "title": "Relative sharpness drop",
+      "description": "Sharpness falls below the baseline measured inside this scene.",
+      "severity": "low",
+      "score": 0.58,
+      "confidence": 0.67,
+      "time_range": {
+        "start_seconds": 13.3,
+        "end_seconds": 15.6,
+        "start_frame": 319,
+        "end_frame": 374
+      },
+      "evidence": [
+        {
+          "evidence_type": "frame",
+          "timestamp_seconds": 14.4,
+          "relative_path": "mock-evidence.svg",
+          "description": "Lowest relative sharpness sample",
+          "metadata": {}
+        }
+      ],
+      "tags": ["sharpness", "scene-relative"],
+      "parameters": {
+        "relative_ratio_threshold": 0.55,
+        "scene_baseline": 224.8
+      },
+      "limitations": [
+        "Motion blur, shallow depth of field, or a soft visual style may be intentional."
+      ]
+    }
+  ],
+  "warnings": [
+    "Mock report for interface development only; it is not a benchmark result."
+  ],
+  "runtime": {
+    "platform": "mock",
+    "sample_count": 36
+  }
+}

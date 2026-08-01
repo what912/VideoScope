@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" role="img" aria-labelledby="title desc">
+  <title id="title">Mock evidence frame</title>
+  <desc id="desc">Abstract harbor scene used only for front-end development.</desc>
+  <rect width="960" height="540" fill="#13212b"/>
+  <rect y="330" width="960" height="210" fill="#1c3542"/>
+  <circle cx="750" cy="120" r="54" fill="#e8e0bd"/>
+  <path d="M0 385 C130 355 220 420 350 385S585 350 720 390s180 25 240-5v155H0Z" fill="#28566a"/>
+  <path d="M350 360l125-2-48 60h-40z" fill="#d9d4c5"/>
+  <path d="M400 358v-95l72 92z" fill="#9bb7c2"/>
+  <g fill="#e19752">
+    <rect x="90" y="270" width="9" height="9"/>
+    <rect x="145" y="245" width="9" height="9"/>
+    <rect x="210" y="286" width="9" height="9"/>
+  </g>
+  <text x="42" y="68" fill="#f4f1e8" font-family="system-ui, sans-serif" font-size="26">Local evidence preview</text>
+  <text x="42" y="102" fill="#a7bdc7" font-family="system-ui, sans-serif" font-size="17">Mock asset — no detector claim</text>
+</svg>

@@ -1,0 +1,97 @@
+VideoScope / GenVideoScope
+Copyright 2026 VideoScope contributors
+
+This product includes software developed by the VideoScope contributors and is
+licensed under the Apache License, Version 2.0. See LICENSE.
+
+Direct runtime dependencies
+---------------------------
+
+VideoScope uses the following Python packages. Their own license files and
+package metadata remain authoritative:
+
+- Typer — MIT License
+- Rich — MIT License
+- Pydantic — MIT License
+- NumPy — BSD-3-Clause, 0BSD, MIT, Zlib and CC0-1.0 licensed components
+- Pillow — MIT-CMU License
+- opencv-python-headless — Apache License 2.0
+- scenedetect-headless — BSD-3-Clause License
+- Jinja2 — BSD-3-Clause License
+- platformdirs — MIT License
+
+Development and release dependencies
+------------------------------------
+
+- pytest — MIT License
+- pytest-cov — MIT License
+- Ruff — MIT License
+- mypy — MIT License
+- build — MIT License
+- setuptools — MIT License
+- wheel — MIT License
+- HTTPX — BSD-3-Clause License
+
+Transitive dependencies are resolved by the Python package installer and retain
+their respective licenses. Distributors should review the licenses of the exact
+resolved dependency set they ship.
+
+Optional extras
+---------------
+
+The `ai`, `ocr`, `web`, and `all` extras may install PyTorch, torchvision,
+OpenCLIP, PaddleOCR, PaddlePaddle, FastAPI, Uvicorn, python-multipart, and their
+transitive dependencies. They are not part of the base installation and no
+model weights are bundled.
+Downstream users must review the licenses and model-weight terms of the exact
+optional components and checkpoints they choose.
+
+The optional DINOv2 provider uses the user-installed PyTorch/torchvision
+runtime and may retrieve the facebookresearch/dinov2 torch hub repository and
+checkpoint only after explicit download permission. VideoScope does not bundle
+that repository or its weights. The upstream repository declares the Apache
+License 2.0; users and distributors must still review the terms and model card
+for the exact revision and checkpoint they use.
+
+The optional PaddleOCR provider uses user-installed PaddleOCR and PaddlePaddle
+packages and may retrieve PaddleOCR model files only after explicit download
+permission. VideoScope does not bundle OCR model weights. Users and
+distributors must review the software and model terms for the exact releases
+and model files they use.
+
+External FFmpeg dependency
+--------------------------
+
+VideoScope invokes user-installed ffmpeg and ffprobe executables. It does not
+copy, bundle, or redistribute FFmpeg binaries. FFmpeg licensing depends on how a
+particular build was configured; users and downstream distributors must review
+the license information supplied with their chosen FFmpeg build.
+
+Local dashboard
+---------------
+
+The source dashboard directly uses React, React DOM, TypeScript, Vite, Vitest,
+jsdom, and Testing Library packages. Production wheels contain only the
+compiled local dashboard assets, not node_modules. Exact direct license
+identifiers and audit notes are recorded in docs/third-party-licenses.md.
+
+Public browser site
+-------------------
+
+The static public site directly uses the following runtime packages:
+
+- @supabase/supabase-js 2.57.4 — MIT License
+- hash-wasm 4.12.0 — MIT License
+- idb 8.0.3 — ISC License
+- motion 12.23.12 — MIT License
+- React 19.2.6 — MIT License
+- React DOM 19.2.6 — MIT License
+- react-router-dom 7.8.2 — MIT License
+
+Its direct development and build dependencies are @eslint/js, ESLint,
+TypeScript ESLint, Testing Library, Node/React type declarations, the Vite
+React plugin, jsdom, TypeScript, Vite, and Vitest. Their resolved versions and
+license identifiers are recorded in docs/third-party-licenses.md. The deployed
+GitHub Pages artifact contains compiled application assets and project-authored
+media, not node_modules. Optional Supabase functionality remains unavailable
+without explicit public configuration and completed production security gates.

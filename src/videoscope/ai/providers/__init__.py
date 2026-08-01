@@ -1,0 +1,63 @@
+"""Optional concrete AI providers with no eager framework imports."""
+
+from videoscope.ai.providers.dinov2 import (
+    DEFAULT_DINOV2_MODEL_ID,
+    DEFAULT_DINOV2_MODEL_NAME,
+    DINOV2_PREPROCESSING_VERSION,
+    DINOV2_PROVIDER_ID,
+    DINOv2EmbeddingProvider,
+    DINOv2UnavailableError,
+    register_dinov2_provider,
+)
+from videoscope.ai.providers.openclip import (
+    DEFAULT_OPENCLIP_MODEL_ID,
+    DEFAULT_OPENCLIP_MODEL_NAME,
+    DEFAULT_OPENCLIP_PRETRAINED,
+    OPENCLIP_PREPROCESSING_VERSION,
+    OPENCLIP_PROVIDER_ID,
+    OpenCLIPEmbeddingProvider,
+    OpenCLIPUnavailableError,
+    register_openclip_provider,
+)
+from videoscope.ai.providers.paddleocr import (
+    PADDLEOCR_CHINESE_MODEL_ID,
+    PADDLEOCR_CHINESE_RECOGNITION_MODEL,
+    PADDLEOCR_DETECTION_MODEL,
+    PADDLEOCR_ENGLISH_MODEL_ID,
+    PADDLEOCR_ENGLISH_RECOGNITION_MODEL,
+    PADDLEOCR_PREPROCESSING_VERSION,
+    PADDLEOCR_PROVIDER_ID,
+    PADDLEOCR_VERSION,
+    PaddleOCRProvider,
+    PaddleOCRUnavailableError,
+    register_paddleocr_providers,
+)
+
+__all__ = [
+    "DEFAULT_DINOV2_MODEL_ID",
+    "DEFAULT_DINOV2_MODEL_NAME",
+    "DEFAULT_OPENCLIP_MODEL_ID",
+    "DEFAULT_OPENCLIP_MODEL_NAME",
+    "DEFAULT_OPENCLIP_PRETRAINED",
+    "DINOV2_PREPROCESSING_VERSION",
+    "DINOV2_PROVIDER_ID",
+    "DINOv2EmbeddingProvider",
+    "DINOv2UnavailableError",
+    "OPENCLIP_PREPROCESSING_VERSION",
+    "OPENCLIP_PROVIDER_ID",
+    "OpenCLIPEmbeddingProvider",
+    "OpenCLIPUnavailableError",
+    "PADDLEOCR_CHINESE_MODEL_ID",
+    "PADDLEOCR_CHINESE_RECOGNITION_MODEL",
+    "PADDLEOCR_DETECTION_MODEL",
+    "PADDLEOCR_ENGLISH_MODEL_ID",
+    "PADDLEOCR_ENGLISH_RECOGNITION_MODEL",
+    "PADDLEOCR_PREPROCESSING_VERSION",
+    "PADDLEOCR_PROVIDER_ID",
+    "PADDLEOCR_VERSION",
+    "PaddleOCRProvider",
+    "PaddleOCRUnavailableError",
+    "register_dinov2_provider",
+    "register_openclip_provider",
+    "register_paddleocr_providers",
+]
