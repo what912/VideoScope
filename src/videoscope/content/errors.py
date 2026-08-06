@@ -72,6 +72,12 @@ class ContentArtifactError(ContentError):
     public_message = "A useful-content artifact could not be handled safely."
 
 
+class ContentArtifactLinkError(ContentArtifactError):
+    """A filesystem link appeared where an owned artifact was required."""
+
+    public_message = "A useful-content artifact link could not be handled safely."
+
+
 class ContentCancelledError(ContentError):
     """The user cancelled the local workflow."""
 

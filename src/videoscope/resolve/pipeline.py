@@ -576,7 +576,8 @@ class PublishReadyPipeline:
 
     def _resolved_output_directory(self) -> Path:
         try:
-            return self.config.output_directory.resolve(strict=False)
+            candidate = self.config.output_directory
+            return candidate.parent.resolve(strict=False) / candidate.name
         except OSError as exc:
             raise PublishInputError(
                 "Publish output path could not be resolved"
@@ -622,9 +623,10 @@ class PublishReadyPipeline:
     def _rename_directory_no_replace(workspace: Path, output: Path) -> None:
         """Atomically move a staging directory without replacing an output root."""
         if os.name == "nt":
-            kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+            win_dll = getattr(ctypes, "WinDLL")
+            kernel32 = win_dll("kernel32", use_last_error=True)
             if kernel32.MoveFileExW(str(workspace), str(output), 0x00000008) == 0:
-                error_code = ctypes.get_last_error()
+                error_code = int(getattr(ctypes, "get_last_error")())
                 if error_code in {80, 183}:
                     raise FileExistsError(error_code, os.strerror(error_code), output)
                 raise OSError(error_code, os.strerror(error_code), output)

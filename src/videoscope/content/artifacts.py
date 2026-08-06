@@ -13,6 +13,7 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 
 from videoscope.content.errors import (
     ContentArtifactError,
+    ContentArtifactLinkError,
     ContentCancelledError,
 )
 from videoscope.content.models import (
@@ -326,7 +327,7 @@ def _reject_link(path: Path) -> None:
     if stat.S_ISLNK(info.st_mode) or attributes & getattr(
         stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0
     ):
-        raise ContentArtifactError("content artifact path cannot use a link")
+        raise ContentArtifactLinkError("content artifact path cannot use a link")
 
 
 def _require_regular_file(path: Path) -> None:

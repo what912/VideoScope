@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 import stat
-import sys
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -20,8 +19,8 @@ def _regular_identity() -> SimpleNamespace:
 def test_darwin_pinned_argument_passes_only_exact_snapshot_descriptor(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(os, "name", "posix")
-    monkeypatch.setattr(sys, "platform", "darwin")
+    monkeypatch.setattr(processes, "_os_name", lambda: "posix")
+    monkeypatch.setattr(processes, "_system_platform", lambda: "darwin")
     monkeypatch.setattr(
         processes,
         "_fstat_descriptor",
@@ -48,8 +47,8 @@ def test_darwin_pinned_argument_passes_only_exact_snapshot_descriptor(
 def test_pinned_argument_rejects_descriptor_identity_mismatch(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(os, "name", "posix")
-    monkeypatch.setattr(sys, "platform", "darwin")
+    monkeypatch.setattr(processes, "_os_name", lambda: "posix")
+    monkeypatch.setattr(processes, "_system_platform", lambda: "darwin")
     monkeypatch.setattr(
         processes,
         "_fstat_descriptor",
@@ -73,8 +72,8 @@ def test_pinned_argument_rejects_descriptor_identity_mismatch(
 def test_pinned_argument_rejects_inheritable_parent_descriptor(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(os, "name", "posix")
-    monkeypatch.setattr(sys, "platform", "darwin")
+    monkeypatch.setattr(processes, "_os_name", lambda: "posix")
+    monkeypatch.setattr(processes, "_system_platform", lambda: "darwin")
     monkeypatch.setattr(
         processes,
         "_fstat_descriptor",
@@ -98,8 +97,8 @@ def test_pinned_argument_rejects_inheritable_parent_descriptor(
 def test_unsupported_posix_pinned_argument_fails_closed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(os, "name", "posix")
-    monkeypatch.setattr(sys, "platform", "freebsd14")
+    monkeypatch.setattr(processes, "_os_name", lambda: "posix")
+    monkeypatch.setattr(processes, "_system_platform", lambda: "freebsd14")
 
     with pytest.raises(processes.PinnedDescriptorError, match="unavailable"):
         processes.pinned_subprocess_options(["ffprobe", "/dev/fd/41"])
@@ -115,8 +114,8 @@ def test_ordinary_arguments_do_not_inherit_descriptors() -> None:
 def test_ordinary_proc_path_is_not_treated_as_a_pinned_source(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(os, "name", "posix")
-    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setattr(processes, "_os_name", lambda: "posix")
+    monkeypatch.setattr(processes, "_system_platform", lambda: "linux")
     options = processes.pinned_subprocess_options(["tool", "/proc/cpuinfo"])
     assert options == {}
 
@@ -124,8 +123,8 @@ def test_ordinary_proc_path_is_not_treated_as_a_pinned_source(
 def test_linux_child_accepts_only_current_process_descriptor_path(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(os, "name", "posix")
-    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setattr(processes, "_os_name", lambda: "posix")
+    monkeypatch.setattr(processes, "_system_platform", lambda: "linux")
     monkeypatch.setattr(os, "getpid", lambda: 700)
     monkeypatch.setattr(
         processes, "_fstat_descriptor", lambda descriptor: _regular_identity()
@@ -148,8 +147,8 @@ def test_linux_child_accepts_only_current_process_descriptor_path(
 def test_child_rejects_multiple_distinct_pinned_descriptors(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(os, "name", "posix")
-    monkeypatch.setattr(sys, "platform", "darwin")
+    monkeypatch.setattr(processes, "_os_name", lambda: "posix")
+    monkeypatch.setattr(processes, "_system_platform", lambda: "darwin")
     monkeypatch.setattr(
         processes,
         "_fstat_descriptor",

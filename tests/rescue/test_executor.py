@@ -506,6 +506,7 @@ def test_strict_decode_error_is_fatal_and_preserves_sanitized_diagnostic(
     )
     assert "-xerror" in decode_call
     assert ("-err_detect", "explode") in tuple(zip(decode_call, decode_call[1:]))
+    assert ("-max_error_rate", "0") in tuple(zip(decode_call, decode_call[1:]))
     assert error.value.internal_message == "invalid packet while decoding"
 
 

@@ -19,6 +19,14 @@ _LINUX_DESCRIPTOR_PATH = re.compile(r"^/proc/([0-9]+)/fd/([0-9]+)$")
 _DARWIN_DESCRIPTOR_PATH = re.compile(r"^/dev/fd/([0-9]+)$")
 
 
+def _os_name() -> str:
+    return os.name
+
+
+def _system_platform() -> str:
+    return sys.platform
+
+
 def _fstat_descriptor(descriptor: int) -> os.stat_result:
     return os.fstat(descriptor)
 
@@ -47,12 +55,12 @@ def _validate_descriptor_path(path: Path, descriptor: int) -> None:
 
 def pinned_descriptor_path(descriptor: int) -> Path:
     """Return the current-process path for one retained POSIX descriptor."""
-    if os.name != "posix":
+    if _os_name() != "posix":
         raise PinnedDescriptorError("Pinned descriptor paths require POSIX")
     path: Path
-    if sys.platform.startswith("linux"):
+    if _system_platform().startswith("linux"):
         path = Path(f"/proc/{os.getpid()}/fd/{descriptor}")
-    elif sys.platform == "darwin":
+    elif _system_platform() == "darwin":
         path = Path(f"/dev/fd/{descriptor}")
     else:
         raise PinnedDescriptorError(
@@ -67,14 +75,14 @@ def _descriptor_from_argument(argument: str) -> tuple[Path, int] | None:
     is_proc_fd = re.match(r"^/proc/[0-9]+/fd/", argument) is not None
     if not is_dev_fd and not is_proc_fd:
         return None
-    if os.name != "posix":
+    if _os_name() != "posix":
         raise PinnedDescriptorError("Pinned descriptor arguments require POSIX")
-    if sys.platform.startswith("linux"):
+    if _system_platform().startswith("linux"):
         match = _LINUX_DESCRIPTOR_PATH.fullmatch(argument)
         if match is None or int(match.group(1)) != os.getpid():
             raise PinnedDescriptorError("Pinned descriptor path is invalid")
         return Path(argument), int(match.group(2))
-    if sys.platform == "darwin":
+    if _system_platform() == "darwin":
         match = _DARWIN_DESCRIPTOR_PATH.fullmatch(argument)
         if match is None:
             raise PinnedDescriptorError("Pinned descriptor path is invalid")
@@ -109,7 +117,7 @@ def secure_read_open(path: Path) -> int:
     existing = _descriptor_from_argument(str(candidate))
     if existing is not None:
         descriptor = os.dup(existing[1])
-    elif os.name != "nt":
+    elif _os_name() != "nt":
         nofollow = getattr(os, "O_NOFOLLOW", None)
         if nofollow is None:
             raise PinnedDescriptorError("No-follow file opens are unavailable")
@@ -167,7 +175,8 @@ def _secure_windows_read_open(path: Path) -> int:
             ("nFileIndexLow", wintypes.DWORD),
         ]
 
-    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    win_dll = getattr(ctypes, "WinDLL")
+    kernel32 = win_dll("kernel32", use_last_error=True)
     create_file = kernel32.CreateFileW
     create_file.argtypes = [
         wintypes.LPCWSTR,
@@ -197,7 +206,8 @@ def _secure_windows_read_open(path: Path) -> int:
     if information.dwFileAttributes & 0x00000400:
         kernel32.CloseHandle(handle)
         raise PinnedDescriptorError("Input reparse points are not allowed")
-    return msvcrt.open_osfhandle(handle, os.O_RDONLY | getattr(os, "O_BINARY", 0))
+    open_osfhandle = getattr(msvcrt, "open_osfhandle")
+    return int(open_osfhandle(handle, os.O_RDONLY | getattr(os, "O_BINARY", 0)))
 
 
 __all__ = [

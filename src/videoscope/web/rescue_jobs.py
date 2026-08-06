@@ -536,6 +536,8 @@ class RescueJobManager:
         # `replace` changes only the name in this owned job directory.  The
         # subsequent no-follow open verifies the identity after publication.
         staging.replace(destination)
+        if os.name == "posix":
+            destination.chmod(stat.S_IRUSR)
         descriptor = _secure_read_open(destination)
         os.set_inheritable(descriptor, False)
         try:
@@ -1430,7 +1432,8 @@ def _secure_read_open(path: Path) -> int:
             ("nFileIndexLow", wintypes.DWORD),
         ]
 
-    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    win_dll = getattr(ctypes, "WinDLL")
+    kernel32 = win_dll("kernel32", use_last_error=True)
     create_file = kernel32.CreateFileW
     create_file.argtypes = [
         wintypes.LPCWSTR,
@@ -1460,7 +1463,8 @@ def _secure_read_open(path: Path) -> int:
     if information.dwFileAttributes & 0x00000400:  # FILE_ATTRIBUTE_REPARSE_POINT
         kernel32.CloseHandle(handle)
         raise FileNotFoundError("Local file reparse points are not allowed")
-    return msvcrt.open_osfhandle(handle, os.O_RDONLY | getattr(os, "O_BINARY", 0))
+    open_osfhandle = getattr(msvcrt, "open_osfhandle")
+    return int(open_osfhandle(handle, os.O_RDONLY | getattr(os, "O_BINARY", 0)))
 
 
 def _manifest_entry_from_descriptor(

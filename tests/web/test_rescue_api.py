@@ -1723,7 +1723,10 @@ def test_rescue_public_resolver_rejects_external_symlink(tmp_path: Path) -> None
         (public / "faithful-rescue.mp4").symlink_to(external)
     except OSError as exc:
         manager.shutdown()
-        pytest.skip(f"Windows symlink capability is unavailable: {exc.winerror}")
+        pytest.skip(
+            "Windows symlink capability is unavailable: "
+            f"{getattr(exc, 'winerror', None)}"
+        )
 
     try:
         manager.resolve_public_artifact(record.job_id, "faithful-rescue.mp4")

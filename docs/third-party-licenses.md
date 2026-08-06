@@ -35,7 +35,7 @@ Uvicorn, or Node dependency.
 | `build` | wheel and sdist build | MIT |
 | `setuptools` | build backend | MIT |
 | `wheel` | wheel support | MIT |
-| `httpx` | in-process API test client | BSD-3-Clause |
+| `httpx2` | in-process API test client | BSD-3-Clause |
 | `fastapi` | Web API test runtime | MIT |
 | `uvicorn` | local server test runtime | BSD-3-Clause |
 | `python-multipart` | upload test runtime | Apache-2.0 |

@@ -13,7 +13,7 @@ from typing import Any, ClassVar, cast
 
 import pytest
 from fastapi.testclient import TestClient
-from httpx import Response
+from httpx2 import Response
 
 from tests.analysis.helpers import FakeMedia, FixedSceneDetector, TickClock
 from tests.detectors.dummy import DummyDetector

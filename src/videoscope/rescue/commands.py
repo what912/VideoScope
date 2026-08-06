@@ -400,6 +400,8 @@ def build_decode_verification_command(
         "-xerror",
         "-err_detect",
         "explode",
+        "-max_error_rate",
+        "0",
         "-i",
         str(source),
         "-map",
