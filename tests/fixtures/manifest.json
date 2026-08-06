@@ -1,4 +1,142 @@
 {
+  "content": {
+    "content_join_regression.mp4": {
+      "duration_seconds": 12.0,
+      "explicit_reorder": [
+        2,
+        0,
+        1
+      ],
+      "frame_rate": 10,
+      "goal": "selected_clips",
+      "has_audio": true,
+      "height": 180,
+      "purpose": "selected clips and join regression verification",
+      "recipe_id": "videoscope-content-join-v1",
+      "selected_ranges": [
+        [
+          1.0,
+          3.0
+        ],
+        [
+          5.0,
+          7.0
+        ],
+        [
+          9.0,
+          11.0
+        ]
+      ],
+      "source": "FFmpeg lavfi only; no downloaded media",
+      "tolerance_seconds": 0.11,
+      "width": 320
+    },
+    "content_locked_context.mp4": {
+      "duration_seconds": 12.0,
+      "expected_removed_ranges": [
+        [
+          4.0,
+          5.0
+        ],
+        [
+          7.0,
+          8.0
+        ]
+      ],
+      "frame_rate": 10,
+      "goal": "faithful_clean",
+      "has_audio": true,
+      "height": 180,
+      "locked_keep_range": [
+        5.0,
+        7.0
+      ],
+      "purpose": "locked keep wins over an explicit removal",
+      "recipe_id": "videoscope-content-lock-v1",
+      "remove_range": [
+        4.0,
+        8.0
+      ],
+      "source": "FFmpeg lavfi only; no downloaded media",
+      "tolerance_seconds": 0.11,
+      "width": 320
+    },
+    "content_meeting_structure.mp4": {
+      "duration_seconds": 12.0,
+      "frame_rate": 10,
+      "goal": "faithful_clean",
+      "has_audio": true,
+      "height": 180,
+      "low_information_range": [
+        4.0,
+        8.0
+      ],
+      "purpose": "ordered meeting sections with a corroborated quiet static gap",
+      "recipe_id": "videoscope-content-meeting-v1",
+      "reviewed_remove_range": [
+        4.5,
+        7.5
+      ],
+      "source": "FFmpeg lavfi only; no downloaded media",
+      "speech_like_ranges": [
+        [
+          0.0,
+          4.0
+        ],
+        [
+          8.0,
+          12.0
+        ]
+      ],
+      "tolerance_seconds": 0.11,
+      "transcript": "content_meeting_valid.srt",
+      "width": 320
+    },
+    "content_tutorial_chapters.mp4": {
+      "chapter_ranges": [
+        [
+          0.0,
+          4.0
+        ],
+        [
+          4.0,
+          8.0
+        ],
+        [
+          8.0,
+          12.0
+        ]
+      ],
+      "chapter_titles": [
+        "准备",
+        "操作",
+        "复盘"
+      ],
+      "duration_seconds": 12.0,
+      "frame_rate": 10,
+      "goal": "chaptered_full",
+      "has_audio": true,
+      "height": 180,
+      "purpose": "complete-timeline chapter and subtitle mapping",
+      "recipe_id": "videoscope-content-tutorial-v1",
+      "source": "FFmpeg lavfi only; no downloaded media",
+      "tolerance_seconds": 0.11,
+      "transcript": "content_tutorial_zh.vtt",
+      "width": 320
+    },
+    "transcripts": {
+      "invalid": [
+        "content_overlap.srt",
+        "content_out_of_range.vtt",
+        "content_malformed.srt"
+      ],
+      "privacy": "All transcript files are local generated fixtures.",
+      "valid": [
+        "content_meeting_valid.srt",
+        "content_tutorial_zh.vtt"
+      ]
+    }
+  },
   "generation": {
     "audio": false,
     "frame_rate": 10,
@@ -6,6 +144,639 @@
     "source": "FFmpeg lavfi and program-generated Pillow frames",
     "video_codec": "mpeg4",
     "width": 320
+  },
+  "privacy": {
+    "privacy_clean.mp4": {
+      "duration_seconds": 4.0,
+      "expected_categories": [],
+      "frame_rate": 10,
+      "has_audio": false,
+      "height": 180,
+      "manual_audio_intervals": [],
+      "manual_visual_regions": [],
+      "risks": [],
+      "timing_tolerance_seconds": 0.11,
+      "width": 320
+    },
+    "privacy_manual_visual.mp4": {
+      "duration_seconds": 4.0,
+      "expected_categories": [
+        "manual_visual"
+      ],
+      "frame_rate": 10,
+      "has_audio": false,
+      "height": 180,
+      "manual_audio_intervals": [],
+      "manual_visual_regions": [
+        {
+          "box": {
+            "x_max": 0.8,
+            "x_min": 0.1,
+            "y_max": 0.75,
+            "y_min": 0.15
+          },
+          "end_seconds": 3.6,
+          "start_seconds": 0.4,
+          "style": "blur"
+        }
+      ],
+      "risks": [
+        {
+          "box": {
+            "x_max": 0.8,
+            "x_min": 0.1,
+            "y_max": 0.75,
+            "y_min": 0.15
+          },
+          "category": "manual_visual",
+          "decision": "redact",
+          "end_seconds": 3.6,
+          "start_seconds": 0.4,
+          "style": "blur"
+        }
+      ],
+      "timing_tolerance_seconds": 0.11,
+      "visual_story": {
+        "kind": "moving_face_like_region",
+        "occluded_intervals": [
+          [
+            1.4,
+            2.0
+          ]
+        ],
+        "reappears": true,
+        "visible_intervals": [
+          [
+            0.4,
+            1.4
+          ],
+          [
+            2.0,
+            3.6
+          ]
+        ]
+      },
+      "width": 320
+    },
+    "privacy_qr.mp4": {
+      "duration_seconds": 4.0,
+      "expected_categories": [
+        "qr_code"
+      ],
+      "frame_rate": 10,
+      "has_audio": false,
+      "height": 180,
+      "manual_audio_intervals": [],
+      "manual_visual_regions": [],
+      "risks": [
+        {
+          "box": {
+            "x_max": 0.3125,
+            "x_min": 0.0625,
+            "y_max": 0.555556,
+            "y_min": 0.111111
+          },
+          "category": "qr_code",
+          "decision": "redact",
+          "end_seconds": 1.0,
+          "motion": "static",
+          "start_seconds": 0.0,
+          "style": "solid_fill"
+        },
+        {
+          "box": {
+            "x_max": 0.775,
+            "x_min": 0.075,
+            "y_max": 0.777778,
+            "y_min": 0.333333
+          },
+          "category": "qr_code",
+          "decision": "redact",
+          "end_seconds": 2.0,
+          "motion": "moving",
+          "start_seconds": 1.0,
+          "style": "solid_fill"
+        },
+        {
+          "box": {
+            "x_max": 0.64375,
+            "x_min": 0.35625,
+            "y_max": 0.755556,
+            "y_min": 0.244444
+          },
+          "category": "qr_code",
+          "decision": "redact",
+          "end_seconds": 3.0,
+          "motion": "scaling",
+          "start_seconds": 2.0,
+          "style": "solid_fill"
+        },
+        {
+          "box": {
+            "x_max": 0.9875,
+            "x_min": 0.7375,
+            "y_max": 0.977778,
+            "y_min": 0.533333
+          },
+          "category": "qr_code",
+          "decision": "redact",
+          "end_seconds": 4.0,
+          "motion": "edge_adjacent",
+          "start_seconds": 3.0,
+          "style": "solid_fill"
+        }
+      ],
+      "timing_tolerance_seconds": 0.11,
+      "width": 320
+    },
+    "privacy_tags_av.mp4": {
+      "duration_seconds": 4.0,
+      "expected_categories": [
+        "metadata",
+        "manual_audio"
+      ],
+      "frame_rate": 10,
+      "has_audio": true,
+      "height": 180,
+      "manual_audio_intervals": [
+        {
+          "end_seconds": 2.0,
+          "start_seconds": 1.0,
+          "style": "mute"
+        }
+      ],
+      "manual_visual_regions": [],
+      "metadata_expectations": {
+        "attached_picture": true,
+        "device_semantic_key": "comment",
+        "keys": [
+          "artist",
+          "title",
+          "comment",
+          "location"
+        ],
+        "scopes": [
+          "global",
+          "stream",
+          "chapter",
+          "attachment"
+        ],
+        "semantic_fields": [
+          "author",
+          "title",
+          "device",
+          "location"
+        ]
+      },
+      "risks": [
+        {
+          "category": "metadata",
+          "decision": "redact",
+          "end_seconds": 4.0,
+          "start_seconds": 0.0,
+          "style": "remove_metadata"
+        },
+        {
+          "category": "manual_audio",
+          "decision": "redact",
+          "end_seconds": 2.0,
+          "start_seconds": 1.0,
+          "style": "mute"
+        }
+      ],
+      "timing_tolerance_seconds": 0.11,
+      "width": 320
+    },
+    "privacy_text.mp4": {
+      "duration_seconds": 4.0,
+      "expected_categories": [
+        "suspicious_text"
+      ],
+      "frame_rate": 10,
+      "has_audio": false,
+      "height": 180,
+      "manual_audio_intervals": [],
+      "manual_visual_regions": [],
+      "risks": [
+        {
+          "box": {
+            "x_max": 0.975,
+            "x_min": 0.025,
+            "y_max": 0.955556,
+            "y_min": 0.688889
+          },
+          "category": "suspicious_text",
+          "decision": "redact",
+          "end_seconds": 0.8,
+          "kind": "phone",
+          "start_seconds": 0.0,
+          "style": "solid_fill"
+        },
+        {
+          "box": {
+            "x_max": 0.975,
+            "x_min": 0.025,
+            "y_max": 0.955556,
+            "y_min": 0.688889
+          },
+          "category": "suspicious_text",
+          "decision": "redact",
+          "end_seconds": 1.6,
+          "kind": "email",
+          "start_seconds": 0.8,
+          "style": "solid_fill"
+        },
+        {
+          "box": {
+            "x_max": 0.975,
+            "x_min": 0.025,
+            "y_max": 0.955556,
+            "y_min": 0.688889
+          },
+          "category": "suspicious_text",
+          "decision": "redact",
+          "end_seconds": 2.4,
+          "kind": "address",
+          "start_seconds": 1.6,
+          "style": "solid_fill"
+        },
+        {
+          "box": {
+            "x_max": 0.975,
+            "x_min": 0.025,
+            "y_max": 0.955556,
+            "y_min": 0.688889
+          },
+          "category": "suspicious_text",
+          "decision": "redact",
+          "end_seconds": 3.2,
+          "kind": "account",
+          "start_seconds": 2.4,
+          "style": "solid_fill"
+        }
+      ],
+      "text_cases": [
+        {
+          "box": {
+            "x_max": 0.975,
+            "x_min": 0.025,
+            "y_max": 0.955556,
+            "y_min": 0.688889
+          },
+          "end_seconds": 0.8,
+          "kind": "phone",
+          "language": "zh-CN",
+          "sensitive": true,
+          "start_seconds": 0.0,
+          "value": "电话 TEL 138-0013-8000"
+        },
+        {
+          "box": {
+            "x_max": 0.975,
+            "x_min": 0.025,
+            "y_max": 0.955556,
+            "y_min": 0.688889
+          },
+          "end_seconds": 1.6,
+          "kind": "email",
+          "language": "en",
+          "sensitive": true,
+          "start_seconds": 0.8,
+          "value": "邮箱 EMAIL alice@example.test"
+        },
+        {
+          "box": {
+            "x_max": 0.975,
+            "x_min": 0.025,
+            "y_max": 0.955556,
+            "y_min": 0.688889
+          },
+          "end_seconds": 2.4,
+          "kind": "address",
+          "language": "zh-CN",
+          "sensitive": true,
+          "start_seconds": 1.6,
+          "value": "地址 ADDR 上海浦东 88号"
+        },
+        {
+          "box": {
+            "x_max": 0.975,
+            "x_min": 0.025,
+            "y_max": 0.955556,
+            "y_min": 0.688889
+          },
+          "end_seconds": 3.2,
+          "kind": "account",
+          "language": "en",
+          "sensitive": true,
+          "start_seconds": 2.4,
+          "value": "账号 ACCT CN-912-PRIVATE"
+        },
+        {
+          "box": {
+            "x_max": 0.975,
+            "x_min": 0.025,
+            "y_max": 0.955556,
+            "y_min": 0.688889
+          },
+          "end_seconds": 4.0,
+          "kind": "ordinary",
+          "language": "zh-CN",
+          "sensitive": false,
+          "start_seconds": 3.2,
+          "value": "今日天气晴朗 CREATIVE DEMO"
+        }
+      ],
+      "timing_tolerance_seconds": 0.11,
+      "width": 320
+    }
+  },
+  "publish_ready_fixture": {
+    "audio": {
+      "codec": "aac",
+      "frequency_hz": 440,
+      "source": "FFmpeg lavfi sine"
+    },
+    "duration_seconds": 4.0,
+    "filename": "publish_av.mp4",
+    "frame_rate": 12,
+    "height": 180,
+    "purpose": "Publish Ready profile end-to-end regression",
+    "tolerance_seconds": 0.11,
+    "video_codec": "mpeg4",
+    "width": 320
+  },
+  "rescue": {
+    "rescue_clean_av.mp4": {
+      "acceptance": {
+        "duration_tolerance_seconds": 0.25,
+        "expected_outcome": "completed",
+        "outcome_scope": "faithful_structural"
+      },
+      "damage_tolerance_seconds": 1.0,
+      "duration_seconds": 6.0,
+      "expected_damage_intervals": [],
+      "expected_damage_kinds": [
+        "decodable"
+      ],
+      "frame_rate": 10,
+      "generation": "ffmpeg_filter",
+      "has_audio": true,
+      "height": 180,
+      "source_fixture": "rescue_clean_av.mp4",
+      "source_recipe_id": "videoscope-rescue-clean-av-v1",
+      "source_sha256_record": "rescue-source-hashes.json",
+      "width": 320
+    },
+    "rescue_dark_noise.mp4": {
+      "acceptance": {
+        "duration_tolerance_seconds": 0.25,
+        "expected_outcome": "completed",
+        "maximum_mean_luma": 0.35,
+        "maximum_noise_increase": 0.0,
+        "minimum_luma_gain": 0.01,
+        "outcome_scope": "faithful_structural"
+      },
+      "damage_tolerance_seconds": 1.0,
+      "duration_seconds": 6.0,
+      "expected_damage_intervals": [],
+      "expected_damage_kinds": [
+        "dark",
+        "video_noise"
+      ],
+      "frame_rate": 10,
+      "generation": "ffmpeg_filter",
+      "has_audio": true,
+      "height": 180,
+      "source_fixture": "rescue_clean_av.mp4",
+      "source_recipe_id": "videoscope-rescue-clean-av-v1",
+      "source_sha256_record": "rescue-source-hashes.json",
+      "width": 320
+    },
+    "rescue_fixed_av_offset.mp4": {
+      "acceptance": {
+        "duration_tolerance_seconds": 0.25,
+        "expected_outcome": "completed",
+        "fixed_offset_residual_tolerance_seconds": 0.04,
+        "outcome_scope": "faithful_structural"
+      },
+      "damage_tolerance_seconds": 1.0,
+      "duration_seconds": 6.0,
+      "expected_damage_intervals": [],
+      "expected_damage_kinds": [
+        "fixed_av_offset"
+      ],
+      "frame_rate": 10,
+      "generation": "ffmpeg_filter",
+      "has_audio": true,
+      "height": 180,
+      "source_fixture": "rescue_clean_av.mp4",
+      "source_recipe_id": "videoscope-rescue-clean-av-v1",
+      "source_sha256_record": "rescue-source-hashes.json",
+      "width": 320
+    },
+    "rescue_flicker.mp4": {
+      "acceptance": {
+        "duration_tolerance_seconds": 0.25,
+        "expected_outcome": "completed",
+        "outcome_scope": "faithful_structural"
+      },
+      "damage_tolerance_seconds": 1.0,
+      "duration_seconds": 6.0,
+      "expected_damage_intervals": [],
+      "expected_damage_kinds": [
+        "flicker"
+      ],
+      "frame_rate": 10,
+      "generation": "ffmpeg_filter",
+      "has_audio": true,
+      "height": 180,
+      "source_fixture": "rescue_clean_av.mp4",
+      "source_recipe_id": "videoscope-rescue-clean-av-v1",
+      "source_sha256_record": "rescue-source-hashes.json",
+      "width": 320
+    },
+    "rescue_low_loudness.mp4": {
+      "acceptance": {
+        "duration_tolerance_seconds": 0.25,
+        "expected_outcome": "completed",
+        "outcome_scope": "faithful_structural"
+      },
+      "damage_tolerance_seconds": 1.0,
+      "duration_seconds": 6.0,
+      "expected_damage_intervals": [],
+      "expected_damage_kinds": [
+        "low_loudness"
+      ],
+      "frame_rate": 10,
+      "generation": "ffmpeg_filter",
+      "has_audio": true,
+      "height": 180,
+      "source_fixture": "rescue_clean_av.mp4",
+      "source_recipe_id": "videoscope-rescue-clean-av-v1",
+      "source_sha256_record": "rescue-source-hashes.json",
+      "width": 320
+    },
+    "rescue_middle_damaged.mp4": {
+      "acceptance": {
+        "duration_tolerance_seconds": 0.25,
+        "expected_outcome": "partial",
+        "outcome_scope": "faithful_structural"
+      },
+      "damage_tolerance_seconds": 1.0,
+      "duration_seconds": 6.0,
+      "expected_damage_intervals": [
+        {
+          "end_seconds": 3.0,
+          "start_seconds": 2.0
+        }
+      ],
+      "expected_damage_kinds": [
+        "undecodable"
+      ],
+      "frame_rate": 10,
+      "generation": "payload_zeroing",
+      "has_audio": true,
+      "height": 180,
+      "source_fixture": "rescue_clean_av.mp4",
+      "source_recipe_id": "videoscope-rescue-clean-av-v1",
+      "source_sha256_record": "rescue-source-hashes.json",
+      "width": 320
+    },
+    "rescue_missing_audio.mp4": {
+      "acceptance": {
+        "duration_tolerance_seconds": 0.25,
+        "expected_outcome": "needs_review",
+        "outcome_scope": "faithful_structural"
+      },
+      "damage_tolerance_seconds": 1.0,
+      "duration_seconds": 6.0,
+      "expected_damage_intervals": [],
+      "expected_damage_kinds": [
+        "missing_stream"
+      ],
+      "frame_rate": 10,
+      "generation": "ffmpeg_filter",
+      "has_audio": false,
+      "height": 180,
+      "source_fixture": "rescue_clean_av.mp4",
+      "source_recipe_id": "videoscope-rescue-clean-av-v1",
+      "source_sha256_record": "rescue-source-hashes.json",
+      "width": 320
+    },
+    "rescue_shake.mp4": {
+      "acceptance": {
+        "duration_tolerance_seconds": 0.25,
+        "expected_outcome": "completed",
+        "outcome_scope": "faithful_structural"
+      },
+      "damage_tolerance_seconds": 1.0,
+      "duration_seconds": 6.0,
+      "expected_damage_intervals": [],
+      "expected_damage_kinds": [
+        "shake"
+      ],
+      "frame_rate": 10,
+      "generation": "ffmpeg_filter",
+      "has_audio": true,
+      "height": 180,
+      "source_fixture": "rescue_clean_av.mp4",
+      "source_recipe_id": "videoscope-rescue-clean-av-v1",
+      "source_sha256_record": "rescue-source-hashes.json",
+      "width": 320
+    },
+    "rescue_soft_detail.mp4": {
+      "acceptance": {
+        "duration_tolerance_seconds": 0.25,
+        "expected_outcome": "completed",
+        "outcome_scope": "faithful_structural"
+      },
+      "damage_tolerance_seconds": 1.0,
+      "duration_seconds": 6.0,
+      "expected_damage_intervals": [],
+      "expected_damage_kinds": [
+        "soft_detail"
+      ],
+      "frame_rate": 10,
+      "generation": "ffmpeg_filter",
+      "has_audio": true,
+      "height": 180,
+      "source_fixture": "rescue_clean_av.mp4",
+      "source_recipe_id": "videoscope-rescue-clean-av-v1",
+      "source_sha256_record": "rescue-source-hashes.json",
+      "width": 320
+    },
+    "rescue_tail_damaged.mp4": {
+      "acceptance": {
+        "duration_tolerance_seconds": 0.25,
+        "expected_outcome": "partial",
+        "outcome_scope": "faithful_structural"
+      },
+      "damage_tolerance_seconds": 1.0,
+      "duration_seconds": 6.0,
+      "expected_damage_intervals": [
+        {
+          "end_seconds": 6.0,
+          "start_seconds": 5.0
+        }
+      ],
+      "expected_damage_kinds": [
+        "undecodable"
+      ],
+      "frame_rate": 10,
+      "generation": "payload_zeroing",
+      "has_audio": true,
+      "height": 180,
+      "source_fixture": "rescue_clean_av.mp4",
+      "source_recipe_id": "videoscope-rescue-clean-av-v1",
+      "source_sha256_record": "rescue-source-hashes.json",
+      "width": 320
+    }
+  },
+  "rescue_derivatives": {
+    "rescue_flicker_middle_damaged.mp4": {
+      "acceptance": {
+        "decoded_frame_tolerance": 0.04,
+        "duration_tolerance_seconds": 0.25,
+        "expected_outcome": "partial",
+        "mapping_tolerance_seconds": 0.11,
+        "maximum_residual_luma": 0.14,
+        "outcome_scope": "faithful_structural"
+      },
+      "authorized_correction_intervals": [
+        {
+          "end_seconds": 3.5,
+          "start_seconds": 0.5
+        }
+      ],
+      "clean_interval": {
+        "end_seconds": 6.0,
+        "start_seconds": 5.0
+      },
+      "damage_tolerance_seconds": 1.0,
+      "duration_seconds": 6.0,
+      "expected_damage_intervals": [],
+      "expected_damage_kinds": [
+        "undecodable",
+        "flicker"
+      ],
+      "frame_rate": 10,
+      "generation": "ffmpeg_filter_then_payload_zeroing",
+      "has_audio": true,
+      "height": 180,
+      "locked_interval": {
+        "end_seconds": 4.5,
+        "start_seconds": 3.5
+      },
+      "source_deletion_interval": {
+        "end_seconds": 3.0,
+        "start_seconds": 2.0
+      },
+      "source_fixture": "local_ffmpeg_derivative",
+      "source_recipe_id": "videoscope-rescue-flicker-middle-v1",
+      "source_sha256_record": "rescue-source-hashes.json",
+      "width": 320
+    }
   },
   "schema_version": "1.0",
   "videos": {

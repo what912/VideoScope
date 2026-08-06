@@ -6,7 +6,7 @@ import {
   useRef,
 } from "react";
 import { createPortal } from "react-dom";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 
 import { useAuth } from "../../features/auth/AuthProvider";
 import { useI18n } from "../../i18n/I18nProvider";

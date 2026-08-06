@@ -6,7 +6,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter } from "react-router";
 
 import { I18nProvider } from "../../i18n/I18nProvider";
 import type { BrowserAnalysisService } from "../../services/browser-analysis";

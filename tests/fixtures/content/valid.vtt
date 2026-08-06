@@ -1,0 +1,9 @@
+WEBVTT
+
+intro
+00:00:00.000 --> 00:00:01.000
+<b>Markup-looking text remains text.</b>
+
+second
+00:00:01.250 --> 00:00:02.500 align:start
+Second cue.

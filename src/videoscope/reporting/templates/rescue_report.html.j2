@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Video Rescue report</title>
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, sans-serif; }
+    body { margin: 0 auto; max-width: 72rem; padding: 2rem; background: #101315; color: #edf2f2; }
+    h1, h2 { letter-spacing: -.02em; }
+    section { padding: 1rem 0; border-top: 1px solid #31393b; }
+    code, .number { font-family: ui-monospace, monospace; overflow-wrap: anywhere; }
+    li { margin: .55rem 0; }
+    a { color: #71e7df; }
+    .status { font-weight: 700; text-transform: uppercase; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Video Rescue report</h1>
+    <p>Local, path-free evidence for the confirmed Rescue operation.</p>
+
+    <section aria-labelledby="source-summary">
+      <h2 id="source-summary">Source summary</h2>
+      <dl>
+        <dt>Input SHA-256</dt><dd><code>{{ plan.input_hash }}</code></dd>
+        <dt>Plan digest</dt><dd><code>{{ plan.plan_digest }}</code></dd>
+        <dt>Strategy</dt><dd>{{ plan.strategy }}</dd>
+        <dt>Outcome</dt><dd class="status">{{ report.outcome }}</dd>
+      </dl>
+    </section>
+
+    <section aria-labelledby="assessment">
+      <h2 id="assessment">Assessment context</h2>
+      <p>Requested symptom hints:
+      {% if report.requested_symptoms %}
+        {% for symptom in report.requested_symptoms %}<code>{{ symptom }}</code>{% if not loop.last %}, {% endif %}{% endfor %}
+      {% else %}
+        none
+      {% endif %}
+      </p>
+      <p>Measured parameters: <code>{{ report.assessment_parameters }}</code></p>
+      <ul>
+      {% for limitation in report.assessment_limitations %}<li>{{ limitation }}</li>{% endfor %}
+      {% for warning in report.assessment_warnings %}<li><strong>Needs review:</strong> {{ warning }}</li>{% endfor %}
+      {% if not report.assessment_limitations and not report.assessment_warnings %}<li>No assessment warning was recorded.</li>{% endif %}
+      </ul>
+    </section>
+
+    <section aria-labelledby="timeline">
+      <h2 id="timeline">Observed timeline</h2>
+      <ul>
+      {% for interval in report.damage_map.intervals %}
+        <li><span class="number">{{ interval.start_seconds }} to {{ interval.end_seconds }} seconds</span>: {{ interval.description }}</li>
+      {% else %}
+        <li>No damage interval was recorded by the bounded scan.</li>
+      {% endfor %}
+      </ul>
+    </section>
+
+    <section aria-labelledby="actions">
+      <h2 id="actions">Action execution record</h2>
+      <ul>
+      {% for execution in report.action_executions %}
+        <li><code>{{ execution.action_id }}</code>: {% if execution.status == "succeeded" %}executed{% else %}{{ execution.status }}{% endif %} for {{ execution.artifact_role }}{% for action in plan.actions %}{% if action.id == execution.action_id %}. {{ action.description }}{% endif %}{% endfor %}{% if execution.reason %} {{ execution.reason }}{% endif %}</li>
+      {% else %}
+        <li>No action execution record is available.</li>
+      {% endfor %}
+      </ul>
+    </section>
+
+    <section aria-labelledby="mappings">
+      <h2 id="mappings">Source mappings</h2>
+      <ul>
+      {% for mapping in mappings %}
+        <li><span class="number">source {{ mapping.source_start }} to {{ mapping.source_end }}</span> maps to <span class="number">output {{ mapping.output_start }} to {{ mapping.output_end }}</span> in <code>{{ mapping.output_relative_path }}</code></li>
+      {% else %}
+        <li>No retained source mapping is available.</li>
+      {% endfor %}
+      </ul>
+    </section>
+
+    <section aria-labelledby="verification">
+      <h2 id="verification">Independent verification</h2>
+      <ul>
+      {% for check in report.verification.checks %}
+        <li><strong>{{ check.artifact }} - {{ check.check_id }}</strong>: <span class="status">{{ check.status }}</span>. {{ check.message }}{% if check.measured %} Measurements: <code>{{ check.measured }}</code>{% endif %}</li>
+      {% endfor %}
+      </ul>
+    </section>
+
+    <section aria-labelledby="limits">
+      <h2 id="limits">Limitations and review notes</h2>
+      <ul>
+      {% for limitation in report.limitations %}<li>{{ limitation }}</li>{% endfor %}
+      {% for reason in report.manual_review_reasons %}<li>{{ reason }}</li>{% endfor %}
+      {% if not report.limitations and not report.manual_review_reasons %}<li>No additional limitation was recorded.</li>{% endif %}
+      </ul>
+    </section>
+
+    <section aria-labelledby="downloads">
+      <h2 id="downloads">Downloadable media</h2>
+      <ul>
+      {% for artifact in downloadable_artifacts %}
+        {% set verification_status = report.verification.faithful_status if artifact.artifact_role == "faithful" else report.verification.improved_status %}
+        <li><a href="{{ artifact.relative_path }}">{{ artifact.relative_path }}</a> - {% if verification_status == "passed" %}Verified: passed{% else %}Verification status: {{ verification_status }}{% endif %}. {{ artifact.description }}</li>
+      {% else %}
+        <li>No eligible media download is available.</li>
+      {% endfor %}
+      </ul>
+    </section>
+  </main>
+</body>
+</html>

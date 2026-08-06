@@ -8,33 +8,6 @@ permissions:
   contents: read
 
 jobs:
-  frontend:
-    name: React dashboard
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v6
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: "22"
-          cache: npm
-          cache-dependency-path: web/package-lock.json
-
-      - name: Install locked front-end dependencies
-        working-directory: web
-        run: npm ci
-
-      - name: Test dashboard
-        working-directory: web
-        run: npm test
-
-      - name: Build packaged dashboard assets
-        working-directory: web
-        run: npm run build
-
   test:
     name: ${{ matrix.os }} / Python ${{ matrix.python-version }}
     runs-on: ${{ matrix.os }}
@@ -58,6 +31,13 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
       - name: Install FFmpeg on Linux
         if: runner.os == 'Linux'
         run: |
@@ -77,14 +57,55 @@ jobs:
       - name: Generate deterministic video fixtures
         run: python scripts/generate_test_videos.py --force
 
+      - name: Exercise real Publish Ready profiles
+        run: python -m pytest tests/resolve/test_fixture_publish.py -q
+
+      - name: Exercise real Safe Sharing workflows
+        run: python -m pytest tests/privacy/test_fixture_privacy.py -q
+
+      - name: Exercise real Video Rescue workflows
+        run: python -m pytest tests/rescue/test_fixture_rescue.py -q
+
+      - name: Exercise real Long Video to Useful Content workflows
+        run: python -m pytest tests/content/test_fixture_content.py tests/content/test_native_media.py tests/content/test_performance.py -q
+
       - name: Run repository verification
-        run: python scripts/verify.py
+        run: python scripts/validate.py
+
+      - name: Install locked front-end dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Test dashboard
+        working-directory: web
+        run: npm test
+
+      - name: Build packaged dashboard assets
+        working-directory: web
+        run: npm run build
+
+      - name: Verify packaged dashboard assets are current
+        shell: bash
+        run: |
+          static_changes="$(git status --porcelain --untracked-files=all -- src/videoscope/web/static)"
+          if [ -n "$static_changes" ]; then
+            printf '%s\n' "$static_changes"
+            exit 1
+          fi
+
+      - name: Build wheel and source archive
+        run: python -m build
+
+      - name: Audit distribution contents
+        run: python scripts/audit_distribution.py dist
+
+      - name: Smoke-test clean base wheel
+        run: python scripts/smoke_test.py --dist dist
 
   distribution:
     name: Build and smoke-test distribution
     runs-on: ubuntu-latest
     needs:
-      - frontend
       - test
 
     steps:
@@ -96,6 +117,13 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
 
       - name: Install FFmpeg
         run: |
@@ -110,6 +138,32 @@ jobs:
       - name: Generate deterministic video fixtures
         run: python scripts/generate_test_videos.py --force
 
+      - name: Run repository verification
+        run: python scripts/validate.py
+
+      - name: Exercise real Video Rescue workflows
+        run: python -m pytest tests/rescue/test_fixture_rescue.py -q
+
+      - name: Exercise real Long Video to Useful Content workflows
+        run: python -m pytest tests/content/test_fixture_content.py tests/content/test_native_media.py tests/content/test_performance.py -q
+
+      - name: Install locked front-end dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Build current packaged dashboard assets
+        working-directory: web
+        run: npm run build
+
+      - name: Verify packaged dashboard assets are current
+        shell: bash
+        run: |
+          static_changes="$(git status --porcelain --untracked-files=all -- src/videoscope/web/static)"
+          if [ -n "$static_changes" ]; then
+            printf '%s\n' "$static_changes"
+            exit 1
+          fi
+
       - name: Build wheel and source archive
         run: python -m build
 
@@ -117,7 +171,7 @@ jobs:
         run: python scripts/audit_distribution.py dist
 
       - name: Smoke-test wheel in a clean virtual environment
-        run: python scripts/smoke_test.py --dist dist --video tests/fixtures/generated/black_segment.mp4
+        run: python scripts/smoke_test.py --dist dist --video tests/fixtures/generated/privacy_manual_visual.mp4
 
       - name: Upload distributions
         uses: actions/upload-artifact@v7

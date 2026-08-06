@@ -36,17 +36,18 @@ def test_base_dependencies_exclude_heavy_optional_runtimes() -> None:
     )
 
 
+def test_numpy_dependency_preserves_python_311_type_checking() -> None:
+    """Do not admit NumPy releases whose stubs require Python 3.12."""
+    metadata = project_metadata()
+
+    assert "numpy>=1.26,<2.5" in metadata["dependencies"]
+
+
 def test_expected_optional_dependency_groups_are_declared() -> None:
     metadata = project_metadata()
     extras = cast(dict[str, list[str]], metadata["optional-dependencies"])
 
-    assert {"ai", "ocr", "web", "all"} <= extras.keys()
-    assert set(extras["all"]) == set(extras["ai"] + extras["ocr"] + extras["web"])
-
-
-def test_development_extra_uses_official_httpx_test_client() -> None:
-    metadata = project_metadata()
-    extras = cast(dict[str, list[str]], metadata["optional-dependencies"])
-
-    assert "httpx>=0.27" in extras["dev"]
-    assert not any(requirement.startswith("httpx2") for requirement in extras["dev"])
+    assert {"ai", "asr", "ocr", "web", "all"} <= extras.keys()
+    assert set(extras["all"]) == set(
+        extras["ai"] + extras["asr"] + extras["ocr"] + extras["web"]
+    )

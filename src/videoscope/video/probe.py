@@ -13,6 +13,11 @@ from typing import Any, cast
 from pydantic import JsonValue, ValidationError
 
 from videoscope.domain import VideoMetadata
+from videoscope.privacy.metadata import (
+    PrivateProbeSummary,
+    private_probe_summary_from_ffprobe,
+)
+from videoscope.processes import pinned_subprocess_options
 from videoscope.video.errors import (
     ExternalToolNotFoundError,
     NoVideoStreamError,
@@ -87,6 +92,28 @@ def _creation_time(
     return None
 
 
+def _rotation_degrees(video_stream: Mapping[str, Any]) -> float:
+    candidates: list[object] = []
+    raw_side_data = video_stream.get("side_data_list")
+    if isinstance(raw_side_data, list):
+        candidates.extend(
+            _mapping(side_data).get("rotation") for side_data in raw_side_data
+        )
+    candidates.append(_mapping(video_stream.get("tags")).get("rotate"))
+    for candidate in candidates:
+        if candidate in (None, "", "N/A"):
+            continue
+        try:
+            rotation = float(str(candidate))
+        except (TypeError, ValueError):
+            continue
+        normalized = rotation % 360.0
+        if normalized > 180.0:
+            normalized -= 360.0
+        return 0.0 if abs(normalized) < 1e-6 else normalized
+    return 0.0
+
+
 def _select_video_stream(
     streams: list[Mapping[str, Any]],
 ) -> Mapping[str, Any] | None:
@@ -147,6 +174,15 @@ def metadata_from_ffprobe(
             if value not in (None, "")
         }
     )
+    audio_stream = next(
+        (stream for stream in streams if stream.get("codec_type") == "audio"),
+        None,
+    )
+    if audio_stream is not None and audio_stream.get("codec_name"):
+        raw_probe["audio_codec"] = str(audio_stream["codec_name"])
+    rotation_degrees = _rotation_degrees(video_stream)
+    if rotation_degrees != 0:
+        raw_probe["rotation_degrees"] = rotation_degrees
 
     try:
         return VideoMetadata(
@@ -180,6 +216,42 @@ def probe_video(
     timeout_seconds: float = DEFAULT_PROBE_TIMEOUT_SECONDS,
 ) -> VideoMetadata:
     """Probe one local video through a shell-free ffprobe invocation."""
+    input_path, payload = _probe_payload(
+        path,
+        ffprobe=ffprobe,
+        timeout_seconds=timeout_seconds,
+    )
+    return metadata_from_ffprobe(payload, input_path=input_path)
+
+
+def probe_video_with_private_summary(
+    path: Path,
+    *,
+    ffprobe: str = "ffprobe",
+    timeout_seconds: float = DEFAULT_PROBE_TIMEOUT_SECONDS,
+) -> tuple[VideoMetadata, PrivateProbeSummary]:
+    """Probe once and keep sensitive tags only in a bounded private summary."""
+    input_path, payload = _probe_payload(
+        path,
+        ffprobe=ffprobe,
+        timeout_seconds=timeout_seconds,
+    )
+    public_metadata = metadata_from_ffprobe(payload, input_path=input_path)
+    private_summary = private_probe_summary_from_ffprobe(
+        payload,
+        filename=input_path.name,
+        duration_seconds=public_metadata.duration_seconds,
+    )
+    return public_metadata, private_summary
+
+
+def _probe_payload(
+    path: Path,
+    *,
+    ffprobe: str,
+    timeout_seconds: float,
+) -> tuple[Path, Mapping[str, Any]]:
+    """Return decoded ffprobe JSON without logging or persisting its raw form."""
     input_path = Path(path)
     if not input_path.is_file():
         raise VideoNotFoundError(f"Input file not found: {input_path.name}")
@@ -194,6 +266,7 @@ def probe_video(
         "json",
         "-show_format",
         "-show_streams",
+        "-show_chapters",
         str(input_path),
     ]
     try:
@@ -205,6 +278,7 @@ def probe_video(
             errors="replace",
             shell=False,
             timeout=timeout_seconds,
+            **pinned_subprocess_options(arguments),
         )
     except FileNotFoundError as exc:
         raise ExternalToolNotFoundError(
@@ -239,7 +313,4 @@ def probe_video(
         raise VideoProbeError(
             f"ffprobe returned an invalid JSON root for: {input_path.name}"
         )
-    return metadata_from_ffprobe(
-        cast(Mapping[str, Any], raw_payload),
-        input_path=input_path,
-    )
+    return input_path, cast(Mapping[str, Any], raw_payload)

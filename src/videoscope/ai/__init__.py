@@ -26,6 +26,7 @@ from videoscope.ai.models import (
     OCRObservation,
     Precision,
 )
+from videoscope.ai.ocr import OCRRuntimeUnavailableError, detect_with_optional_ocr
 from videoscope.ai.protocols import EmbeddingProvider, ModelProvider, OCRProvider
 from videoscope.ai.runtime import (
     DuplicateModelRegistrationError,
@@ -74,8 +75,10 @@ __all__ = [
     "OCRImageInput",
     "OCRObservation",
     "OCRProvider",
+    "OCRRuntimeUnavailableError",
     "Precision",
     "UnknownModelError",
     "create_model_runtime",
     "default_embedding_cache_directory",
+    "detect_with_optional_ocr",
 ]

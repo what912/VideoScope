@@ -451,52 +451,182 @@ through the job endpoint, and reconnects SSE from the last event sequence.
 Source video streaming remains bounded to the retained job input path, while
 evidence and reports continue through the artifact containment checks.
 
-## Public static site addendum
+## 14. A：Publish Ready architecture
 
-The `site/` application is a separate static-browser adapter and not a client of
-the Python Web API. Its `BrowserAnalysisService` decodes user-selected media
-with the browser media stack, creates one bounded sample set, derives shared
-frame metrics, and runs four browser implementations of the CPU heuristics.
-Thresholds live in typed configuration. Detector failures are represented
-explicitly and do not erase successful detector results.
+本节为 v0.3 开发线增加可选的本地处理架构。它与 v0.1 Check 的诊断路径并存，
+不修改 `AnalysisReport` 的任何字段，也不改变既有 `videoscope analyze` 行为、
+安装依赖或离线 CPU 测试边界。
+
+### 14.1 Publish Ready data flow
 
 ```text
-Local File / consented HTTPS URL
- └─ browser metadata + codec decode
-     └─ bounded frame sampling
-         ├─ shared metrics and scene context
-         ├─ near_black
-         ├─ possible_freeze
-         ├─ scene_relative_blur
-         └─ global_flicker
-             └─ validated browser report
-                 ├─ local IndexedDB report + compact evidence
-                 ├─ Workspace / Compare / Report routes
-                 └─ optional sanitized share projection
+input -> Check baseline -> PublishPlan -> confirmation -> native FFmpeg
+      -> output Check -> VerificationReport -> artifact publication
 ```
 
-The browser report is deliberately not presented as the Python report schema.
-It records the browser runtime, sampling configuration, detector executions,
-warnings, limitations, and Findings, but does not claim FFmpeg equivalence,
-model accuracy, or a cross-detector overall score. Central marketing demo data
-is isolated from real reports and cannot be substituted when a report is
-missing, revoked, or invalid.
+处理器只在确认后运行。本地 FFmpeg/ffprobe 调用必须使用参数数组和
+`shell=False`；不存在远程执行、GPU 或模型运行时。源文件只读，处理器只向任务
+输出根目录写入独立产物。
 
-Browser-local persistence stores report metadata, detector configuration,
-Findings, review state, and compressed evidence thumbnails. It does not persist
-the original media blob or an absolute filesystem path. Object URLs are
-session-scoped and released on replacement, cancellation, or cleanup.
+### 14.2 Versioned artifacts
 
-Authentication and sharing are optional injected adapters. Missing Supabase
-configuration selects unavailable adapters; therefore anonymous analysis has
-no authentication dependency. Sharing has an independent explicit enable flag,
-requires user consent, uploads only a validated sanitized projection, and
-supports revocation when the configured service is available. Supabase row
-level security and provider callback configuration remain deployment concerns,
-not assumptions made by the static application.
+一个完成或可复核的 Publish Ready 任务在输出根目录中使用以下稳定相对路径：
 
-The production bundle uses the `/VideoScope/` base and a same-origin GitHub
-Pages 404 restoration shim. The Pages workflow builds only `site/`; it neither
-publishes Python packages nor downloads models. All decorative media is served
-from checked-in local files with a license manifest, and the build rejects
-unapproved runtime URLs and oversized bundles.
+```text
+plan.json
+preview/publish-preview.mp4
+publish-ready.mp4
+cover.jpg
+changes.json
+technical-report.json
+analysis-before/report.json
+analysis-after/report.json
+```
+
+`plan.json` 是确认前的版本化 `PublishPlan`，`changes.json` 是已执行动作的记录，
+`technical-report.json` 承载版本化 `VerificationReport`。分析前后报告分别位于
+`analysis-before/report.json` 和 `analysis-after/report.json`。JSON 报告只能引用
+输出根目录内的相对路径，路径分隔符必须为正斜杠，且不得泄露输入、临时目录或
+其他个人绝对路径。
+
+### 14.3 Resolve lifecycle and CLI outcome
+
+Publish Ready 生命周期固定为：
+
+```text
+created -> inspecting -> planning -> awaiting_confirmation -> processing -> verifying -> completed|needs_review|failed|cancelled
+```
+
+Publish CLI 使用如下退出码；这组退出码独立于既有分析命令的退出码：
+
+```text
+0   output exists and verification passed
+2   input, profile, configuration, or confirmation error
+3   FFmpeg/ffprobe could not process the media
+4   internal orchestration or artifact failure
+5   output exists but verification requires human review
+130 user cancellation
+```
+
+验证失败绝不产生 `completed`；它只能进入 `needs_review`（输出存在但需要人工
+复核）或 `failed`（无法安全发布可用结果）。
+
+## 15. D：Safe Sharing privacy-domain contract
+
+Safe Sharing 是独立于 v0.1 `AnalysisReport` 的 Resolve 领域。其核心模型位于
+`videoscope.privacy`，不被既有检测器导入或调用；未来扫描器、计划器、执行器和
+验证器仅通过这个版本化边界交换数据。详细的字段、验证、确定性 ID、摘要与 JSON
+规则见 [`docs/privacy-schema.md`](privacy-schema.md)。
+
+## 16. B：Video Rescue domain contract
+
+Video Rescue 位于独立的 `videoscope.rescue` 包，与 v0.1 Check、Publish Ready 和
+Safe Sharing 领域通过版本化模型而非隐式副作用交互。它的首个负载承重边界包括
+`MediaDamageMap`、`RescuePlan`、`RescueConfirmation`、`RescueChangeLog`、独立的
+`RescueVerificationReport` 与公开 `RescueTechnicalReport`。字段、枚举、路径验证、
+确定性排序及 canonical JSON 规则定义于
+[`docs/rescue-schema.md`](rescue-schema.md)。
+
+后续扫描器、计划器、预览器、执行器和验证器只能通过这些模型传递路径安全、无个人
+绝对路径的数据。源媒体只读；faithful 和 improved 产物独立验证，improved 失败不能
+使已通过验证的 faithful 产物失效。该领域不导入模型运行时、不探测 GPU、也不改变
+`AnalysisReport` 序列化。
+
+Rescue 公共契约当前为 schema 0.2。0.2 为验证产物增加必填的
+`artifact_role`，使终态消费者不必也不得通过文件名猜测 faithful 或 improved。
+由于 0.1 没有足够信息安全重建该角色，核心读取器和 Web 作业恢复对 0.1 记录
+fail-closed；不进行隐式升级或重标版本，需重新运行本地 Rescue 生成 0.2 记录。
+
+Schema 0.2 also preserves action-ledger presence: a missing
+`action_executions` field means unknown execution state, while an explicit
+empty ledger means no executable action was recorded. Neither means every
+action succeeded. Canonical writers emit the field and still reject unknown
+fields. Confirmations bind the exact previewed action set; persisted previews
+or confirmations without that binding require regeneration before execution.
+
+```text
+private input -> PrivacyRiskMap -> reviewed PrivacyPlan -> confirmation
+              -> staged sharing copy -> PrivacyVerificationReport
+              -> public PrivacyTechnicalReport + share-package
+```
+
+The final arrow is permitted only when the verification outcome is `completed`.
+Every other terminal outcome removes the pending candidate and leaves the public
+package empty; private preview evidence remains physically separate.
+
+`PrivacyRiskMap` 是私有复核文档。风险中的 `private_evidence` 只能留在私有地图；
+构造公开摘要时必须移除，公开技术报告和分享包均不得重新引入。所有公共产物路径
+都要是输出根目录内的正斜杠相对路径。模型拒绝额外字段、非有限或负秒数、无面积
+归一化框、无效审核决定和逃逸路径。
+
+每个风险 ID 基于输入哈希、扫描器、风险类型、时间范围和可选归一化框生成；风险
+地图以时间、严重程度、扫描器和 ID 固定排序。计划摘要覆盖输入哈希、Profile、有效
+配置、已审核风险、动作及公开产物，不覆盖 `reviewed_at` 审计时间。所有 JSON 使用
+UTF-8、未转义 Unicode、排序键、稳定数组、禁止 NaN/Infinity 和同目录临时文件的
+原子替换。
+
+## 17. C：Long Video to Useful Content architecture
+
+C 位于独立的 `videoscope.content` 包，不扩展或改写 v0.1 `AnalysisReport`，也不
+把 A、B 或 D 的终态报告当作可变存储。它复用经过版本化适配的只读媒体探测、镜头、
+抽帧和可观察 CPU 特征，并产生自己的 `ContentMap`、`Storyboard`、
+`ContentPlan`、`ContentConfirmation`、`ContentSourceMapping`、变更记录、独立验证
+报告与技术报告。
+
+```text
+local source + optional local timed transcript
+  -> deterministic content map
+  -> Faithful Clean | Chaptered Full | Selected Clips storyboard
+  -> user locks and edits
+  -> bounded private join previews
+  -> exact digest confirmation
+  -> staged native FFmpeg execution
+  -> independent verification
+  -> atomic content-output publication
+```
+
+结构特征 provider 只能返回可观察证据、版本、有效参数和 warning，不能自行删除
+内容或调用另一个 Detector。内容计划器是确定性的纯领域层：锁定保留区间优先，
+静音本身不能自动触发删除，目标时长不能强迫不安全删减，默认保持来源顺序。
+
+执行层只接受与来源哈希、可选字幕哈希、配置、锁定区间、故事板、预览身份和验证
+策略完全匹配的确认。所有外部进程使用参数数组和 `shell=False`，源视频只读，媒体
+先写入 staging。独立验证通过后，固定 allowlist 才能原子发布到
+`content-output/`；私有 `content-review-private/` 永不通过公开 artifact 路由提供。
+
+每个内容改变输出都必须有覆盖完整输出时间线的半开区间来源映射。必需验证失败为
+`failed`，结论不充分为 `needs_review`；不能用执行成功标志代替验证。CLI 和本地
+Web API 调用同一核心 pipeline。基础安装、基础测试和三种 CPU 工作流不导入 AI、
+不探测 GPU、不访问网络且不下载模型。Advanced AI 是 C CPU 门禁之后的独立阶段。
+
+## 18. Advanced AI architecture
+
+Advanced AI 使用独立的 `videoscope.intelligence` 版本化领域，不修改 v0.1
+`AnalysisReport`、Detector 协议或既有 A/D/B/C 序列化。共享
+`ModelRuntimeManager` 仍是 provider 生命周期的唯一所有者；新的 ASR 和内容智能
+provider 只增加能力协议，不复制模型实例、下载政策或设备解析。
+
+```text
+ContentMap + trusted transcript | optional local ASR
+  -> bounded evidence request
+  -> local structured intelligence provider
+  -> schema validation + grounding audit
+  -> private suggestion batch
+  -> user review decisions
+  -> accepted ranges as ordinary ContentUserRange values
+  -> existing C preview / confirmation / execution / verification
+```
+
+模型不能直接持有 `LongVideoContentPipeline`，不能执行 FFmpeg，也不能写公开产物。
+Grounding 层拒绝越界区间、未知 cue、缺少证据、超长文本、额外字段和非有限数字。
+生成响应被规范化以后，建议 ID、排序、复核记录和 C bridge 必须确定；不同硬件上的
+原始推理本身不宣称逐字节确定。
+
+`FasterWhisperASRProvider` 和 loopback-only 的
+`OllamaContentIntelligenceProvider` 属于可选运行库。基础安装只包含协议和 Fake
+provider。真实权重不进入仓库或 wheel，非交互下载必须显式授权；Ollama provider
+不执行 pull，也不接受非 loopback endpoint。
+
+AI 私有复核树包含转写、证据请求、原始验证后建议和拒绝项。公共技术报告只包含
+接受项的脱敏来源摘要、provider/model 标识、限制和执行状态，不包含原始 prompt、
+完整字幕、用户路径或私有缩略图。

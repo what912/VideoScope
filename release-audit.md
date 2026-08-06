@@ -1,164 +1,145 @@
-# GenVideoScope 0.2.0 release audit
+# GenVideoScope 0.7.0 development release audit
 
-Audit date: 2026-07-29  
-Candidate: `genvideoscope 0.2.0rc1`  
-Public identities: GitHub repository `GenVideoScope`, PyPI distribution
-`genvideoscope`, Python package `videoscope`, CLI `videoscope`
+Audit date: 2026-08-06
 
-This audit records checks performed against the release candidate. It is not a
-security certification and it does not claim detector accuracy on real
-generated videos.
+Candidate: `genvideoscope 0.7.0.dev0`
 
-## Passed
+Branch: `codex/advanced-ai-useful-content`
 
-### Security and privacy
+Scope: the local-first CPU product line—Check, A Publish Ready, D Safe Sharing,
+B Video Rescue, C Long Video to Useful Content—and the optional, review-first
+Advanced AI assistance layer. This is engineering evidence, not a security
+certification or a real-world semantic-accuracy/usefulness claim.
 
-- Scans of first-party source, configuration, documentation, and examples found
-  no committed API key, access token, personal email address, Windows user
-  profile path, or local media file.
-- External commands use argument arrays with `shell=False`; no production use
-  of `shell=True` was found.
-- Uploads are read in bounded chunks and rejected after the configured byte
-  limit. Extension and MIME are advisory; the shared pipeline still validates
-  the media with ffprobe.
-- Job and artifact paths use generated identifiers, resolved-path containment,
-  and traversal rejection.
-- The local server defaults to loopback. Host headers and browser origins are
-  restricted to loopback unless the operator explicitly enables network
-  access. Wildcard CORS is not enabled.
-- Jinja auto-escaping protects the offline report, report URLs are generated
-  from controlled relative paths, and the React application does not inject
-  untrusted HTML.
-- API errors and FFmpeg diagnostics are sanitized before exposure. Reports do
-  not contain workspace paths.
-- Full input video is not bundled into a report unless the user explicitly
-  requests it.
-- Base tests have an enforced non-loopback socket guard.
+## Passed automated checks
 
-### Dependencies and packaging
+### Repository and native media
 
-- The base dependency group contains CPU analysis libraries only. Torch,
-  OpenCLIP, PaddleOCR, PaddlePaddle, FastAPI, Uvicorn, and multipart support are
-  absent from a clean base-wheel installation.
-- `ai`, `ocr`, and `web` are separate optional extras. `all` is opt-in. The
-  development extra includes Web dependencies only so it can run the complete
-  API test suite.
-- A clean `wheel[ai]` installation registered providers without importing
-  Torch/OpenCLIP during registration and without downloading model weights.
-- Direct Python and dashboard dependencies and their declared licenses are
-  inventoried in `docs/third-party-licenses.md`.
-- Wheel and sdist content audits found no generated test video, `runs`
-  directory, virtual environment, `node_modules`, cache, model weight, or
-  personal absolute path.
-- FFmpeg remains an external executable and is not redistributed by the
-  project.
+- `python scripts/validate.py` passed Ruff and formatting for 356 files, strict
+  mypy for 300 source files, and pytest with 1,414 passed and 17 explicit
+  optional/environment skips on Windows/Python 3.12.
+- `python scripts/generate_test_videos.py --force` generated and decoded 29
+  local synthetic videos twice with FFmpeg 9.0. File hashes matched between
+  runs. No media was downloaded and generated videos are excluded from the
+  distributions.
+- C native gates proved exact reviewed removal with locked-keep precedence,
+  complete-timeline chapters and Unicode subtitles, exact selected clips,
+  explicit reorder acknowledgement, playable output, source immutability,
+  complete source maps, stream/duration checks, and no new required
+  black/freeze/audio/A-V or sustained join regression.
+- The native Fake-AI gate ran a generated meeting fixture twice, obtained
+  identical suggestion IDs and batch digest, accepted only one exact reviewed
+  highlight, and passed C selected-clips rendering and source-map verification.
+- Advanced-AI evaluation tests report chapter/highlight temporal IoU, event
+  precision, recall, F1, coverage and boundary errors separately. They do not
+  produce an uncalibrated aggregate quality score.
 
-### Performance and lifecycle
+### Frontend and local API
 
-- File hashing and uploads are streamed; the complete video is not loaded into
-  memory.
-- Frame sampling is a single pipeline stage reused by all detectors.
-- The AI runtime lazy-loads shared providers and keys embedding caches by video
-  hash, timestamp, model, and preprocessing version.
-- Reports reference evidence thumbnails and do not embed the source video by
-  default.
-- Workspaces are removed after successful analysis unless explicitly retained;
-  Web jobs have expiry cleanup and cancellation support.
+- `npm test -- --run` passed 113 tests across 17 files.
+- TypeScript checks and `npm run build` passed and the packaged static dashboard
+  was synchronized.
+- English and Simplified Chinese Advanced AI and C review flows, stable
+  Check/A/B/C/D navigation, keyboard controls, lifecycle recovery,
+  cancellation, deletion and literal `what912` attribution have automated
+  contract coverage.
+- The Advanced AI API is loopback-only. It has a bounded semaphore, rejects
+  stale C revisions and changed inputs, and keeps transcript/evidence/review
+  artifacts outside public artifact routes.
+- The GitHub Pages application passed lint, TypeScript, 519 tests across 55
+  files, a production build, and exact allowlist verification for 15
+  deterministically generated project-authored media files.
+- React Router was migrated to the patched 8.3.0 package and Vite to 8.2.0;
+  `npm audit --audit-level=high` reports zero known vulnerabilities for the
+  public-site dependency tree at the audit time.
 
-### Stable interfaces
+### Build and distribution
 
-- Reports declare schema version `0.1`; the candidate tool version is
-  `0.2.0rc1`.
-- Analysis and detector configuration is Pydantic-validated.
-- CLI exit codes remain `0` for completed analysis (including findings), `2`
-  for input/configuration errors, `3` for unprocessable video, and `4` for
-  internal analysis failure.
-- Detectors use the shared protocol, requirements model, configuration model,
-  execution record, and deterministic Finding structure.
-- Detector failures are isolated and represented as failed executions rather
-  than discarding the report.
+- `python -m build --no-isolation` built
+  `genvideoscope-0.7.0.dev0-py3-none-any.whl` and the matching sdist. The
+  standard isolated command could not bootstrap `setuptools` in the restricted
+  local environment; the build still rebuilt the wheel from the produced sdist.
+- `scripts/audit_distribution.py` passed both archives and required the
+  Advanced AI runtime, providers, evaluation code and documentation.
+- The audit rejects videos, runs, caches, logs, generated fixtures, private
+  transcript/evidence/preview trees, pending/staging trees, public job outputs,
+  workspaces and personal absolute paths.
+- The base distribution declares no AI, ASR, OCR or Web dependency. Faster
+  Whisper remains in the separate `asr` extra; Ollama uses only a user-started
+  loopback endpoint and never pulls a model implicitly.
+- The exact base wheel passed a clean-environment smoke covering `--version`,
+  `doctor`, CPU Check, A Publish Ready, manual-region D Safe Sharing,
+  Conservative and Balanced B Video Rescue, and all three confirmed C goals.
+- Final archive checksums must be generated after this tracked document is
+  frozen and stored outside the sdist because an embedded sdist hash would be
+  self-referential.
 
-### Documentation, examples, and verification
+## Security and privacy audit
 
-- README installation and CLI commands were exercised against the built wheel.
-- Example PowerShell, shell, batch API, custom detector, and configuration files
-  are present and validated by tests.
-- Documentation distinguishes CPU and optional AI/OCR heuristics, states
-  limitations, and does not present synthetic-fixture results as real-world
-  accuracy.
-- Clean base-wheel analysis of `black_segment.mp4` produced JSON and offline
-  HTML without an absolute workspace path.
-- Clean Web-extra smoke testing covered health, dashboard serving, detector
-  listing, upload, job completion, report retrieval, and shutdown.
-- The React dashboard completed all 10 tests and a production build.
-- Repository verification completed lint, format, strict type checking, and
-  tests. The final suite passed 228 tests; 3 real-model optional tests were
-  skipped by design.
-- Wheel and sdist build and distribution-content audit completed successfully.
+- Production scans found no `shell=True`, `os.system`, stored credential,
+  common API key/token pattern or configured remote media-processing call.
+- External media commands use argument arrays, bounded diagnostics and checked
+  return codes. FFmpeg remains an external executable and is not copied into
+  source or archives.
+- Source files remain unchanged. Exact accepted action IDs, input/transcript
+  hashes, effective configuration, suggestion/plan digests, preview identity
+  and reorder acknowledgement are bound before media changes are allowed.
+- Suggestions start rejected. Text summaries and titles cannot edit media;
+  accepted chapter/highlight ranges still pass through C's ordinary private
+  preview, exact confirmation, native rendering and verification path.
+- Public JSON/HTML reject private absolute paths and unsafe artifact paths.
+  AI cancellation, deletion, provider failure and stale state fail closed.
+- Web uploads are bounded and ffprobe-validated. Artifact paths are normalized
+  and restricted. The service binds loopback by default with no wildcard CORS.
 
-## Risks
+## Risks and known limitations
 
-- Reports intentionally retain the input filename, SHA-256 hash, optional
-  prompt, selected metadata, findings, and evidence thumbnails. A user must
-  review these artifacts before sharing them.
-- `videoscope serve --allow-network` broadens the trust boundary and provides
-  no authentication or multi-user isolation. It is intended only for a trusted
-  network with an operator-supplied protective layer.
-- The local job executor has configurable worker counts and per-upload limits,
-  but the queued-job count and aggregate retained storage are not globally
-  quota-limited. Untrusted network exposure can cause resource exhaustion.
-- The DINOv2 provider uses an explicitly authorized Torch Hub download path.
-  That still carries upstream code and model supply-chain risk; pin and review
-  the exact repository revision and weight terms before organizational use.
-- Python version ranges allow transitive resolution to change over time.
-  Distributors needing reproducible environments should publish reviewed
-  constraints or lock files.
-- Detector outputs are heuristic observations. Static scenes, intentional
-  black frames, motion, occlusion, lighting, OCR errors, and model limitations
-  can create false positives or false negatives.
-- The tested temporary Windows FFmpeg 8.1.2 essentials build identifies itself
-  as GPLv3. It was used only as an external local test tool and is not included
-  in either distribution.
+- CPU signals and AI suggestions are heuristic. Silence, low visual change,
+  transcript wording or model output do not prove that content is unimportant.
+- Optional Advanced AI can transcribe locally and propose grounded chapters,
+  highlights, summaries and titles. It does not establish truth, guarantee a
+  useful edit, auto-accept media changes or provide a quality/virality score.
+- Fake providers prove contracts, determinism, caching and failure isolation;
+  they do not measure real Faster Whisper or Ollama semantic quality.
+- FFmpeg build, codec, VFR, damaged-media and player differences remain
+  operational risks. Reports, filenames, hashes, transcripts, prompts,
+  thumbnails, previews, video and audio can all contain sensitive information.
+- The loopback workbench has no public account, TLS, billing, quota or
+  multi-tenant isolation boundary and must not be exposed as a public server.
 
-## Not yet verified
+## Human inspection required
 
-- The GitHub Actions Linux/Windows and Python 3.11/3.12 matrix has not run on
-  the final public commit.
-- Native Linux and macOS smoke tests were not run on this Windows workstation.
-- Real OpenCLIP/DINOv2 weights, CUDA execution, PaddleOCR models, and multilingual
-  OCR behavior were not exercised; offline fakes cover the contracts.
-- Detector accuracy, memory use, and throughput on a representative,
-  independently labelled real-video corpus have not been measured.
-- All direct licenses were reviewed, but a final resolved transitive dependency
-  license and vulnerability scan remains a distributor responsibility.
-- Browser behavior should receive a final manual pass in Firefox, Chromium, and
-  a keyboard-only workflow after the release artifact is fixed.
+1. Use authorized meeting, tutorial, lecture, interview and screen-recording
+   media; judge every proposal, transcript, join, subtitle and output.
+2. Evaluate a locally cached Faster Whisper model and an explicitly selected
+   Ollama model. Record model/version and separate grounding errors from product
+   workflow defects.
+3. Test English/Simplified Chinese, keyboard-only focus, reduced motion, mobile
+   layout, refresh/recovery, cancellation, deletion and browser console output.
+4. Profile CPU, peak memory and temporary disk on representative 30-minute,
+   one-hour and multi-hour inputs.
+5. Review transitive licenses/vulnerabilities, PyPI ownership, the exact Git
+   index, exact-commit CI and external archive checksums before a stable tag.
 
-## Human actions required
+## Externally unverified
 
-1. Confirm GitHub `GenVideoScope` and PyPI `genvideoscope` availability and
-   ownership.
-2. Create the public repository URLs, security contact route, and project
-   maintainer metadata; replace any remaining repository-URL placeholders.
-3. Review exact resolved transitive licenses, known vulnerabilities, model
-   cards, and weight terms for every installation profile being advertised.
-4. Review report screenshots and sample artifacts for private filenames,
-   prompts, metadata, and evidence.
-5. Run the final CI matrix on the exact commit, inspect wheel/sdist artifacts,
-   and sign or attest them according to the maintainer's release policy.
-6. Only after all gates pass, create the commit/tag and perform PyPI/GitHub
-   publication manually.
+- GitHub Actions has not yet run on the exact final commit. Windows/Linux and
+  Python 3.11/3.12 remain external evidence until that matrix is green.
+- Native Linux/macOS media and player behavior is not verified in this local
+  Windows run.
+- No representative private user media, uncommon codec corpus, encrypted
+  input, multi-hour run, current-browser manual session, real ASR/Ollama/AI/OCR
+  model, GPU or model download was used.
+- No PyPI upload or production multi-user AI hosting boundary was performed.
 
-## Release blockers
+## Release decision
 
-There is no known failing local code or build check. Public release remains
-blocked until all of these manual gates pass:
+The CPU product and optional review-first Advanced AI layer have a green local
+automated baseline and are suitable for an openly labeled development or release
+candidate publication after the exact-commit CI passes. A stable release claim
+remains premature until the human, real-model, supply-chain and cross-platform
+gates above close.
 
-- the exact final commit passes the GitHub Actions matrix;
-- package/repository name ownership and canonical URLs are confirmed;
-- the resolved transitive dependency and optional model-license review is
-  accepted;
-- a maintainer completes the privacy and browser review.
-
-No commit, Git tag, push, PyPI upload, or GitHub Release was performed during
-this audit.
+The static public website may run browser-side CPU diagnostics and link to local
+installation. It must not imply that GitHub Pages runs Python, FFmpeg or private
+AI models on a server.

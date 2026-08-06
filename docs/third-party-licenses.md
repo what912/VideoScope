@@ -1,10 +1,9 @@
 # Third-party dependency and license inventory
 
-Audit date: 2026-08-01
+Audit date: 2026-07-29
 
 This inventory covers every direct dependency declared by `pyproject.toml` and
-the `web/package.json` and `site/package.json` Node workspaces. Package
-metadata and upstream license files remain
+`web/package.json`. Package metadata and upstream license files remain
 authoritative. Transitive dependencies are selected by installers; distributors
 must review the exact resolved environment they ship.
 
@@ -36,7 +35,7 @@ Uvicorn, or Node dependency.
 | `build` | wheel and sdist build | MIT |
 | `setuptools` | build backend | MIT |
 | `wheel` | wheel support | MIT |
-| `httpx` | in-process API test client | BSD-3-Clause |
+| `httpx2` | in-process API test client | BSD-3-Clause |
 | `fastapi` | Web API test runtime | MIT |
 | `uvicorn` | local server test runtime | BSD-3-Clause |
 | `python-multipart` | upload test runtime | Apache-2.0 |
@@ -112,9 +111,9 @@ exhaustive transitive license report.
 | `hash-wasm` | `4.12.0` | incremental local input hashing | `MIT` |
 | `idb` | `8.0.3` | browser report persistence | `ISC` |
 | `motion` | `12.23.12` | functional interface motion | `MIT` |
-| `react` | `19.2.6` | interface runtime | `MIT` |
-| `react-dom` | `19.2.6` | browser renderer | `MIT` |
-| `react-router-dom` | `7.8.2` | client-side routing | `MIT` |
+| `react` | `19.2.8` | interface runtime | `MIT` |
+| `react-dom` | `19.2.8` | browser renderer | `MIT` |
+| `react-router` | `8.3.0` | client-side routing | `MIT` |
 
 ### Development and build
 
@@ -131,13 +130,12 @@ exhaustive transitive license report.
 | `jsdom` | `27.4.0` | test DOM environment | `MIT` |
 | `typescript` | `5.9.3` | static type checker | `Apache-2.0` |
 | `typescript-eslint` | `8.56.1` | TypeScript-aware lint rules | `MIT` |
-| `vite` | `8.0.13` | development and production build tool | `MIT` |
+| `vite` | `8.2.0` | development and production build tool | `MIT` |
 | `vitest` | `4.1.0` | unit and integration test runner | `MIT` |
 
 The public browser site deploys compiled first-party assets and project-authored
-media. It does not deploy `node_modules`. The Supabase runtime package is
-present in the bundle, but missing public configuration selects the unavailable
-adapter and does not make authentication or sharing operational.
+media. It does not deploy `node_modules`. Missing optional Supabase configuration
+selects the unavailable adapter and leaves sign-in and sharing disabled.
 
 ## External FFmpeg boundary
 
@@ -153,7 +151,7 @@ Before publishing:
 
 1. Build in a clean environment.
 2. Record `python -m pip list` for each shipped installation profile.
-3. Run `npm ci` in both `web/` and `site/`, and retain both lockfiles.
+3. Run `npm ci` and retain `web/package-lock.json`.
 4. Review transitive licenses and model terms for the resolved versions.
 5. Re-run the distribution audit to confirm no third-party binary, model, test
    video, cache, or personal path was bundled accidentally.

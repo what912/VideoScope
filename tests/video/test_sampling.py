@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import json
 import shutil
 import subprocess
+from io import BytesIO
 from pathlib import Path
 
 import pytest
@@ -144,6 +146,311 @@ def test_missing_ffmpeg_keeps_workspace(
     assert error.value.code == "external_tool_not_found"
     assert error.value.work_directory is not None
     assert error.value.work_directory.is_dir()
+
+
+def test_frame_indices_without_max_samples_rejects_hard_limit_before_subprocess(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    input_path = tmp_path / "video.mp4"
+    input_path.write_bytes(b"video")
+
+    def unexpected_run(
+        args: list[str], **kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
+        raise AssertionError(f"subprocess must not start: {args!r}, {kwargs!r}")
+
+    monkeypatch.setattr("videoscope.video.sampling.subprocess.run", unexpected_run)
+
+    with pytest.raises(ValueError, match="frame_indices"):
+        sample_frames(input_path, frame_indices=tuple(range(1001)))
+
+
+def test_out_of_range_frame_index_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    input_path = tmp_path / "video.mp4"
+    input_path.write_bytes(b"video")
+
+    def fake_run(
+        args: list[str],
+        **kwargs: object,
+    ) -> subprocess.CompletedProcess[str]:
+        del kwargs
+        _write_mock_frames(Path(args[-1]), count=1)
+        return subprocess.CompletedProcess(
+            args,
+            0,
+            stdout="",
+            stderr="[Parsed_showinfo_0] n:0 pts:0 pts_time:0.0",
+        )
+
+    monkeypatch.setattr("videoscope.video.sampling.subprocess.run", fake_run)
+
+    with pytest.raises(FrameSamplingError, match="timestamps"):
+        sample_frames(input_path, frame_indices=(0, 100))
+
+
+def test_timeline_sampling_fails_closed_when_frame_and_timestamp_counts_differ(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    input_path = tmp_path / "video.mp4"
+    input_path.write_bytes(b"video")
+    image_payload = BytesIO()
+    Image.new("RGB", (16, 16), color=(20, 40, 60)).save(image_payload, format="PNG")
+
+    def fake_run(args: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        del kwargs
+        payload = {
+            "streams": [{"start_time": "0", "duration": "1"}],
+            "format": {"start_time": "0", "duration": "1"},
+        }
+        return subprocess.CompletedProcess(args, 0, json.dumps(payload), "")
+
+    class FakeProcess:
+        def __init__(self) -> None:
+            self.stdout = BytesIO(image_payload.getvalue() * 2)
+            self.stderr = BytesIO(
+                b"[Parsed_showinfo_2] n:0 pts:0 pts_time:0 "
+                b"duration:1 duration_time:0.1\n"
+            )
+            self.returncode: int | None = None
+
+        def poll(self) -> int | None:
+            return self.returncode
+
+        def terminate(self) -> None:
+            self.returncode = 1
+
+        def kill(self) -> None:
+            self.returncode = 1
+
+        def wait(self, timeout: float | None = None) -> int:
+            del timeout
+            self.returncode = 0 if self.returncode is None else self.returncode
+            return self.returncode
+
+    monkeypatch.setattr("videoscope.video.sampling.subprocess.run", fake_run)
+    monkeypatch.setattr(
+        "videoscope.video.sampling.subprocess.Popen",
+        lambda args, **kwargs: FakeProcess(),
+    )
+
+    with pytest.raises(FrameSamplingError, match="sampled-frame stream") as error:
+        sample_frames(
+            input_path,
+            sample_rate=3.0,
+            max_samples=2,
+            timeline_duration_seconds=1.0,
+        )
+
+    assert not list(error.value.work_directory.rglob("*.png"))
+
+
+def test_uncapped_timeline_uses_fixed_rate_targets_in_one_streaming_decode(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    input_path = tmp_path / "two second video.mp4"
+    input_path.write_bytes(b"video")
+    payloads = BytesIO()
+    for color in ((10, 20, 30), (40, 50, 60), (70, 80, 90), (100, 110, 120)):
+        Image.new("RGB", (16, 16), color=color).save(payloads, format="PNG")
+
+    def fake_run(args: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        del kwargs
+        payload = {
+            "streams": [{"start_time": "0", "duration": "2"}],
+            "format": {"start_time": "0", "duration": "2"},
+        }
+        return subprocess.CompletedProcess(args, 0, json.dumps(payload), "")
+
+    class FakeProcess:
+        def __init__(self) -> None:
+            self.stdout = BytesIO(payloads.getvalue())
+            self.stderr = BytesIO(
+                b"[Parsed_showinfo_2] n:0 pts:0 pts_time:0 "
+                b"duration:1 duration_time:0.5\n"
+                b"[Parsed_showinfo_2] n:1 pts:1 pts_time:0.5 "
+                b"duration:1 duration_time:0.5\n"
+                b"[Parsed_showinfo_2] n:2 pts:2 pts_time:1 "
+                b"duration:1 duration_time:0.5\n"
+                b"[Parsed_showinfo_2] n:3 pts:3 pts_time:1.5 "
+                b"duration:1 duration_time:0.5\n"
+            )
+            self.returncode: int | None = None
+
+        def poll(self) -> int | None:
+            return self.returncode
+
+        def terminate(self) -> None:
+            self.returncode = 1
+
+        def kill(self) -> None:
+            self.returncode = 1
+
+        def wait(self, timeout: float | None = None) -> int:
+            del timeout
+            self.returncode = 0 if self.returncode is None else self.returncode
+            return self.returncode
+
+    monkeypatch.setattr("videoscope.video.sampling.subprocess.run", fake_run)
+    monkeypatch.setattr(
+        "videoscope.video.sampling.subprocess.Popen",
+        lambda args, **kwargs: FakeProcess(),
+    )
+
+    result = sample_frames(
+        input_path,
+        sample_rate=2.0,
+        image_format="png",
+        max_samples=6,
+        timeline_duration_seconds=2.0,
+    )
+
+    assert [sample.timestamp_seconds for sample in result.samples] == pytest.approx(
+        [0.0, 0.5, 1.0, 1.5], abs=0.11
+    )
+    assert result.truncated is False
+    assert result.decode_passes == 1
+
+
+def test_capped_timeline_deduplicates_source_frames_and_publishes_contiguous_names(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    input_path = tmp_path / "sparse video.mp4"
+    input_path.write_bytes(b"video")
+    payloads = BytesIO()
+    for color in ((10, 20, 30), (40, 50, 60), (70, 80, 90)):
+        Image.new("RGB", (16, 16), color=color).save(payloads, format="PNG")
+
+    def fake_run(args: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        del kwargs
+        payload = {
+            "streams": [{"start_time": "0", "duration": "3"}],
+            "format": {"start_time": "0", "duration": "3"},
+        }
+        return subprocess.CompletedProcess(args, 0, json.dumps(payload), "")
+
+    class FakeProcess:
+        def __init__(self) -> None:
+            self.stdout = BytesIO(payloads.getvalue())
+            self.stderr = BytesIO(
+                b"[Parsed_showinfo_2] n:0 pts:0 pts_time:0 "
+                b"duration:1 duration_time:1\n"
+                b"[Parsed_showinfo_2] n:1 pts:1 pts_time:1 "
+                b"duration:1 duration_time:1\n"
+                b"[Parsed_showinfo_2] n:2 pts:2 pts_time:2 "
+                b"duration:1 duration_time:1\n"
+            )
+            self.returncode: int | None = None
+
+        def poll(self) -> int | None:
+            return self.returncode
+
+        def terminate(self) -> None:
+            self.returncode = 1
+
+        def kill(self) -> None:
+            self.returncode = 1
+
+        def wait(self, timeout: float | None = None) -> int:
+            del timeout
+            self.returncode = 0 if self.returncode is None else self.returncode
+            return self.returncode
+
+    monkeypatch.setattr("videoscope.video.sampling.subprocess.run", fake_run)
+    monkeypatch.setattr(
+        "videoscope.video.sampling.subprocess.Popen",
+        lambda args, **kwargs: FakeProcess(),
+    )
+
+    result = sample_frames(
+        input_path,
+        sample_rate=10.0,
+        image_format="png",
+        max_samples=6,
+        timeline_duration_seconds=3.0,
+    )
+
+    assert result.truncated is True
+    assert [sample.timestamp_seconds for sample in result.samples] == [0.0, 1.0, 2.0]
+    assert [sample.relative_path for sample in result.samples] == [
+        "frames/frame_000000.png",
+        "frames/frame_000001.png",
+        "frames/frame_000002.png",
+    ]
+    assert [sample.sample_index for sample in result.samples] == [0, 1, 2]
+    published_colors = []
+    for sample in result.samples:
+        with Image.open(result.work_directory / sample.relative_path) as image:
+            published_colors.append(image.getpixel((0, 0)))
+    assert published_colors == [(10, 20, 30), (40, 50, 60), (70, 80, 90)]
+    assert not (result.work_directory / ".timeline-candidates").exists()
+
+
+def test_timeline_sampling_fails_closed_when_probe_timing_is_unknown(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    input_path = tmp_path / "unknown duration.mp4"
+    input_path.write_bytes(b"video")
+    payload = BytesIO()
+    Image.new("RGB", (16, 16), color=(20, 40, 60)).save(payload, format="PNG")
+    popen_commands: list[tuple[str, ...]] = []
+
+    def fake_run(args: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        del kwargs
+        return subprocess.CompletedProcess(
+            args,
+            0,
+            json.dumps({"streams": [{}], "format": {}}),
+            "",
+        )
+
+    class FakeProcess:
+        def __init__(self) -> None:
+            self.stdout = BytesIO(payload.getvalue())
+            self.stderr = BytesIO(
+                b"[Parsed_showinfo_2] n:0 pts:0 pts_time:0 duration:1 duration_time:1\n"
+            )
+            self.returncode: int | None = None
+
+        def poll(self) -> int | None:
+            return self.returncode
+
+        def terminate(self) -> None:
+            self.returncode = 1
+
+        def kill(self) -> None:
+            self.returncode = 1
+
+        def wait(self, timeout: float | None = None) -> int:
+            del timeout
+            self.returncode = 0 if self.returncode is None else self.returncode
+            return self.returncode
+
+    def recording_popen(args: list[str], **kwargs: object) -> FakeProcess:
+        del kwargs
+        popen_commands.append(tuple(args))
+        return FakeProcess()
+
+    monkeypatch.setattr("videoscope.video.sampling.subprocess.run", fake_run)
+    monkeypatch.setattr("videoscope.video.sampling.subprocess.Popen", recording_popen)
+
+    with pytest.raises(FrameSamplingError, match="duration.*unavailable") as error:
+        sample_frames(
+            input_path,
+            sample_rate=2.0,
+            max_samples=1,
+            timeline_duration_seconds=1.0,
+        )
+
+    assert len(popen_commands) == 1
+    assert not list(error.value.work_directory.rglob("*.png"))
 
 
 def test_real_clean_motion_probe_and_sampling_when_available(

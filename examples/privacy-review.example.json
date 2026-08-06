@@ -1,0 +1,31 @@
+{
+  "manual_audio_intervals": [
+    {
+      "end_seconds": 2.5,
+      "start_seconds": 2.0,
+      "style": "mute"
+    }
+  ],
+  "manual_visual_regions": [
+    {
+      "box": {
+        "x_max": 0.75,
+        "x_min": 0.25,
+        "y_max": 0.8,
+        "y_min": 0.2
+      },
+      "end_seconds": 1.8,
+      "start_seconds": 0.8,
+      "style": "solid_fill"
+    }
+  ],
+  "reviews": [
+    {
+      "decision": "redact",
+      "edited_box": null,
+      "reviewed_at": "2026-08-03T12:00:00+08:00",
+      "risk_id": "privacy_risk_0000000000000000000000000000000000000000000000000000000000000000",
+      "style": "remove_metadata"
+    }
+  ]
+}

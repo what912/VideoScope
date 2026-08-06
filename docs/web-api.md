@@ -42,6 +42,29 @@ headers and browser `Origin` headers that are not loopback HTTP(S) origins.
 This reduces DNS-rebinding and cross-site request risks; it is not a substitute
 for authentication after `--allow-network` broadens the trust boundary.
 
+## Private Advanced AI review for C
+
+After a useful-content job reaches `awaiting_review`, the loopback dashboard may
+use these endpoints:
+
+- `POST /api/content/jobs/{job_id}/ai/prepare` — run explicitly configured local
+  providers and return a grounded private suggestion batch;
+- `GET /api/content/jobs/{job_id}/ai/suggestions` — restore the current batch;
+- `PUT /api/content/jobs/{job_id}/ai/review` — save exact decisions;
+- `POST /api/content/jobs/{job_id}/ai/apply` — apply accepted chapter/highlight
+  ranges through optimistic C revision control.
+
+These routes reject non-loopback clients. Heavy preparation is bounded by the
+configured heavy-job semaphore. Batches are bound to the current C revision;
+editing the storyboard makes the batch stale. Private AI artifacts are not
+served through public content-artifact routes. Applying suggestions neither
+renders media nor bypasses private previews or exact-plan confirmation.
+
+This API has no public multi-user authentication or isolation and must not be
+exposed as a public AI service. A future service requires separate authentication,
+quotas, upload retention, abuse prevention, encrypted storage, deletion
+guarantees, privacy terms and operational monitoring.
+
 ## Create a job
 
 `POST /api/jobs` uses `multipart/form-data`:
@@ -165,6 +188,110 @@ random job-ID format.
 The API is intended for a single trusted user on one machine. Loopback binding,
 Host checking, and Origin checking are defense in depth, not account
 authentication.
+
+## Long Video to Useful Content API
+
+The content API is the local Web adapter for the same confirmation-gated
+pipeline used by `videoscope content`. Uploads, transcripts, structural maps,
+storyboards and join previews stay in the application-data job directory.
+Nothing is sent to a remote service.
+
+Create a job with `POST /api/content/jobs` using multipart fields:
+
+- `video`: required local video;
+- `goal`: `faithful_clean`, `chaptered_full`, or `selected_clips`;
+- `config_json`: optional JSON containing only `ContentConfig` fields;
+- `transcript`: optional local UTF-8 `.srt` or `.vtt` file.
+
+The lifecycle is:
+
+```text
+queued -> probing -> mapping -> planning -> awaiting_review
+       -> previewing -> ready_to_confirm -> rendering -> verifying
+       -> completed | partial | needs_review | failed | cancelled
+```
+
+Read the path-free structural map from
+`GET /api/content/jobs/{job_id}/map`. Submit exact source-time range edits with
+`PUT /api/content/jobs/{job_id}/storyboard`. Every edit includes the current
+`expected_revision`; concurrent or stale revisions return `409 Conflict`.
+The server assigns deterministic range IDs from the uploaded video hash, range
+kind and exact source interval.
+
+After review, `POST /api/content/jobs/{job_id}/previews` creates bounded private
+join previews. Then read the immutable plan from
+`GET /api/content/jobs/{job_id}/plan`. Execution requires all three values from
+that current review: `plan_digest`, `revision`, and the exact ordered
+`accepted_action_ids`. A stale digest, partial action set, or replay is rejected.
+The UI enumerates a path-safe private preview manifest through
+`GET /api/content/jobs/{job_id}/previews`; media bytes remain protected by the
+loopback-only preview allowlist.
+
+Private previews are served only through the loopback-only `/previews/{path}`
+route and its exact per-job allowlist. The `/artifacts/{path}` route serves only
+verified files declared by the confirmed plan, and only after a successful or
+partial terminal outcome. It never serves the upload, transcript, evidence,
+draft storyboard, private previews, or pending render tree.
+
+Useful-content jobs share the application-wide CPU concurrency budget. Ordered
+SSE progress supports `Last-Event-ID` and `after` reconnects. A first `DELETE`
+requests cooperative cancellation; deleting a terminal job removes its local
+directory. Versioned path-free state supports browser refresh and terminal-job
+recovery after restart. An interrupted nonterminal job fails closed and must be
+started again because transient media handles are never serialized.
+
+## Publish Ready API
+
+Publish Ready reuses the same loopback-only service and shared safe job storage.
+It is a local processing workflow, not a cloud upload or remote transcoding
+service. The source upload remains read-only and the pipeline writes a separate
+`publish-ready.mp4` only after the client confirms the exact prepared plan.
+
+Available profiles are returned by `GET /api/publish/profiles`:
+
+- `compatible_mp4` preserves the source dimensions;
+- `social_vertical_9_16` uses a 1080×1920 canvas;
+- `social_horizontal_16_9` uses a 1920×1080 canvas.
+
+The social profiles use scale-and-pad and retain the complete source frame; they
+do not crop. Start a job with multipart `video` and `profile_id` fields:
+
+```text
+POST /api/publish/jobs
+```
+
+The preparation stages inspect the source and create a deterministic plan and a
+short local preview. Poll `GET /api/publish/jobs/{job_id}` or subscribe to
+`GET /api/publish/jobs/{job_id}/events`. When the state is
+`awaiting_confirmation`, read `GET /api/publish/jobs/{job_id}/plan`, review its
+actions and preview, then send the unchanged `plan_digest`:
+
+```json
+POST /api/publish/jobs/{job_id}/confirm
+{"plan_digest":"<digest from the prepared plan>"}
+```
+
+A missing, stale, or mismatched digest is rejected. Confirmation can be accepted
+only once. The lifecycle is:
+
+```text
+created -> inspecting -> planning -> awaiting_confirmation
+        -> processing -> verifying -> completed | needs_review | failed | cancelled
+```
+
+The exact `preview/publish-preview.mp4` is available after preparation so the
+user can review the plan. Other artifacts remain gated until a terminal success
+or review state. Completed output includes `publish-ready.mp4`, `cover.jpg`,
+`changes.json`, and `technical-report.json`; the technical report records whether
+verification is `passed`, `needs_review`, or `failed`. Verification is a
+profile-specific technical check, not a claim about artistic quality or permanent
+platform compatibility.
+
+`DELETE /api/publish/jobs/{job_id}` requests cancellation while the job is
+active and deletes a retained terminal job on a later call. Artifact paths are
+resolved inside the job root, use output-relative paths, and reject traversal.
+FFmpeg and ffprobe must be installed on the host; no model, GPU, external API, or
+network upload is used by Publish Ready.
 
 ## Dashboard development
 

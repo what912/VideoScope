@@ -1,0 +1,7 @@
+import type { RescueDamageMap } from "../types";
+import { rescueText, type RescueLocale } from "../rescueI18n";
+export function RescueDamageTimeline({ locale, damageMap, lockedRanges }: { locale: RescueLocale; damageMap: RescueDamageMap; lockedRanges: Array<[number, number]> }): React.JSX.Element {
+  const duration = Math.max(damageMap.duration_seconds, 0.001);
+  const coverage = damageMap.scan_coverage.reduce((sum, [start, end]) => sum + (end - start), 0);
+  return <section className="rescue-timeline" aria-label={rescueText("timelineAria", locale)}><h2>{rescueText("damage", locale)}</h2><p>{rescueText("recoverable", locale)} {rescueText("noScore", locale)}</p><p><strong>{rescueText("coverage", locale)}:</strong> {coverage.toFixed(2)} / {duration.toFixed(2)} s</p><div className="rescue-track" role="img" aria-label={rescueText("timelineAria", locale)}><span className="rescue-coverage" style={{ width: `${Math.min(100, coverage / duration * 100)}%` }} />{damageMap.intervals.map((interval) => <span key={interval.id} className="rescue-damage" title={interval.description} style={{ left: `${interval.start_seconds / duration * 100}%`, width: `${Math.max(1, (interval.end_seconds - interval.start_seconds) / duration * 100)}%` }} />)}{lockedRanges.map(([start, end], index) => <span key={`${start}-${end}`} className="rescue-locked" title={rescueText("locked", locale)} style={{ left: `${start / duration * 100}%`, width: `${Math.max(1, (end - start) / duration * 100)}%` }} data-index={index} />)}</div></section>;
+}

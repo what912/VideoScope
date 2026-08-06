@@ -9,8 +9,7 @@ include SECURITY.md
 include release-audit.md
 recursive-include docs *.md *.svg
 recursive-include docs *.jpg
-exclude docs/CODEX-HANDOFF-*.md
-recursive-include examples *.py *.ps1 *.sh *.yaml
+recursive-include examples *.py *.ps1 *.sh *.yaml *.json
 recursive-include scripts *.py
 recursive-include tests *.py *.json
 recursive-include src/videoscope/web/static *

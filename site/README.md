@@ -11,7 +11,7 @@ separate implementation with a wider codec surface and benchmark support.
 
 ## Requirements
 
-- Node.js 22.13 or newer;
+- Node.js 22.22 or newer;
 - npm (the checked-in lockfile is used with `npm ci`);
 - FFmpeg and ffprobe on `PATH` when preparing or verifying project-authored
   decorative media.
