@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import os
 import re
-import sys
 import threading
 import time
 from collections.abc import Callable
@@ -2024,7 +2023,7 @@ def test_rescue_posix_open_without_no_follow_fails_closed(
 ) -> None:
     source = tmp_path / "source.mp4"
     source.write_bytes(b"video")
-    monkeypatch.setattr(os, "name", "posix")
+    monkeypatch.setattr(rescue_jobs_module, "_os_name", lambda: "posix")
     monkeypatch.delattr(os, "O_NOFOLLOW", raising=False)
     with pytest.raises(RescueJobStateError, match="No-follow"):
         rescue_jobs_module._secure_read_open(source)
@@ -2040,7 +2039,8 @@ def test_rescue_posix_pipeline_without_stable_proc_descriptor_fails_closed(
     staging = record.directory / ".upload-test.mp4"
     staging.write_bytes(b"video")
     manager.commit_input_snapshot(record.job_id, staging)
-    monkeypatch.setattr(os, "name", "posix")
+    monkeypatch.setattr(rescue_jobs_module, "_os_name", lambda: "posix")
+    monkeypatch.setattr("videoscope.processes._os_name", lambda: "posix")
     monkeypatch.setattr(
         "videoscope.processes._stat_descriptor_path",
         lambda _path: (_ for _ in ()).throw(FileNotFoundError()),
@@ -2064,8 +2064,9 @@ def test_rescue_darwin_pipeline_uses_dev_fd_snapshot(
     staging.write_bytes(b"video")
     manager.commit_input_snapshot(record.job_id, staging)
     assert record.input_descriptor is not None
-    monkeypatch.setattr(os, "name", "posix")
-    monkeypatch.setattr(sys, "platform", "darwin")
+    monkeypatch.setattr(rescue_jobs_module, "_os_name", lambda: "posix")
+    monkeypatch.setattr("videoscope.processes._os_name", lambda: "posix")
+    monkeypatch.setattr("videoscope.processes._system_platform", lambda: "darwin")
     descriptor_metadata = os.fstat(record.input_descriptor)
     monkeypatch.setattr(
         "videoscope.processes._stat_descriptor_path", lambda _path: descriptor_metadata

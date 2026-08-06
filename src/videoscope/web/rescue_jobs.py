@@ -67,6 +67,10 @@ _EVENT_LIMIT = 128
 _TERMINAL_SOURCE_PREVIEW = re.compile(r"^source-[0-9]+\.mp4$")
 
 
+def _os_name() -> str:
+    return os.name
+
+
 class _SnapshotState(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
@@ -536,7 +540,7 @@ class RescueJobManager:
         # `replace` changes only the name in this owned job directory.  The
         # subsequent no-follow open verifies the identity after publication.
         staging.replace(destination)
-        if os.name == "posix":
+        if _os_name() == "posix":
             destination.chmod(stat.S_IRUSR)
         descriptor = _secure_read_open(destination)
         os.set_inheritable(descriptor, False)
@@ -592,7 +596,7 @@ class RescueJobManager:
     def _pipeline_source(record: RescueJobRecord) -> Path:
         if record.input_descriptor is None:
             raise RescueJobStateError("Rescue input snapshot is not pinned")
-        if os.name == "posix":
+        if _os_name() == "posix":
             try:
                 return pinned_descriptor_path(record.input_descriptor)
             except PinnedDescriptorError as exc:
@@ -1406,7 +1410,7 @@ def _hash_descriptor(descriptor: int) -> str:
 
 def _secure_read_open(path: Path) -> int:
     """Open one regular file without following links, retaining a safe descriptor."""
-    if os.name != "nt":
+    if _os_name() != "nt":
         flag = getattr(os, "O_NOFOLLOW", None)
         if flag is None:
             raise RescueJobStateError(
