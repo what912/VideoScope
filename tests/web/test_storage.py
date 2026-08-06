@@ -15,7 +15,7 @@ from videoscope.web.storage import LocalJobStore
 
 
 def _store(tmp_path: Path) -> LocalJobStore:
-    return LocalJobStore(tmp_path / "应用 数据" / "web jobs")
+    return LocalJobStore(tmp_path / "搴旂敤 鏁版嵁" / "web jobs")
 
 
 def test_reserve_uses_random_contained_directories_and_normalized_suffix(
@@ -24,7 +24,7 @@ def test_reserve_uses_random_contained_directories_and_normalized_suffix(
     """A changed upload name must never control a job path."""
     store = _store(tmp_path)
 
-    first = store.reserve("../../外部/Camera.MP4")
+    first = store.reserve("../../澶栭儴/Camera.MP4")
     second = store.reserve("Camera.MP4")
 
     assert re.fullmatch(r"[0-9a-f]{32}", first.job_id)
@@ -33,7 +33,7 @@ def test_reserve_uses_random_contained_directories_and_normalized_suffix(
     assert first.input_path == first.directory / "input.mp4"
     assert first.output_directory == first.directory / "artifacts"
     assert first.directory.is_dir()
-    assert not (store.root.parent / "外部").exists()
+    assert not (store.root.parent / "澶栭儴").exists()
 
 
 def test_reserve_falls_back_to_bin_for_unsafe_upload_suffix(tmp_path: Path) -> None:
@@ -226,8 +226,8 @@ def test_discard_and_cleanup_unlink_junctions_without_touching_target(
             ],
             shell=False,
             check=False,
-            capture_output=True,
-            text=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
             timeout=10,
         )
         if completed.returncode != 0:
