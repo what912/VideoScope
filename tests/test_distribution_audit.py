@@ -36,6 +36,9 @@ def test_clean_wheel_passes_audit(tmp_path: Path) -> None:
             "videoscope/content/models.py": "# Content models\n",
             "videoscope/content/pipeline.py": "# Content pipeline\n",
             "videoscope/content/verification.py": "# Content verification\n",
+            "videoscope/intelligence/models.py": "# Advanced AI models\n",
+            "videoscope/intelligence/pipeline.py": "# Advanced AI pipeline\n",
+            "videoscope/intelligence/providers/ollama.py": "# Ollama provider\n",
             "videoscope/reporting/templates/rescue_report.html.j2": "<html></html>",
             "videoscope/reporting/templates/content_report.html.j2": "<html></html>",
             "videoscope/web/static/index.html": (
