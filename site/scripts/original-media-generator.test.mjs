@@ -9,6 +9,7 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import { inspect } from "node:util";
 
 import { afterEach, describe, expect, it } from "vitest";
@@ -198,6 +199,30 @@ describe("offline original media generation", () => {
     await expect(readFile(path.join(mediaDirectory, completeItems[0].video), "utf8")).resolves.toBe("generated media");
     await expect(readFile(path.join(mediaDirectory, completeItems[0].poster), "utf8")).resolves.toBe("generated media");
     await expect(readFile(path.join(mediaDirectory, completeItems.at(-1).poster), "utf8")).resolves.toBe("generated media");
+  });
+
+  it("bounds independent renders to two concurrent FFmpeg processes", async () => {
+    const mediaDirectory = await temporaryDirectory();
+    let active = 0;
+    let maximumActive = 0;
+
+    await generateOriginalMedia({
+      items: completeItems,
+      mediaDirectory,
+      runner: async (_file, args) => {
+        active += 1;
+        maximumActive = Math.max(maximumActive, active);
+        try {
+          await delay(5);
+          await writeFakeOutputsFromArguments(args);
+        } finally {
+          active -= 1;
+        }
+      },
+    });
+
+    expect(maximumActive).toBe(2);
+    expect(active).toBe(0);
   });
 
   it.each([

@@ -18,6 +18,7 @@ const stagingPrefix = ".media-staging-";
 const backupPrefix = ".media-backup-";
 const ffmpegRenderTimeoutMilliseconds = 600_000;
 const maximumStderrCharacters = 4_000;
+const maximumConcurrentRenders = 2;
 
 function assertDirectChild(candidate, parent, prefix) {
   const resolvedCandidate = path.resolve(candidate);
@@ -304,6 +305,32 @@ export async function generateItem(item, stagingDirectory, runner, ffmpeg) {
   });
 }
 
+async function generateItems(items, stagingDirectory, runner, ffmpeg) {
+  let nextIndex = 0;
+  let stopped = false;
+  const workerCount = Math.min(maximumConcurrentRenders, items.length);
+  const workers = Array.from({ length: workerCount }, async () => {
+    while (!stopped) {
+      const index = nextIndex;
+      nextIndex += 1;
+      if (index >= items.length) {
+        return;
+      }
+      try {
+        await generateItem(items[index], stagingDirectory, runner, ffmpeg);
+      } catch (error) {
+        stopped = true;
+        throw error;
+      }
+    }
+  });
+  const outcomes = await Promise.allSettled(workers);
+  const failure = outcomes.find((outcome) => outcome.status === "rejected");
+  if (failure?.status === "rejected") {
+    throw failure.reason;
+  }
+}
+
 export async function generateOriginalMedia({
   items,
   mediaDirectory,
@@ -340,9 +367,7 @@ export async function generateOriginalMedia({
       assertDirectChild(backupDirectory, resolvedMediaDirectory, backupPrefix);
       await mkdir(stagingDirectory);
       await mkdir(backupDirectory);
-      for (const item of items) {
-        await generateItem(item, stagingDirectory, runner, ffmpeg);
-      }
+      await generateItems(items, stagingDirectory, runner, ffmpeg);
 
       await verifyStagedOutputs(stagingDirectory, filenames);
       try {
