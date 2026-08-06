@@ -49,7 +49,46 @@ jobs:
       - name: Install FFmpeg on Windows
         if: runner.os == 'Windows'
         shell: pwsh
-        run: choco install ffmpeg --yes --no-progress
+        run: |
+          $installed = $false
+          foreach ($attempt in 1..3) {
+            choco install ffmpeg --yes --no-progress
+            if ($LASTEXITCODE -eq 0) {
+              $installed = $true
+              break
+            }
+            Write-Warning "Chocolatey FFmpeg install attempt $attempt failed."
+            Start-Sleep -Seconds 10
+          }
+
+          if (-not $installed -and (Get-Command winget -ErrorAction SilentlyContinue)) {
+            winget install --id Gyan.FFmpeg --exact --source winget `
+              --accept-package-agreements --accept-source-agreements `
+              --disable-interactivity
+            $installed = $LASTEXITCODE -eq 0
+          }
+
+          if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) {
+            $searchRoots = @(
+              (Join-Path $env:ProgramData "chocolatey\lib\ffmpeg\tools"),
+              (Join-Path $env:LOCALAPPDATA "Microsoft\WinGet\Packages")
+            )
+            $binary = Get-ChildItem -Path $searchRoots -Filter ffmpeg.exe `
+              -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($null -ne $binary) {
+              $binary.DirectoryName | Out-File -FilePath $env:GITHUB_PATH `
+                -Encoding utf8 -Append
+              $env:PATH = "$($binary.DirectoryName);$env:PATH"
+            }
+          }
+
+          $ffmpegCommand = Get-Command ffmpeg -ErrorAction SilentlyContinue
+          $ffprobeCommand = Get-Command ffprobe -ErrorAction SilentlyContinue
+          if ($null -eq $ffmpegCommand -or $null -eq $ffprobeCommand) {
+            throw "FFmpeg and ffprobe could not be installed after bounded retries."
+          }
+          ffmpeg -version
+          ffprobe -version
 
       - name: Install development dependencies
         run: |

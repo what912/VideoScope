@@ -279,6 +279,22 @@ def test_ci_static_asset_gate_includes_untracked_generated_files() -> None:
     assert "git diff --exit-code -- src/videoscope/web/static" not in workflow
 
 
+def test_ci_gates_public_site_and_bounds_windows_ffmpeg_install() -> None:
+    """Release CI must verify the public product and fail closed on missing tools."""
+    workflow = (REPOSITORY_ROOT / ".github" / "workflows" / "ci.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert "  public-site:\n" in workflow
+    assert "npm audit --audit-level=high" in workflow
+    assert "npm run media:prepare" in workflow
+    assert "npm run media:verify" in workflow
+    assert "      - public-site\n" in workflow
+    assert "foreach ($attempt in 1..3)" in workflow
+    assert "Get-Command ffmpeg" in workflow
+    assert "Get-Command ffprobe" in workflow
+
+
 def test_personal_absolute_path_is_rejected(tmp_path: Path) -> None:
     wheel = tmp_path / "videoscope-0.1.0-py3-none-any.whl"
     personal_path = "C:" + "\\Users\\" + "Example\\private.mp4"
