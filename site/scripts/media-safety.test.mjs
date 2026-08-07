@@ -177,8 +177,8 @@ describe("project-authored media manifest", () => {
   );
 
   it.each([
-    ["workingWidth", 1280],
-    ["workingHeight", 720],
+    ["workingWidth", 1920],
+    ["workingHeight", 1080],
     ["outputWidth", 1920],
     ["outputHeight", 1080],
     ["frameRate", 23],

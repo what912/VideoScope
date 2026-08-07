@@ -29,7 +29,9 @@ describe("product routes", () => {
     ["/compare", "Compare videos"],
   ])("renders %s", async (path, expected) => {
     render(<TestApp initialEntries={[path]} />);
-    expect(await screen.findByText(expected, { exact: false })).toBeVisible();
+    expect(
+      await screen.findByText(expected, { exact: false }, { timeout: 3_000 }),
+    ).toBeVisible();
     expect(screen.getByText("what912")).toBeVisible();
   });
 

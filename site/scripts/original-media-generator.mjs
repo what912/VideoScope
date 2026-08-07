@@ -16,7 +16,7 @@ import { stillFilterFor, videoFilterFor } from "./original-scenes.mjs";
 const execFileAsync = promisify(execFile);
 const stagingPrefix = ".media-staging-";
 const backupPrefix = ".media-backup-";
-const ffmpegRenderTimeoutMilliseconds = 600_000;
+const ffmpegRenderTimeoutMilliseconds = 900_000;
 const maximumStderrCharacters = 4_000;
 const maximumConcurrentRenders = 2;
 

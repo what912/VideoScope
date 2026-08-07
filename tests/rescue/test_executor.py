@@ -768,6 +768,34 @@ def test_external_runner_uses_shell_false_and_sanitizes_bounded_stderr(
     assert len(result.stderr_summary) <= 2003
 
 
+@pytest.mark.parametrize(  # type: ignore[untyped-decorator]
+    ("stderr", "expected_returncode"),
+    (("", 0), ("fatal decoder report", 1)),
+)
+def test_external_runner_normalizes_strict_decode_error_output(
+    stderr: str, expected_returncode: int
+) -> None:
+    """A strict decode cannot trust a zero child status when FFmpeg logged errors."""
+    result = run_external_command(
+        (
+            sys.executable,
+            "-c",
+            "import sys; sys.stderr.write(sys.argv[1])",
+            stderr,
+            "-xerror",
+            "-loglevel",
+            "error",
+            "-f",
+            "null",
+        ),
+        timeout_seconds=5.0,
+        sensitive_paths=(),
+        cancellation_callback=lambda: False,
+    )
+
+    assert result.returncode == expected_returncode
+
+
 def _local_video_tools() -> tuple[str, str]:
     ffmpeg = shutil.which("ffmpeg")
     ffprobe = shutil.which("ffprobe")

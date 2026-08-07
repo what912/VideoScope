@@ -26,8 +26,8 @@ const temporaryDirectories = [];
 const videoItem = Object.freeze({
   role: "hero",
   scene: "optical-aperture",
-  workingWidth: 1920,
-  workingHeight: 1080,
+  workingWidth: 1280,
+  workingHeight: 720,
   outputWidth: 1280,
   outputHeight: 720,
   frameRate: 24,
@@ -40,8 +40,8 @@ const videoItem = Object.freeze({
 const stillItem = Object.freeze({
   role: "evidence-a",
   scene: "cyan-caustic",
-  workingWidth: 1920,
-  workingHeight: 1080,
+  workingWidth: 1280,
+  workingHeight: 720,
   outputWidth: 1280,
   outputHeight: 720,
   frameRate: 24,
@@ -94,7 +94,7 @@ describe("offline original media generation", () => {
     expect(calls).toHaveLength(2);
     expect(calls.every(({ args }) => args.includes("-f") && args.includes("lavfi"))).toBe(true);
     expect(calls.every(({ options }) => options.shell === false)).toBe(true);
-    expect(calls.every(({ options }) => options.timeout === 600_000)).toBe(true);
+    expect(calls.every(({ options }) => options.timeout === 900_000)).toBe(true);
     expect(calls.every(({ options }) => options.maxBuffer === 64 * 1024)).toBe(true);
     expect(JSON.stringify(calls)).not.toMatch(/https?:|fetch|download/iu);
   });
@@ -146,7 +146,7 @@ describe("offline original media generation", () => {
     }
 
     expect(caught.message).toBe(
-      "FFmpeg failed: FFmpeg exceeded the bounded 600000ms render timeout.",
+      "FFmpeg failed: FFmpeg exceeded the bounded 900000ms render timeout.",
     );
     const renderedError = inspect(caught, { depth: null });
     expect(renderedError).not.toContain(windowsPrivatePath);

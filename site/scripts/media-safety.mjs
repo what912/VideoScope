@@ -42,8 +42,8 @@ const FORBIDDEN_FIELDS = Object.freeze([
   "downloadDate",
 ]);
 const GENERATION_SETTINGS = Object.freeze({
-  workingWidth: 1920,
-  workingHeight: 1080,
+  workingWidth: 1280,
+  workingHeight: 720,
   outputWidth: 1280,
   outputHeight: 720,
   frameRate: 24,

@@ -67,6 +67,13 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _verification_diagnostics(result: RescueResult) -> tuple[dict[str, Any], ...]:
+    """Keep cross-platform acceptance failures actionable in CI logs."""
+    if result.verification is None:
+        return ()
+    return tuple(check.model_dump(mode="json") for check in result.verification.checks)
+
+
 @pytest.fixture
 def rescue_dark_noise() -> Iterator[Path]:
     if shutil.which("ffmpeg") is None or shutil.which("ffprobe") is None:
@@ -416,7 +423,7 @@ def test_real_middle_damage_is_partial_with_manifest_bounded_ranges(
         include_improvements=False,
     )
 
-    assert result.status is RescueStatus.PARTIAL
+    assert result.status is RescueStatus.PARTIAL, _verification_diagnostics(result)
     assert result.faithful_path is not None and result.faithful_path.is_file()
     expected = cast(
         list[dict[str, float]], _manifest_entry(filename)["expected_damage_intervals"]
@@ -458,7 +465,7 @@ def test_real_structural_deflicker_respects_mappings_locks_and_clean_frames(
         locked_ranges=locked_ranges,
     )
 
-    assert result.status is RescueStatus.PARTIAL
+    assert result.status is RescueStatus.PARTIAL, _verification_diagnostics(result)
     assert result.technical_report is not None
     assert result.technical_report.manual_review_reasons == (
         "Some observed source intervals were not retained in the faithful output.",

@@ -408,13 +408,33 @@ def run(source, root, goal, ranges):
 source = Path(sys.argv[1])
 root = Path(sys.argv[2])
 source_hash = compute_file_sha256(source)
+ffprobe = shutil.which("ffprobe")
+if not ffprobe:
+    raise RuntimeError("ffprobe is unavailable")
+duration = probe_content_duration(source, ffprobe=ffprobe)
+if duration < 3:
+    raise RuntimeError("content smoke input must be at least three seconds long")
+third = duration / 3
+sixth = duration / 6
 run(
     source,
     root / "faithful-clean",
     ContentGoal.FAITHFUL_CLEAN,
     (
-        user_range(source_hash, ContentUserRangeKind.EXCLUDE, 2, 3, "Remove"),
-        user_range(source_hash, ContentUserRangeKind.LOCKED_KEEP, 2.4, 2.6, "Lock"),
+        user_range(
+            source_hash,
+            ContentUserRangeKind.EXCLUDE,
+            third,
+            duration / 2,
+            "Remove",
+        ),
+        user_range(
+            source_hash,
+            ContentUserRangeKind.LOCKED_KEEP,
+            duration * 0.4,
+            duration * 0.45,
+            "Lock",
+        ),
     ),
 )
 run(
@@ -423,7 +443,11 @@ run(
     ContentGoal.CHAPTERED_FULL,
     tuple(
         user_range(source_hash, ContentUserRangeKind.CHAPTER, start, end, label)
-        for start, end, label in ((0, 2, "Start"), (2, 4, "Middle"), (4, 6, "End"))
+        for start, end, label in (
+            (0, third, "Start"),
+            (third, third * 2, "Middle"),
+            (third * 2, duration, "End"),
+        )
     ),
 )
 run(
@@ -432,7 +456,11 @@ run(
     ContentGoal.SELECTED_CLIPS,
     tuple(
         user_range(source_hash, ContentUserRangeKind.KEEP, start, end, label)
-        for start, end, label in ((0, 1, "One"), (2, 3, "Two"), (4, 5, "Three"))
+        for start, end, label in (
+            (0, sixth, "One"),
+            (third, duration / 2, "Two"),
+            (third * 2, sixth * 5, "Three"),
+        )
     ),
 )
 print("content-status=faithful-clean-chaptered-full-selected-clips")

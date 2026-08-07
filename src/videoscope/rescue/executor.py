@@ -204,10 +204,27 @@ def run_external_command(
         stdout_summary = _read_bounded_text(
             stdout_file, MAX_COMMAND_STDOUT_BYTES, tail=False
         )
+        raw_stderr = _read_bounded_text(
+            stderr_file, MAX_COMMAND_STDERR_BYTES, tail=True
+        )
         stderr_summary = sanitize_diagnostic(
-            _read_bounded_text(stderr_file, MAX_COMMAND_STDERR_BYTES, tail=True),
+            raw_stderr,
             sensitive_paths=diagnostic_paths,
         )
+        # FFmpeg has emitted error-level decoder diagnostics while still returning
+        # zero on some platform/version combinations, even with ``-xerror``.  A
+        # strict, null-output decode is a verification command: any stderr that
+        # survives ``-loglevel error`` means the candidate was not fully decoded.
+        if (
+            returncode == 0
+            and "-xerror" in arguments
+            and "-loglevel" in arguments
+            and "error" in arguments
+            and "-f" in arguments
+            and "null" in arguments
+            and raw_stderr.strip()
+        ):
+            returncode = 1
         return CommandResult(returncode, stderr_summary, stdout_summary)
 
 

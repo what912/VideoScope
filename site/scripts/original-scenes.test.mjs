@@ -7,15 +7,15 @@ import {
 } from "./original-scenes.mjs";
 
 const sceneCases = [
-  { scene: "optical-aperture", workingWidth: 1920, workingHeight: 1080, outputWidth: 1280, outputHeight: 720, frameRate: 24, durationSeconds: 8 },
-  { scene: "night-observation-grid", workingWidth: 1920, workingHeight: 1080, outputWidth: 1280, outputHeight: 720, frameRate: 24, durationSeconds: 6 },
-  { scene: "fluid-spectrum", workingWidth: 1920, workingHeight: 1080, outputWidth: 1280, outputHeight: 720, frameRate: 24, durationSeconds: 6 },
-  { scene: "diagnostic-mesh", workingWidth: 1920, workingHeight: 1080, outputWidth: 1280, outputHeight: 720, frameRate: 24, durationSeconds: 6 },
-  { scene: "cool-topography", workingWidth: 1920, workingHeight: 1080, outputWidth: 1280, outputHeight: 720, frameRate: 24, durationSeconds: 6 },
-  { scene: "dawn-spectrum", workingWidth: 1920, workingHeight: 1080, outputWidth: 1280, outputHeight: 720, frameRate: 24, durationSeconds: 6 },
-  { scene: "cyan-caustic", workingWidth: 1920, workingHeight: 1080, outputWidth: 1280, outputHeight: 720, frameRate: 24, stillTimeSeconds: 2 },
-  { scene: "violet-lattice", workingWidth: 1920, workingHeight: 1080, outputWidth: 1280, outputHeight: 720, frameRate: 24, stillTimeSeconds: 2 },
-  { scene: "amber-contour", workingWidth: 1920, workingHeight: 1080, outputWidth: 1280, outputHeight: 720, frameRate: 24, stillTimeSeconds: 2 },
+  { scene: "optical-aperture", workingWidth: 1280, workingHeight: 720, outputWidth: 1280, outputHeight: 720, frameRate: 24, durationSeconds: 8 },
+  { scene: "night-observation-grid", workingWidth: 1280, workingHeight: 720, outputWidth: 1280, outputHeight: 720, frameRate: 24, durationSeconds: 6 },
+  { scene: "fluid-spectrum", workingWidth: 1280, workingHeight: 720, outputWidth: 1280, outputHeight: 720, frameRate: 24, durationSeconds: 6 },
+  { scene: "diagnostic-mesh", workingWidth: 1280, workingHeight: 720, outputWidth: 1280, outputHeight: 720, frameRate: 24, durationSeconds: 6 },
+  { scene: "cool-topography", workingWidth: 1280, workingHeight: 720, outputWidth: 1280, outputHeight: 720, frameRate: 24, durationSeconds: 6 },
+  { scene: "dawn-spectrum", workingWidth: 1280, workingHeight: 720, outputWidth: 1280, outputHeight: 720, frameRate: 24, durationSeconds: 6 },
+  { scene: "cyan-caustic", workingWidth: 1280, workingHeight: 720, outputWidth: 1280, outputHeight: 720, frameRate: 24, stillTimeSeconds: 2 },
+  { scene: "violet-lattice", workingWidth: 1280, workingHeight: 720, outputWidth: 1280, outputHeight: 720, frameRate: 24, stillTimeSeconds: 2 },
+  { scene: "amber-contour", workingWidth: 1280, workingHeight: 720, outputWidth: 1280, outputHeight: 720, frameRate: 24, stillTimeSeconds: 2 },
 ];
 
 it("defines nine visually distinct project-authored scenes", () => {

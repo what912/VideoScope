@@ -1123,6 +1123,17 @@ class RescueJobManager:
         if descriptor is None:
             return
         try:
+            # POSIX snapshots are owner-read-only while a job is active. Restore
+            # owner write access on the pinned inode at the terminal boundary so
+            # the application's retained private source is no longer left in an
+            # artificial locked state. ``fchmod`` avoids following a replaced
+            # path while the descriptor still proves which inode we own.
+            fchmod = getattr(os, "fchmod", None)
+            if _os_name() == "posix" and fchmod is not None:
+                try:
+                    fchmod(descriptor, stat.S_IRUSR | stat.S_IWUSR)
+                except OSError:
+                    pass
             os.close(descriptor)
         except OSError:
             pass
