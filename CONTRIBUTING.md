@@ -183,7 +183,29 @@ VideoScope 源代码采用 Apache License 2.0，完整条款见根目录
 
 许可证存在疑问时，停止引入该资产并在评审中提出，不要猜测。
 
-## 8. Pull Request 检查清单
+## 8. 新增 Advanced AI Provider
+
+新增 ASR 或结构化内容智能 Provider 时，必须实现
+`videoscope.intelligence.protocols` 中的对应协议，并通过共享
+`ModelRuntimeManager` 注册和延迟加载。不得在模块导入阶段导入重型运行库、
+探测 GPU、访问网络或下载模型。
+
+每个真实 Provider 必须同时提供：
+
+- 独立 optional extra 和缺失依赖时的可操作错误；
+- 无网络、无权重、可控输出的 Fake Provider；
+- 明确的 provider/model/device/precision 运行记录；
+- 输入大小、输出大小、超时和并发上限；
+- 下载许可、缓存键、卸载和失败隔离测试；
+- 模型与权重许可证、数据流向和隐私说明；
+- grounding 失败、畸形输出、取消和同一运行时共享测试。
+
+语义 Provider 的输出必须经过严格 Pydantic 契约和来源证据校验。不能把模型
+输出直接写成 C 范围，更不能绕过人工 review、私有预览、计划摘要确认、来源
+映射和输出后验证。真实模型集成测试必须标记为 optional；基础 CI 只使用 Fake
+Provider。评估方法见 `docs/advanced-ai-evaluation.md`。
+
+## 9. Pull Request 检查清单
 
 - [ ] 变更属于明确任务和当前产品范围；
 - [ ] 没有隐藏网络访问、模型下载或 GPU 依赖；

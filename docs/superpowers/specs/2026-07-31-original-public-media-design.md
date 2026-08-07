@@ -64,7 +64,7 @@ design system without making all roles look like variants of one background.
 
 ## 4. Quality standard
 
-Video scenes will be generated from a 1920x1080 working canvas at 24 fps for
+Video scenes will be generated from a native 1280x720 working canvas at 24 fps for
 six to eight seconds, then encoded as browser-compatible H.264/yuv420p with a
 high-quality constant-rate-factor setting. Posters will be extracted from a
 deliberately selected composition frame and encoded as WebP.

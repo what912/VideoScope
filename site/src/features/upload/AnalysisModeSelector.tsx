@@ -1,6 +1,6 @@
 import type { Dictionary } from "../../i18n/types";
 import type { BrowserAnalysisModeId } from "./analysis-modes";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 
 interface AnalysisModeSelectorProps {
   copy: Dictionary["upload"];

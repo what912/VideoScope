@@ -71,6 +71,11 @@ export type CapabilityId =
   | "browser_cpu_detectors"
   | "local_reports"
   | "ffmpeg_probe"
+  | "publish_ready"
+  | "safe_sharing"
+  | "video_rescue"
+  | "useful_content"
+  | "advanced_ai"
   | "benchmark"
   | "ai_providers"
   | "ocr"
@@ -137,6 +142,11 @@ const en: StaticCopy = {
       browser_cpu_detectors: "Four browser CPU detectors",
       local_reports: "Local JSON and printable report",
       ffmpeg_probe: "FFmpeg probing",
+      publish_ready: "A · Publish-compatible copy",
+      safe_sharing: "D · Reviewed privacy-safe copy",
+      video_rescue: "B · Verified video rescue",
+      useful_content: "C · Chapters and selected clips",
+      advanced_ai: "Review-first local AI suggestions",
       benchmark: "Benchmark",
       ai_providers: "AI providers",
       ocr: "OCR",
@@ -281,6 +291,11 @@ const zhCN: StaticCopy = {
       browser_cpu_detectors: "四个浏览器 CPU 检测器",
       local_reports: "本地 JSON 和可打印报告",
       ffmpeg_probe: "FFmpeg 探测",
+      publish_ready: "A · 生成发布兼容副本",
+      safe_sharing: "D · 人工复核的隐私安全副本",
+      video_rescue: "B · 经验证的视频救援",
+      useful_content: "C · 章节与选定片段",
+      advanced_ai: "先复核、后应用的本地 AI 建议",
       benchmark: "基准评测",
       ai_providers: "AI 模型提供器",
       ocr: "OCR 文字识别",

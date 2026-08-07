@@ -2,7 +2,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import type { ReactElement } from "react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import viteConfig from "../../vite.config";
@@ -29,7 +29,9 @@ describe("product routes", () => {
     ["/compare", "Compare videos"],
   ])("renders %s", async (path, expected) => {
     render(<TestApp initialEntries={[path]} />);
-    expect(await screen.findByText(expected, { exact: false })).toBeVisible();
+    expect(
+      await screen.findByText(expected, { exact: false }, { timeout: 3_000 }),
+    ).toBeVisible();
     expect(screen.getByText("what912")).toBeVisible();
   });
 

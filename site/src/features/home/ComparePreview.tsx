@@ -4,7 +4,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 
 import { useI18n } from "../../i18n/I18nProvider";
 import { HomeMedia } from "./HomeMedia";

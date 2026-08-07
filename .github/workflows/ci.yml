@@ -2,39 +2,14 @@ name: CI
 
 on:
   push:
+    branches:
+      - main
   pull_request:
 
 permissions:
   contents: read
 
 jobs:
-  frontend:
-    name: React dashboard
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v6
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: "22"
-          cache: npm
-          cache-dependency-path: web/package-lock.json
-
-      - name: Install locked front-end dependencies
-        working-directory: web
-        run: npm ci
-
-      - name: Test dashboard
-        working-directory: web
-        run: npm test
-
-      - name: Build packaged dashboard assets
-        working-directory: web
-        run: npm run build
-
   test:
     name: ${{ matrix.os }} / Python ${{ matrix.python-version }}
     runs-on: ${{ matrix.os }}
@@ -58,6 +33,13 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
       - name: Install FFmpeg on Linux
         if: runner.os == 'Linux'
         run: |
@@ -67,7 +49,46 @@ jobs:
       - name: Install FFmpeg on Windows
         if: runner.os == 'Windows'
         shell: pwsh
-        run: choco install ffmpeg --yes --no-progress
+        run: |
+          $installed = $false
+          foreach ($attempt in 1..3) {
+            choco install ffmpeg --yes --no-progress
+            if ($LASTEXITCODE -eq 0) {
+              $installed = $true
+              break
+            }
+            Write-Warning "Chocolatey FFmpeg install attempt $attempt failed."
+            Start-Sleep -Seconds 10
+          }
+
+          if (-not $installed -and (Get-Command winget -ErrorAction SilentlyContinue)) {
+            winget install --id Gyan.FFmpeg --exact --source winget `
+              --accept-package-agreements --accept-source-agreements `
+              --disable-interactivity
+            $installed = $LASTEXITCODE -eq 0
+          }
+
+          if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) {
+            $searchRoots = @(
+              (Join-Path $env:ProgramData "chocolatey\lib\ffmpeg\tools"),
+              (Join-Path $env:LOCALAPPDATA "Microsoft\WinGet\Packages")
+            )
+            $binary = Get-ChildItem -Path $searchRoots -Filter ffmpeg.exe `
+              -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($null -ne $binary) {
+              $binary.DirectoryName | Out-File -FilePath $env:GITHUB_PATH `
+                -Encoding utf8 -Append
+              $env:PATH = "$($binary.DirectoryName);$env:PATH"
+            }
+          }
+
+          $ffmpegCommand = Get-Command ffmpeg -ErrorAction SilentlyContinue
+          $ffprobeCommand = Get-Command ffprobe -ErrorAction SilentlyContinue
+          if ($null -eq $ffmpegCommand -or $null -eq $ffprobeCommand) {
+            throw "FFmpeg and ffprobe could not be installed after bounded retries."
+          }
+          ffmpeg -version
+          ffprobe -version
 
       - name: Install development dependencies
         run: |
@@ -77,15 +98,109 @@ jobs:
       - name: Generate deterministic video fixtures
         run: python scripts/generate_test_videos.py --force
 
+      - name: Exercise real Publish Ready profiles
+        run: python -m pytest tests/resolve/test_fixture_publish.py -q
+
+      - name: Exercise real Safe Sharing workflows
+        run: python -m pytest tests/privacy/test_fixture_privacy.py -q
+
+      - name: Exercise real Video Rescue workflows
+        run: python -m pytest tests/rescue/test_fixture_rescue.py -q
+
+      - name: Exercise real Long Video to Useful Content workflows
+        run: python -m pytest tests/content/test_fixture_content.py tests/content/test_native_media.py tests/content/test_performance.py -q
+
       - name: Run repository verification
-        run: python scripts/verify.py
+        run: python scripts/validate.py
+
+      - name: Install locked front-end dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Test dashboard
+        working-directory: web
+        run: npm test
+
+      - name: Build packaged dashboard assets
+        working-directory: web
+        run: npm run build
+
+      - name: Verify packaged dashboard assets are current
+        shell: bash
+        run: |
+          static_changes="$(git status --porcelain --untracked-files=all -- src/videoscope/web/static)"
+          if [ -n "$static_changes" ]; then
+            printf '%s\n' "$static_changes"
+            exit 1
+          fi
+
+      - name: Build wheel and source archive
+        run: python -m build
+
+      - name: Audit distribution contents
+        run: python scripts/audit_distribution.py dist
+
+      - name: Smoke-test clean base wheel
+        run: python scripts/smoke_test.py --dist dist
+
+  public-site:
+    name: Audit and build public site
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22.23.1"
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends ffmpeg
+
+      - name: Install locked dependencies
+        working-directory: site
+        run: npm ci
+
+      - name: Audit production and development dependencies
+        working-directory: site
+        run: npm audit --audit-level=high
+
+      - name: Generate project-authored media
+        working-directory: site
+        run: npm run media:prepare
+
+      - name: Lint
+        working-directory: site
+        run: npm run lint
+
+      - name: Type-check
+        working-directory: site
+        run: npm run typecheck
+
+      - name: Test
+        working-directory: site
+        run: npm test
+
+      - name: Build
+        working-directory: site
+        run: npm run build
+
+      - name: Verify media provenance and build budgets
+        working-directory: site
+        run: npm run media:verify
 
   distribution:
     name: Build and smoke-test distribution
     runs-on: ubuntu-latest
     needs:
-      - frontend
       - test
+      - public-site
 
     steps:
       - name: Check out repository
@@ -96,6 +211,13 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
 
       - name: Install FFmpeg
         run: |
@@ -110,6 +232,32 @@ jobs:
       - name: Generate deterministic video fixtures
         run: python scripts/generate_test_videos.py --force
 
+      - name: Run repository verification
+        run: python scripts/validate.py
+
+      - name: Exercise real Video Rescue workflows
+        run: python -m pytest tests/rescue/test_fixture_rescue.py -q
+
+      - name: Exercise real Long Video to Useful Content workflows
+        run: python -m pytest tests/content/test_fixture_content.py tests/content/test_native_media.py tests/content/test_performance.py -q
+
+      - name: Install locked front-end dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Build current packaged dashboard assets
+        working-directory: web
+        run: npm run build
+
+      - name: Verify packaged dashboard assets are current
+        shell: bash
+        run: |
+          static_changes="$(git status --porcelain --untracked-files=all -- src/videoscope/web/static)"
+          if [ -n "$static_changes" ]; then
+            printf '%s\n' "$static_changes"
+            exit 1
+          fi
+
       - name: Build wheel and source archive
         run: python -m build
 
@@ -117,7 +265,7 @@ jobs:
         run: python scripts/audit_distribution.py dist
 
       - name: Smoke-test wheel in a clean virtual environment
-        run: python scripts/smoke_test.py --dist dist --video tests/fixtures/generated/black_segment.mp4
+        run: python scripts/smoke_test.py --dist dist --video tests/fixtures/generated/privacy_manual_visual.mp4
 
       - name: Upload distributions
         uses: actions/upload-artifact@v7

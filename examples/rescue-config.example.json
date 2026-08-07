@@ -1,0 +1,14 @@
+{
+  "locked_ranges": [
+    [
+      0.0,
+      2.0
+    ]
+  ],
+  "preview_seconds": 8.0,
+  "strategy": "balanced",
+  "symptoms": [
+    "dark",
+    "video_noise"
+  ]
+}

@@ -248,3 +248,135 @@ v0.1 可发布必须同时满足：
 v0.1 范围内可以调整阈值、性能和实现，但不得引入本文件的非目标。
 新增语义或 AI 能力必须作为可选插件进入未来版本，并同步更新产品
 规格、报告模式和路线图。
+
+## 14. 稳定任务模式命名
+
+公开产品组合的字母固定为：
+
+- A：Publish Ready；
+- B：Video Rescue；
+- C：Long Video to Useful Content；
+- D：Safe Sharing。
+
+早期文档中的 “Resolve B” 和 “Resolve C” 只是开发线的临时阶段名，不能再
+作为公开任务模式名称。此命名校正不修改既有 JSON schema、CLI、API、产物路径
+或兼容读取行为。
+
+## 15. A：Publish Ready
+
+本节定义后续的 v0.3 开发线；它不追溯修改、替代或扩展上述已冻结的 v0.1
+`AnalysisReport`、检测器、报告或 `videoscope analyze` 行为。
+
+Publish Ready 独立开发线使用 `0.3.0.dev0`。加入 Safe Sharing 后，组合开发线
+使用 `0.4.0.dev0`，直到单独的发布审计明确批准发布版本；不得在该审计前使用
+发布版本号。
+
+> VideoScope Resolve is an opt-in processing workflow built on VideoScope Check.
+> It never changes the v0.1 analysis contract, never overwrites the source, and
+> does not make processing dependencies part of the base diagnostic path.
+
+Publish Ready 是 Resolve 的 A MVP。它只在用户显式选择并确认后处理本地输入，
+源视频只读，成功结果写入单独的 `publish-ready.mp4`。基础诊断安装、测试和
+`videoscope analyze` 路径仍保持离线、CPU-first，且不导入、初始化或下载处理所需
+的可选组件。
+
+### 15.1 A MVP 范围
+
+A MVP 仅包括：
+
+- `compatible_mp4` 兼容 MP4；
+- `social_vertical_9_16` 的 9:16 scale-and-pad；
+- `social_horizontal_16_9` 的 16:9 scale-and-pad；
+- 元数据剥离、fast-start 布局、代表性封面、预览、变更记录和输出后的复检。
+
+竖屏和横屏 Profile 必须使用 scale-and-pad 保留完整源画面，不得自动裁剪。
+Profile 的通过结果是有版本的兼容性结果，不是全局或艺术质量分。A MVP 不包含
+远程后端、网络访问、GPU、AI、模型下载、人脸或身份识别、自动裁剪、片段删除、
+插帧、稳定、音乐或生成式增强；仓库和发行物也不得包含 FFmpeg 二进制文件或
+WASM。
+
+### 15.2 Resolve 处理边界
+
+Resolve 的处理和验证规则、生命周期、产物及隐私契约由
+`docs/publish-ready.md` 和 `docs/resolve-schema.md` 定义。所有公开 JSON 路径
+必须相对于任务输出根目录，并使用正斜杠；绝对个人路径不得进入任何公开报告。
+任何未通过的输出只能成为 `needs_review` 或 `failed`，不能标记为 `completed`
+或 Publish Ready。
+
+## 16. D：Safe Sharing
+
+Safe Sharing 是 Resolve 的后续、显式选择的本地分享副本工作流，不是 v0.1 Check
+能力，也不改变冻结的 `AnalysisReport`、既有 Detector 协议或 `videoscope analyze`
+行为。它在确认后只写入新的分享副本，绝不覆盖源视频；任何风险扫描或验证都只能
+陈述可观察到的结果和限制，不能承诺发现全部隐私风险或输出绝对安全。
+
+该开发线的版本化领域契约、公开 JSON 与私有复核边界定义于
+[`docs/privacy-schema.md`](privacy-schema.md)。基础安装、基础测试和默认诊断路径
+继续保持离线、CPU-only、无 GPU、无模型下载和零默认上传。匿名脸部区域、二维码、
+条码、可疑文字、人工视觉区域、人工音频区间及元数据只是可复核的风险类型；它们
+不涉及真实人物身份识别。
+
+Safe Sharing 的公开 share package 只能包含输出根目录相对、正斜杠的路径以及脱敏
+描述。它不得包含原始敏感 OCR 文本、未脱敏证据、绝对个人路径、用户名或其他私有
+复核材料。媒体改变前必须由用户审核并确认完全匹配的计划摘要；未验证的必需检查
+只能导致 `needs_review`、`partial` 或 `failed`，绝不能作为 `completed` 分享结果。
+
+## 17. B：Video Rescue
+
+Video Rescue 是 Safe Sharing 之后、显式选择的本地 Resolve 工作流，不是 v0.1 Check
+能力，也不修改冻结的 `AnalysisReport`、既有 Detector 协议或 `videoscope analyze`
+行为。它只读取源媒体，在任务输出目录写入新的 faithful rescue 和（仅在证据、预览与
+确认支持时）improved viewing 副本；不得覆盖源文件或把处理依赖加入基础诊断路径。
+
+其版本化领域契约、公开 JSON 路径边界、确定性 ID 与计划摘要规则见
+[`docs/rescue-schema.md`](rescue-schema.md)。基础安装与测试继续离线、CPU-only、无
+GPU、无模型下载。该工作流只陈述可观察到的区间、测量与启发式限制；不承诺恢复丢失
+信息、不生成未经校准的总体质量或恢复分数，也不包含 AI 插帧、超分辨率、生成式补全
+或远程处理。
+
+## 18. C：Long Video to Useful Content
+
+Long Video to Useful Content 是在稳固 Check 底座以及 A、D、B 工作流之后的独立
+本地 CPU 工作流。它把一个经授权的本地长视频转成经过复核、可以实际播放且能够
+追溯来源的内容包，而不只是返回时间戳或文字建议。
+
+C 的首个 CPU MVP 提供三个明确目标：
+
+- `Faithful Clean`：只提议删除具有多种可观察低信息信号的区间，静音本身永远
+  不足以自动提议删除；
+- `Chaptered Full`：保留完整时间线，按镜头、停顿和用户标记提供可编辑章节；
+- `Selected Clips`：只组合用户明确选择的保留区间，默认保持来源顺序。
+
+所有内容改变都必须先生成有界剪接预览，再由用户确认与完整计划、锁定区间、
+配置、来源哈希、可选字幕哈希和验证策略绑定的确定性摘要。源视频始终只读，结果
+写入新的 `content-output/`，每个内容改变结果都必须包含精确的
+`source-map.json`。私有字幕、缩略图、波形、证据与草稿保留在
+`content-review-private/`，不进入公开结果树。
+
+C 使用单独的 `videoscope.content` 领域模型和技术报告，不修改 v0.1
+`AnalysisReport`、Finding、Detector 协议或 `videoscope analyze`。CPU MVP 不包含
+自动语音识别、语义亮点排名、生成式摘要或标题、身份判断、默认创意重排、云上传
+或模型下载。Advanced AI 只能在 C CPU MVP 的确认、来源映射和独立验证门禁全部
+稳定后作为显式可选 provider 进入。
+
+## 19. Advanced AI：可复核的本地内容智能
+
+Advanced AI 是建立在 C CPU MVP 之上的显式可选辅助层。它使用本地转写和
+结构化语义 provider 提议章节、精华区间、摘要和标题，使普通用户更快得到可编辑、
+可播放的结果。AI 输出是带来源证据和限制的建议，不是事实、重要性评分或自动发布
+决定。
+
+首个 Advanced AI 版本必须满足：
+
+- 没有可信字幕时可显式启用本地 ASR，已有可信字幕始终可以直接使用；
+- 每个章节和精华建议都引用合法来源区间及字幕 cue 或帧证据；
+- 摘要和标题可复制、编辑、接受或拒绝，但不会自行改写媒体；
+- 只有用户接受的章节或精华区间才能转换成普通 C 用户范围；
+- 任何媒体改变仍经过 C 的预览、精确确认、来源映射和独立验证；
+- provider、模型、设备、精度、参数、耗时和失败状态可追溯；
+- 模型缺失、输出无效或运行失败时，完整 CPU 工作流继续可用；
+- 基础安装、基础测试和默认工作台不下载模型、不访问网络、不探测 GPU。
+
+Advanced AI 不做人脸或身份识别，不生成未发生的事实，不给出未经校准的传播潜力、
+真伪、重要性或总体质量分，也不允许模型绕过用户确认直接删除、裁剪、分享或发布
+视频。远程 provider 不属于首个版本；本地模型服务只允许显式启用的 loopback 访问。

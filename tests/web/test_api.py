@@ -11,8 +11,9 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, ClassVar, cast
 
+import pytest
 from fastapi.testclient import TestClient
-from httpx import Response
+from httpx2 import Response
 
 from tests.analysis.helpers import FakeMedia, FixedSceneDetector, TickClock
 from tests.detectors.dummy import DummyDetector
@@ -26,6 +27,7 @@ from videoscope.detectors import DetectorRegistry
 from videoscope.web.app import create_app
 from videoscope.web.jobs import JobManager
 from videoscope.web.models import WebServerConfig
+from videoscope.web.publish_jobs import PublishJobManager
 
 
 class SuccessfulPipeline:
@@ -217,6 +219,30 @@ def test_health_detectors_openapi_and_no_wildcard_cors(tmp_path: Path) -> None:
     assert cors.status_code == 403
 
 
+def test_health_counts_active_analysis_and_publish_jobs(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """The shared health total must include both local workbench managers."""
+    config = _config(tmp_path)
+    analysis_manager = JobManager(config, pipeline_factory=SuccessfulPipeline)
+    publish_manager = PublishJobManager(config)
+    monkeypatch.setattr(analysis_manager, "active_job_count", lambda: 2)
+    monkeypatch.setattr(publish_manager, "active_job_count", lambda: 3)
+
+    with TestClient(
+        create_app(
+            config,
+            manager=analysis_manager,
+            publish_manager=publish_manager,
+        )
+    ) as client:
+        health = client.get("/api/health")
+
+    assert health.status_code == 200
+    assert health.json()["active_jobs"] == 5
+
+
 def test_default_server_rejects_untrusted_host_and_cross_site_upload(
     tmp_path: Path,
 ) -> None:
@@ -378,6 +404,7 @@ def test_upload_filename_and_artifact_path_cannot_traverse(tmp_path: Path) -> No
     assert record.input_path.name == "input.mp4"
     assert not (config.job_root.parent / "outside.mp4").exists()
     assert traversal.status_code == 404
+    assert str(config.job_root) not in traversal.text
 
 
 def test_delete_requests_cancellation_then_removes_terminal_job(

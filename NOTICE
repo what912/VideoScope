@@ -39,10 +39,16 @@ resolved dependency set they ship.
 Optional extras
 ---------------
 
-The `ai`, `ocr`, `web`, and `all` extras may install PyTorch, torchvision,
+The `ai`, `asr`, `ocr`, `web`, and `all` extras may install PyTorch, torchvision,
 OpenCLIP, PaddleOCR, PaddlePaddle, FastAPI, Uvicorn, python-multipart, and their
 transitive dependencies. They are not part of the base installation and no
 model weights are bundled.
+
+The optional `asr` extra installs faster-whisper and CTranslate2. VideoScope
+does not bundle Whisper checkpoints. Checkpoint terms are separate from the
+Python packages and must be reviewed for the exact model selected by the user.
+Ollama is an external local application; its models are never bundled or pulled
+by VideoScope and retain their individual terms.
 Downstream users must review the licenses and model-weight terms of the exact
 optional components and checkpoints they choose.
 
@@ -74,24 +80,3 @@ The source dashboard directly uses React, React DOM, TypeScript, Vite, Vitest,
 jsdom, and Testing Library packages. Production wheels contain only the
 compiled local dashboard assets, not node_modules. Exact direct license
 identifiers and audit notes are recorded in docs/third-party-licenses.md.
-
-Public browser site
--------------------
-
-The static public site directly uses the following runtime packages:
-
-- @supabase/supabase-js 2.57.4 — MIT License
-- hash-wasm 4.12.0 — MIT License
-- idb 8.0.3 — ISC License
-- motion 12.23.12 — MIT License
-- React 19.2.6 — MIT License
-- React DOM 19.2.6 — MIT License
-- react-router-dom 7.8.2 — MIT License
-
-Its direct development and build dependencies are @eslint/js, ESLint,
-TypeScript ESLint, Testing Library, Node/React type declarations, the Vite
-React plugin, jsdom, TypeScript, Vite, and Vitest. Their resolved versions and
-license identifiers are recorded in docs/third-party-licenses.md. The deployed
-GitHub Pages artifact contains compiled application assets and project-authored
-media, not node_modules. Optional Supabase functionality remains unavailable
-without explicit public configuration and completed production security gates.

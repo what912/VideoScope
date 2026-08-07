@@ -125,8 +125,8 @@ function assertOriginalManifest(manifest) {
       throw new Error("Original media role and scene declarations do not match");
     }
     if (
-      item.workingWidth !== 1920 ||
-      item.workingHeight !== 1080 ||
+      item.workingWidth !== 1280 ||
+      item.workingHeight !== 720 ||
       item.outputWidth !== 1280 ||
       item.outputHeight !== 720 ||
       item.frameRate !== 24

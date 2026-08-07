@@ -10,6 +10,13 @@ import {
 } from "./api";
 import { Header } from "./components/Header";
 import { ProgressView } from "./components/ProgressView";
+import {
+  PublishReadyView,
+  type WorkbenchLocale,
+} from "./components/PublishReadyView";
+import { PrivacyView } from "./components/PrivacyView";
+import { RescueView } from "./components/RescueView";
+import { ContentView } from "./components/ContentView";
 import { ReportView } from "./components/ReportView";
 import { UploadPanel } from "./components/UploadPanel";
 import mockReportData from "./mocks/mock-report.json";
@@ -131,6 +138,24 @@ const MOCK_DETECTORS: DetectorManifest[] = [
 
 const TERMINAL = new Set<JobStatus>(["completed", "failed", "cancelled"]);
 
+type WorkbenchMode = "analyze" | "publish" | "rescue" | "content" | "privacy";
+
+function initialLocale(): WorkbenchLocale {
+  const stored = window.localStorage.getItem("videoscope-locale");
+  if (stored === "en" || stored === "zh-CN") return stored;
+  return window.navigator.language.toLowerCase().startsWith("zh")
+    ? "zh-CN"
+    : "en";
+}
+
+function replaceQueryParam(name: string, value: string | null): void {
+  const next = new URLSearchParams(window.location.search);
+  if (value === null) next.delete(name);
+  else next.set(name, value);
+  const suffix = next.toString();
+  window.history.replaceState(null, "", suffix ? `?${suffix}` : "/");
+}
+
 function mockJob(status: JobStatus, progress: number, message: string): JobResponse {
   return {
     job_id: "mock-dashboard",
@@ -152,12 +177,79 @@ export default function App(): React.JSX.Element {
   const query = useMemo(() => new URLSearchParams(window.location.search), []);
   const mockMode = query.get("mock") === "1";
   const initialJobId = query.get("job");
+  const initialPublishJobId = query.get("publishJob");
+  const initialPrivacyJobId = query.get("privacyJob");
+  const initialRescueJobId = query.get("rescueJob") ?? window.localStorage.getItem("videoscope-rescue-job");
+  const initialContentJobId = query.get("contentJob") ?? window.localStorage.getItem("videoscope-content-job");
+  const requestedMode = query.get("mode");
+  const [publishJobId, setPublishJobId] = useState<string | null>(
+    initialPublishJobId,
+  );
+  const [privacyJobId, setPrivacyJobId] = useState<string | null>(
+    initialPrivacyJobId,
+  );
+  const [rescueJobId, setRescueJobId] = useState<string | null>(initialRescueJobId);
+  const [contentJobId, setContentJobId] = useState<string | null>(initialContentJobId);
+  const [mode, setMode] = useState<WorkbenchMode>(
+    requestedMode === "content" || (requestedMode === null && initialContentJobId)
+      ? "content"
+      : requestedMode === "rescue" || (requestedMode === null && initialRescueJobId)
+      ? "rescue"
+      : requestedMode === "privacy" ||
+      (requestedMode === null && initialPrivacyJobId)
+      ? "privacy"
+      : requestedMode === "publish" ||
+          (requestedMode === null && initialPublishJobId)
+      ? "publish"
+      : "analyze",
+  );
+  const [locale, setLocale] = useState<WorkbenchLocale>(initialLocale);
   const [detectors, setDetectors] = useState<DetectorManifest[]>([]);
   const [loadingDetectors, setLoadingDetectors] = useState(true);
   const [job, setJob] = useState<JobResponse | null>(null);
   const [report, setReport] = useState<AnalysisReport | null>(null);
   const [videoSource, setVideoSource] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    window.localStorage.setItem("videoscope-locale", locale);
+    document.documentElement.lang = locale;
+  }, [locale]);
+
+  const switchMode = (nextMode: WorkbenchMode): void => {
+    setMode(nextMode);
+    const next = new URLSearchParams(window.location.search);
+    if (["publish", "privacy", "rescue", "content"].includes(nextMode)) {
+      next.set("mode", nextMode);
+    } else if (next.has("publishJob") || next.has("privacyJob") || next.has("rescueJob") || next.has("contentJob")) {
+      next.set("mode", "analyze");
+    }
+    else next.delete("mode");
+    const suffix = next.toString();
+    window.history.replaceState(null, "", suffix ? `?${suffix}` : "/");
+  };
+
+  const rememberPublishJob = (jobId: string | null): void => {
+    setPublishJobId(jobId);
+    replaceQueryParam("publishJob", jobId);
+  };
+
+  const rememberPrivacyJob = (jobId: string | null): void => {
+    setPrivacyJobId(jobId);
+    replaceQueryParam("privacyJob", jobId);
+  };
+  const rememberRescueJob = (jobId: string | null): void => {
+    setRescueJobId(jobId);
+    if (jobId) window.localStorage.setItem("videoscope-rescue-job", jobId);
+    else window.localStorage.removeItem("videoscope-rescue-job");
+    replaceQueryParam("rescueJob", jobId);
+  };
+  const rememberContentJob = (jobId: string | null): void => {
+    setContentJobId(jobId);
+    if (jobId) window.localStorage.setItem("videoscope-content-job", jobId);
+    else window.localStorage.removeItem("videoscope-content-job");
+    replaceQueryParam("contentJob", jobId);
+  };
 
   const showReport = useCallback(
     async (jobId: string): Promise<void> => {
@@ -258,12 +350,12 @@ export default function App(): React.JSX.Element {
         const completed = mockJob("completed", 100, "Analysis completed");
         setJob(completed);
         setReport(mockReportData as AnalysisReport);
-        window.history.replaceState(null, "", "?mock=1&job=mock-dashboard");
+        replaceQueryParam("job", "mock-dashboard");
         return;
       }
       const created = await createJob(file, prompt, options);
       setJob(created);
-      window.history.replaceState(null, "", `?job=${created.job_id}`);
+      replaceQueryParam("job", created.job_id);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not start analysis.");
       setJob(null);
@@ -289,13 +381,79 @@ export default function App(): React.JSX.Element {
     setReport(null);
     setVideoSource(null);
     setError(null);
-    window.history.replaceState(null, "", mockMode ? "?mock=1" : "/");
+    replaceQueryParam("job", null);
   };
 
   return (
     <>
       <Header />
-      {report && job ? (
+      <nav
+        className="workbench-nav"
+        aria-label={locale === "zh-CN" ? "工作台模式" : "Workbench mode"}
+      >
+        <div className="mode-switch" role="group">
+          <button
+            type="button"
+            className={mode === "analyze" ? "is-active" : ""}
+            aria-pressed={mode === "analyze"}
+            onClick={() => switchMode("analyze")}
+          >
+            {locale === "zh-CN" ? "检查" : "Check"}
+          </button>
+          <button
+            type="button"
+            className={mode === "publish" ? "is-active" : ""}
+            aria-pressed={mode === "publish"}
+            onClick={() => switchMode("publish")}
+          >
+            {locale === "zh-CN" ? "A 发布就绪" : "A · Publish Ready"}
+          </button>
+          <button type="button" className={mode === "rescue" ? "is-active" : ""} aria-pressed={mode === "rescue"} onClick={() => switchMode("rescue")}>
+            {locale === "zh-CN" ? "B 视频抢救" : "B · Video Rescue"}
+          </button>
+          <button type="button" className={mode === "content" ? "is-active" : ""} aria-pressed={mode === "content"} onClick={() => switchMode("content")}>
+            {locale === "zh-CN" ? "C 有用内容" : "C · Useful Content"}
+          </button>
+          <button
+            type="button"
+            className={mode === "privacy" ? "is-active" : ""}
+            aria-pressed={mode === "privacy"}
+            onClick={() => switchMode("privacy")}
+          >
+            {locale === "zh-CN" ? "D 安全分享" : "D · Safe Sharing"}
+          </button>
+        </div>
+        <div className="workbench-meta">
+          <span className="creator-mark">what912</span>
+          <button
+            className="language-switch"
+            type="button"
+            onClick={() => setLocale(locale === "en" ? "zh-CN" : "en")}
+            aria-label={
+              locale === "en" ? "切换到简体中文" : "Switch to English"
+            }
+          >
+            {locale === "en" ? "中文" : "EN"}
+          </button>
+        </div>
+      </nav>
+      {mode === "content" ? (
+        <ContentView locale={locale} initialJobId={contentJobId} onJobChange={rememberContentJob} />
+      ) : mode === "rescue" ? (
+        <RescueView locale={locale} onLocaleChange={setLocale} initialJobId={rescueJobId} onJobChange={rememberRescueJob} />
+      ) : mode === "publish" ? (
+        <PublishReadyView
+          locale={locale}
+          initialJobId={publishJobId}
+          onJobIdChange={rememberPublishJob}
+        />
+      ) : mode === "privacy" ? (
+        <PrivacyView
+          locale={locale}
+          initialJobId={privacyJobId}
+          onJobChange={rememberPrivacyJob}
+        />
+      ) : report && job ? (
         <ReportView
           jobId={job.job_id}
           report={report}

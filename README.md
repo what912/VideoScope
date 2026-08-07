@@ -1,28 +1,147 @@
 # VideoScope
 
-**在本机把生成视频中的可疑黑场、冻结、相对模糊、亮度闪烁及可选
-AI/OCR 一致性信号定位到具体时间区间，并生成可审查证据。**
+**Find what is wrong, make a reviewed local fix, and keep every frame traceable.**
+
+VideoScope is an open-source, local-first video observatory by **what912**. Drop
+in a video to diagnose visible problems, prepare a publish-compatible copy,
+review privacy risks, rescue observable playback defects, or turn a long
+recording into useful chapters and clips. The base path runs on CPU, never
+uploads by default, and never overwrites the source.
+
+**Use the browser CPU analyzer:** https://what912.github.io/VideoScope/
+
+**Source, issues and contributions:** https://github.com/what912/VideoScope
+
+```powershell
+python -m pip install https://github.com/what912/VideoScope/releases/download/v0.7.0-dev.0/genvideoscope-0.7.0.dev0-py3-none-any.whl
+videoscope doctor
+videoscope serve
+```
+
+Open the printed loopback URL for the bilingual workbench, or run a first
+diagnosis directly:
+
+```powershell
+videoscope analyze input.mp4 --output runs\first-check
+```
+
+| Mode | Practical result |
+| --- | --- |
+| **Check** | JSON + offline HTML with exact issue ranges and evidence frames |
+| **A · Publish Ready** | New verified MP4 for common horizontal/vertical delivery |
+| **D · Safe Sharing** | Human-reviewed privacy-redacted sharing copy |
+| **B · Video Rescue** | Faithful salvage and optional bounded viewing improvement |
+| **C · Useful Content** | Reviewed chapters, selected clips, source map and report |
+
+Advanced AI in the `0.7.0.dev0` line is optional and local: trusted transcript
+or Faster Whisper ASR plus a loopback Ollama model can propose grounded chapters,
+highlights, summaries and titles. Suggestions start rejected and cannot bypass
+human review, C's private preview, exact confirmation or final verification.
+See [Advanced AI setup and trust boundaries](docs/advanced-ai.md).
+
+> Public static demos can run the browser CPU check locally. Python/FFmpeg and
+> local-model workflows run through the installed CLI or loopback Web app; this
+> repository does not pretend GitHub Pages is a public video-processing server.
+
+## C · Long Video to Useful Content / 长视频变成有用成品
+
+VideoScope can turn an existing local long video into a reviewable, traceable
+result without uploading it or asking an AI model to invent what matters. Pick
+one of three CPU workflows: **Faithful Clean** removes only exact reviewed
+intervals, **Chaptered Full** preserves the complete timeline and adds chapters,
+and **Selected Clips** exports the exact moments you choose.
+
+VideoScope 可以把本地长视频整理成可复核、可追溯的成品，全程默认不上
+传，也不让模型擅自决定“什么重要”。三种 CPU 目标分别是：**忠实精简**
+（只移除人工确认的精确区间）、**完整分章**（不删内容，只增加章节）和
+**选定片段**（只导出用户明确选择的时刻）。
+
+```powershell
+python -m pip install https://github.com/what912/VideoScope/releases/download/v0.7.0-dev.0/genvideoscope-0.7.0.dev0-py3-none-any.whl
+videoscope content meeting.mp4 `
+  --goal faithful_clean `
+  --exclude-range 120:148:"Long reviewed pause" `
+  --locked-keep-range 132:138:"Keep surrounding context" `
+  --output runs\useful-content
+```
+
+The first run writes a private content map, storyboard, exact action ranges and
+bounded join previews. Review those artifacts, then confirm the exact plan shown
+by the CLI or local Web workbench. A verified result contains
+`useful-content.mp4`, `source-map.json`, `changes.json`, chapter data and an
+offline report under `content-output/`. The source file remains byte-for-byte
+unchanged. Optional local SRT/WebVTT is private unless subtitle export is
+explicitly selected.
+
+Read the [workflow guide](docs/long-video-content.md) and stable
+[content schema](docs/content-schema.md). This CPU MVP does not transcribe,
+summarize, rank highlights, generate titles, or perform creative editing; it
+fails closed when a preview, confirmation binding, source map or required media
+verification is incomplete.
+
+## Video Rescue: preview, confirm, then create a new local copy
+
+Video Rescue is an opt-in, CPU-only workflow for observable container, timeline,
+video, and audio problems. It never overwrites the source. Install the base wheel
+and provide local `ffmpeg` and `ffprobe` on `PATH`:
+
+```powershell
+python -m pip install https://github.com/what912/VideoScope/releases/download/v0.7.0-dev.0/genvideoscope-0.7.0.dev0-py3-none-any.whl
+videoscope doctor
+videoscope rescue input.mp4 `
+  --output runs\video-rescue `
+  --strategy balanced `
+  --symptom dark `
+  --symptom video_noise
+```
+
+`conservative` prioritizes faithful remux/timeline/stream salvage and avoids
+subjective enhancement. `balanced` includes Conservative behavior and may propose
+bounded luma, denoise, sharpen, deflicker, stabilization, loudness, audio denoise,
+or fixed A/V-offset actions only when local measurements support them. Symptom
+hints guide assessment; they do not authorize a filter by themselves.
+
+Before full processing, VideoScope creates same-range source/faithful/improved
+previews under the private review root and displays a deterministic plan digest.
+Interactive use asks for confirmation; automation must supply that exact digest
+with `--confirm-plan`. Successful public artifacts are placed in
+`rescue-output/`: `faithful-rescue.mp4`, an optional independent
+`improved-viewing.mp4`, plan/damage/change/verification/technical JSON, and an
+offline `report.html`. A `partial` result includes precise unrecovered source
+ranges; `needs_review` is not completion.
+
+Filtering may improve observable playback, but it cannot recreate missing source
+frames, clipped audio samples, or image detail that was never recorded or has been
+destroyed. Reports, previews, hashes, and derivatives may be sensitive. The local
+Web workflow is available through `python -m videoscope serve`; keep the default
+loopback binding, review both languages and the full result, then use explicit job
+deletion (or delete the complete CLI output directory) when retention is no longer
+needed.
+
+See the [Video Rescue guide](docs/video-rescue-guide.md), the versioned
+[Rescue JSON schema](docs/rescue-schema.md), and the PowerShell/POSIX examples in
+`examples/`.
+
+**在本机定位视频质量异常，并把经过人工复核的隐私区域处理成一个独立、
+可验证的分享副本。**
 
 VideoScope 是 local-first 工具：默认不上传视频、提示词、证据帧或报告，
-没有遥测，也不会自动下载模型。项目身份为：
+没有遥测，也不会自动下载模型。公开发行采用独特名称：
 
-- 公开源码仓库：`https://github.com/what912/VideoScope`
-- 公开浏览器站点：`https://what912.github.io/VideoScope/`
+- GitHub 仓库：`GenVideoScope`
 - PyPI distribution：`genvideoscope`
 - Python import：`videoscope`
 - CLI：`videoscope`
-
-> **公开站点状态（2026-08-01）：已上线。** GitHub Pages 已启用 HTTPS，
-> 并已完成签出状态的首页、工作台、对比、报告、隐私和文档路由验收。
-> 可选 Supabase 登录/分享仍未配置，PyPI 与 GitHub Release 也未发布；
-> 这些状态与匿名本地分析站点是否可用相互独立。
 
 ```powershell
 # 在源码 checkout 根目录安装
 python -m pip install .
 
-# 最小分析
-videoscope analyze input.mp4 --output runs/example
+# 先扫描隐私风险；此命令只写入私有复核区，不修改视频
+videoscope privacy input.mp4 `
+  --output runs\safe-sharing `
+  --audience public `
+  --scan-only
 ```
 
 默认 CPU profile 包含四个 detector：
@@ -32,39 +151,79 @@ videoscope analyze input.mp4 --output runs/example
 - `scene_relative_blur`：场景内相对清晰度下降；
 - `global_flicker`：排除切镜邻域后的潜在全局亮度闪烁。
 
-## 公开浏览器体验
-
-`site/` 是面向 GitHub Pages 的双语浏览器产品站。匿名用户无需注册即可
-选择本地视频，在浏览器中运行四个有界 CPU 启发式 detector：
-`near_black`、`possible_freeze`、`scene_relative_blur` 和
-`global_flicker`。本地文件分析不会上传原视频；报告默认保存在当前
-浏览器的 IndexedDB 中。
-
-浏览器站点还包含：
-
-- 英文/简体中文切换，语言偏好保存在当前浏览器；
-- 固定、不随语言切换的创作者标识 `what912`；
-- 本地工作台、detector 对比和 Creator/Research 报告视图；
-- JSON 下载，以及通过浏览器“打印 / 另存为 PDF”的打印布局；
-- 可选 Supabase 登录和脱敏分享接口；未配置时明确显示不可用，匿名分析
-  不受影响。
-
-浏览器预览不是桌面 CLI 的替代品：它依赖浏览器编解码器和 Canvas，
-按受控采样运行，不使用 FFmpeg/ffprobe，不提供 Benchmark、AI/OCR
-provider、Web API 或经过校准的准确率。直接 URL 导入会在同意后联系
-用户输入的 HTTPS 主机，并可能受 CORS 限制。详情见
-[公开站点说明](docs/public-site.md)和
-[前端开发说明](docs/frontend.md)。
-
-![VideoScope 公开浏览器站点本地生产构建首页](docs/assets/public-home.png)
-
-> 该截图来自本地生产构建的首页，仅证明页面渲染，不是 detector
-> Benchmark、真实 fixture 分析或线上部署证据。
-
 ![VideoScope 本地 Dashboard 首页](docs/assets/dashboard-home.jpg)
 
 > 截图使用明确标注的 mock report，仅展示界面结构，不代表 Benchmark、
 > 真实视频准确率或伪造检测结果。
+
+## Safe Sharing：复核后再生成分享副本
+
+`videoscope privacy` 是 v0.4 开发线中的本地、CPU-first、显式选择工作流。
+它检查可移除元数据，提出匿名人脸区域、QR/条码区域和可选 OCR 文字区域，
+也接受人工画框与静音区间。自动扫描只提供启发式建议；它不识别人是谁，
+不保证发现全部敏感内容，也不证明输出在所有场景中绝对安全。
+
+完整生命周期分为三次明确操作：
+
+```powershell
+# 1. 扫描；源视频只读，风险图只写入 privacy-review-private
+videoscope privacy input.mp4 --output runs\safe-sharing --scan-only
+
+# 2. 用当前 risk-map 中的真实 risk_id 填写复核文件，生成私有预览和摘要
+videoscope privacy input.mp4 `
+  --output runs\safe-sharing `
+  --review-file review.json `
+  --preview-only
+
+# 3. 人工比较源视频与预览后，提交上一步打印的完整摘要
+videoscope privacy input.mp4 `
+  --output runs\safe-sharing `
+  --confirm-digest REPLACE_WITH_EXACT_PLAN_DIGEST
+```
+
+私有目录 `privacy-review-private/` 可能包含未脱敏证据、风险图、计划和预览，
+不能分享。只有确认并完成独立检查后，`share-package/` 才包含固定白名单中的
+`share-safe.mp4` 和脱敏 JSON。若必需检查无法完成，结果是 `needs_review`，
+不会伪装成已完成，也不会生成或授权下载公开分享包。任务结束后可在 Web 工作台显式删除本地任务；CLI 用户应在
+确认不再需要复核材料后删除整个输出目录。
+
+OCR 不是基础依赖。未安装或未启用 OCR 时，界面会明确要求人工文字复核；
+不会下载模型，也不会把“未扫描”写成“没有风险”。详细契约见
+[Safe Sharing 指南](docs/safe-sharing.md)、[隐私 schema](docs/privacy-schema.md)
+和 [Web API](docs/privacy-api.md)。
+
+## Publish Ready：先看计划，再生成发布副本
+
+`videoscope publish` 是可选的本地 Resolve 流程。它先探测源视频、显示确定性
+处理计划并生成最多 6 秒的本地预览；交互终端会在执行完整处理前要求确认。源文件
+始终只读，结果写入新的输出目录。已经人工审查计划的自动化任务可以显式使用
+`--yes`：
+
+```powershell
+videoscope publish input.mp4 `
+  --profile compatible_mp4 `
+  --output runs\publish-ready `
+  --yes
+```
+
+三个 Profile 均输出 MP4/H.264/yuv420p，并在源视频含音频时保留为 AAC：
+
+| Profile | 用途 | 画布 |
+| --- | --- | --- |
+| `compatible_mp4` | 保持源尺寸的通用兼容副本 | 源尺寸 |
+| `social_vertical_9_16` | 竖屏社交画布 | 1080×1920 |
+| `social_horizontal_16_9` | 横屏社交画布 | 1920×1080 |
+
+竖屏和横屏 Profile 使用等比缩放与黑边填充（scale-and-pad），不会裁掉源画面。
+成功目录包含 `publish-ready.mp4`、`cover.jpg`、`changes.json` 和
+`technical-report.json`，并保留 `plan.json`、预览和处理前后诊断报告。若文件已
+生成但技术验证要求人工复核，命令退出码为 `5`，不得把该状态当作已通过。
+
+Publish Ready 不上传素材、不访问远程处理服务，也不需要 GPU 或模型。它需要系统
+`PATH` 中的 FFmpeg/ffprobe，并要求 FFmpeg 构建支持 H.264 (`libx264`) 和 AAC
+编码。技术验证只检查所选 Profile 的当前可观测要求；它不证明艺术质量，也不保证
+未来平台规则或所有播放器环境永久兼容。详见
+[Publish Ready 契约](docs/publish-ready.md)。
 
 ## 输出
 
@@ -129,6 +288,13 @@ brew install ffmpeg
 
 ## 安装
 
+安装公开的 GitHub 开发候选版：
+
+```powershell
+python -m pip install https://github.com/what912/VideoScope/releases/download/v0.7.0-dev.0/genvideoscope-0.7.0.dev0-py3-none-any.whl
+videoscope doctor
+```
+
 源码安装：
 
 ```powershell
@@ -148,14 +314,14 @@ source .venv/bin/activate
 
 ```powershell
 python -m pip install -e ".[dev]"
-python scripts/verify.py
+python scripts/validate.py
 ```
 
 构建并安装本地候选 wheel：
 
 ```powershell
 python -m build
-python -m pip install dist/genvideoscope-0.2.0rc1-py3-none-any.whl
+python -m pip install dist/genvideoscope-0.7.0.dev0-py3-none-any.whl
 ```
 
 正式上传 PyPI 后，用户安装命令将是：
@@ -174,6 +340,8 @@ videoscope doctor
 videoscope models list
 videoscope models doctor
 videoscope analyze INPUT --output runs/example
+videoscope publish INPUT --profile compatible_mp4 --output runs/publish-ready
+videoscope privacy INPUT --output runs/safe-sharing --scan-only
 videoscope benchmark MANIFEST --output runs/benchmark
 videoscope serve
 ```
@@ -198,6 +366,7 @@ videoscope serve
 | `2` | 输入、路径或配置错误 |
 | `3` | 视频无法探测或处理 |
 | `4` | 内部流水线或报告失败 |
+| `5` | Publish Ready 产物存在，但验证要求人工复核 |
 | `130` | 用户中断或取消 |
 
 ## 配置
@@ -242,6 +411,9 @@ for finding in result.report.findings:
 - [`examples/basic_cli.sh`](examples/basic_cli.sh)
 - [`examples/batch_analysis.py`](examples/batch_analysis.py)
 - [`examples/custom_detector.py`](examples/custom_detector.py)
+- [`examples/safe_sharing.ps1`](examples/safe_sharing.ps1)
+- [`examples/safe_sharing.sh`](examples/safe_sharing.sh)
+- [`examples/privacy-review.example.json`](examples/privacy-review.example.json)
 
 ## 可选 AI 与 OCR
 
@@ -301,7 +473,9 @@ videoscope serve
 
 API 对单文件上传、配置和 prompt 设有上限，通过 ffprobe 最终验证媒体，
 使用随机作业 ID、受控 artifact 路径、独立 worker pool 和过期清理。
-前端和 API 复用同一个 `AnalysisPipeline`。
+前端和 API 复用 Python 核心流水线；Safe Sharing 复用同一个
+`SafeSharingPipeline`，并支持风险时间轴、人工视觉/音频区域、私有预览、
+精确摘要确认、恢复、取消、结果下载和显式删除。
 
 参见 [Dashboard 开发说明](docs/frontend.md)和
 [Web API](docs/web-api.md)。
@@ -323,6 +497,8 @@ Benchmark 分 detector 报告 temporal IoU、event precision/recall/F1、起止
 - 默认只读源视频并在本地运行；
 - 默认不复制完整视频，只有 `--bundle-video` 会复制；
 - 报告不记录工作区或个人绝对目录；
+- Safe Sharing 的公开包与私有复核目录物理分离，公开下载采用固定白名单；
+- Safe Sharing 在任何媒体修改前要求人工复核、私有预览和精确计划摘要；
 - 用户提供的文件名、prompt、输入 SHA-256、时间元数据和证据帧仍可能
   具有隐私性，分享报告前必须人工复核；
 - Web 默认只接受可信回环 Host 和回环浏览器 Origin；
@@ -344,13 +520,21 @@ Benchmark 分 detector 报告 temporal IoU、event precision/recall/F1、起止
 - OCR 错误可能看起来像文字不稳定；
 - 未在真实独立标注集上校准，不提供统一总质量分；
 - Web API 没有账户系统；`--allow-network` 只适合受信网络。
+- Publish Ready 当前只提供三个版本化 Profile，使用本地 FFmpeg 生成兼容副本；
+  它不做自动剪辑、插帧、稳定、生成式增强或艺术质量修复。
+- 不同 FFmpeg 编码器配置、VFR 输入、长视频资源消耗和目标平台播放器行为需要在
+  实际目标环境复核；当前 Profile 规则不是对未来平台要求的永久承诺。
+- Safe Sharing 的匿名区域、QR/条码和文字扫描都是启发式；遮挡、运动、低分辨率、
+  OCR 错误和采样间隔都可能造成漏检或误报，最终分享前必须人工播放和复核。
+- CPU MVP 不自动识别敏感语音；音频隐私依赖用户人工标记静音区间。
 
 详细算法与限制见 [算法说明](docs/algorithm-notes.md)。
 
 ## Roadmap
 
-v0.2.0 候选已包括共享 AI runtime、三个可选 AI/OCR detector、本地 Web
-API 和 React Dashboard。后续方向是：
+The `0.7.0.dev0` line adds grounded, human-reviewed local AI assistance on top
+of the completed Check → A → D/B → C foundation. The base installation remains
+local-first, CPU-only and model-free. 后续方向是：
 
 - 独立真实标注集校准和性能基准；
 - 更严格的 schema 迁移机制；
@@ -374,8 +558,9 @@ npm test
 npm run build
 ```
 
-发布检查见 [docs/release-checklist.md](docs/release-checklist.md)，本次审计
-结论见 [release-audit.md](release-audit.md)。
+发布检查见 [docs/release-checklist.md](docs/release-checklist.md)。当前
+`0.7.0.dev0` Advanced AI 开发线的最终实测结论记录在
+[release-audit.md](release-audit.md)；未执行的外部验证会明确标记为未验证。
 
 ## 许可证与引用
 

@@ -5,7 +5,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { TestApp } from "../../app/router";
@@ -188,6 +188,11 @@ describe("public static pages", () => {
     const matrix = screen.getByRole("table", { name: "Capability matrix" });
     for (const capability of [
       "FFmpeg probing",
+      "A · Publish-compatible copy",
+      "D · Reviewed privacy-safe copy",
+      "B · Verified video rescue",
+      "C · Chapters and selected clips",
+      "Review-first local AI suggestions",
       "Benchmark",
       "AI providers",
       "OCR",

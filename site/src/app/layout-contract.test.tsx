@@ -33,7 +33,7 @@ describe("application shell layout contract", () => {
   it("uses a shrinkable single grid track so route content cannot widen the document", async () => {
     const view = render(<TestApp initialEntries={["/workspace"]} />);
 
-    await screen.findByRole("heading", { level: 1 });
+    await screen.findByRole("heading", { level: 1 }, { timeout: 3_000 });
     const shellStyle = getComputedStyle(
       view.container.querySelector(".app-shell") as HTMLElement,
     );

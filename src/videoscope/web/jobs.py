@@ -3,15 +3,14 @@
 from __future__ import annotations
 
 import re
-import shutil
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from concurrent.futures import Future, ThreadPoolExecutor
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from pathlib import Path, PurePath
+from pathlib import Path
 from typing import Protocol, TypeAlias
-from uuid import uuid4
 
 from videoscope.ai import (
     DevicePreference,
@@ -37,8 +36,8 @@ from videoscope.web.models import (
     JobStatus,
     WebServerConfig,
 )
+from videoscope.web.storage import LocalJobStore
 
-_SAFE_SUFFIX = re.compile(r"^\.[a-z0-9]{1,10}$")
 _JOB_ID = re.compile(r"^[0-9a-f]{32}$")
 _AI_DETECTORS = {"prompt_alignment", "visual_semantic_drift"}
 _OCR_DETECTORS = {"text_stability"}
@@ -53,6 +52,29 @@ _PROGRESS_STATES: tuple[tuple[str, JobStatus], ...] = (
     ("bundling source video", JobStatus.RENDERING),
     ("rendering offline html report", JobStatus.RENDERING),
 )
+
+
+class CpuJobLimiter:
+    """Bound CPU work shared by every manager in one local Web app."""
+
+    def __init__(self, slots: int) -> None:
+        self._semaphore = threading.BoundedSemaphore(slots)
+
+    @contextmanager
+    def slot(self, cancelled: Callable[[], bool]) -> Iterator[bool]:
+        """Wait interruptibly for one shared slot and always release it."""
+        acquired = False
+        while not acquired:
+            if cancelled():
+                yield False
+                return
+            acquired = self._semaphore.acquire(timeout=0.05)
+        try:
+            yield True
+        finally:
+            self._semaphore.release()
+
+
 _STAGE_PROGRESS: dict[JobStatus, int] = {
     JobStatus.QUEUED: 0,
     JobStatus.PROBING: 12,
@@ -181,11 +203,13 @@ class JobManager:
         config: WebServerConfig | None = None,
         *,
         pipeline_factory: PipelineFactory = AnalysisPipeline,
+        cpu_limiter: CpuJobLimiter | None = None,
     ) -> None:
         self.config = config or WebServerConfig()
-        self.job_root = self.config.job_root.resolve()
-        self.job_root.mkdir(parents=True, exist_ok=True)
+        self._store = LocalJobStore(self.config.job_root)
+        self.job_root = self._store.root
         self.pipeline_factory = pipeline_factory
+        self._cpu_limiter = cpu_limiter or CpuJobLimiter(self.config.cpu_concurrency)
         self._jobs: dict[str, JobRecord] = {}
         self._lock = threading.RLock()
         self._cpu_executor = ThreadPoolExecutor(
@@ -198,6 +222,11 @@ class JobManager:
         )
         self._cleanup_stop = threading.Event()
         self._cleanup_thread: threading.Thread | None = None
+
+    def use_cpu_limiter(self, limiter: CpuJobLimiter) -> None:
+        """Join the app-wide CPU budget before any work is submitted."""
+        with self._lock:
+            self._cpu_limiter = limiter
 
     @staticmethod
     def _optional_profiles(
@@ -216,27 +245,20 @@ class JobManager:
         warnings: tuple[str, ...] = (),
     ) -> JobRecord:
         """Allocate a random path-safe job directory before streaming upload."""
-        job_id = uuid4().hex
-        directory = (self.job_root / job_id).resolve()
-        if not directory.is_relative_to(self.job_root):
-            raise RuntimeError("Generated job directory escaped the job root")
-        directory.mkdir(parents=False, exist_ok=False)
-        suffix = PurePath(original_filename).suffix.casefold()
-        if _SAFE_SUFFIX.fullmatch(suffix) is None:
-            suffix = ".bin"
+        paths = self._store.reserve(original_filename)
         enable_ai, enable_ocr = self._optional_profiles(analysis_config)
         record = JobRecord(
-            job_id=job_id,
-            directory=directory,
-            input_path=directory / f"input{suffix}",
-            output_directory=directory / "artifacts",
+            job_id=paths.job_id,
+            directory=paths.directory,
+            input_path=paths.input_path,
+            output_directory=paths.output_directory,
             prompt=prompt,
             analysis_config=analysis_config,
             heavy=enable_ai or enable_ocr,
             warnings=warnings,
         )
         with self._lock:
-            self._jobs[job_id] = record
+            self._jobs[paths.job_id] = record
         return record
 
     def discard_reserved(self, job_id: str) -> None:
@@ -244,16 +266,26 @@ class JobManager:
         with self._lock:
             record = self._jobs.pop(job_id, None)
         if record is not None:
-            shutil.rmtree(record.directory, ignore_errors=True)
+            self._store.discard(record.job_id)
 
     def submit(self, job_id: str) -> JobResponse:
         """Queue a completed upload in the matching worker pool."""
         record = self.require(job_id)
         executor = self._heavy_executor if record.heavy else self._cpu_executor
-        future = executor.submit(self._run_job, job_id)
+        target = self._run_job if record.heavy else self._run_cpu_job
+        future = executor.submit(target, job_id)
         with record.lock:
             record.future = future
         return record.snapshot()
+
+    def _run_cpu_job(self, job_id: str) -> None:
+        record = self.require(job_id)
+        with self._cpu_limiter.slot(record.cancellation.is_set) as acquired:
+            if acquired:
+                self._run_job(job_id)
+            else:
+                record.update(JobStatus.CANCELLED, "Job cancelled before execution")
+                self._store.discard(record.job_id)
 
     def require(self, job_id: str) -> JobRecord:
         """Resolve only canonical random IDs."""
@@ -288,7 +320,7 @@ class JobManager:
             future = record.future
         if future is not None and future.cancel():
             record.update(JobStatus.CANCELLED, "Job cancelled before execution")
-            shutil.rmtree(record.directory, ignore_errors=True)
+            self._store.discard(record.job_id)
         elif not record.snapshot().status.terminal:
             with record.lock:
                 record._append_event(record.status, "Cancellation requested")
@@ -302,7 +334,7 @@ class JobManager:
             return self.cancel(job_id)
         with self._lock:
             self._jobs.pop(job_id, None)
-        shutil.rmtree(record.directory, ignore_errors=True)
+        self._store.discard(record.job_id)
         return None
 
     def resolve_artifact(self, job_id: str, requested_path: str) -> Path:
@@ -310,16 +342,7 @@ class JobManager:
         record = self.require(job_id)
         if record.snapshot().status is not JobStatus.COMPLETED:
             raise FileNotFoundError("Job artifacts are not ready")
-        root = record.output_directory.resolve()
-        candidate = (root / requested_path).resolve()
-        if (
-            not requested_path
-            or Path(requested_path).is_absolute()
-            or not candidate.is_relative_to(root)
-            or not candidate.is_file()
-        ):
-            raise FileNotFoundError("Artifact not found")
-        return candidate
+        return self._store.resolve_artifact(record.job_id, requested_path)
 
     def report_path(self, job_id: str) -> Path:
         return self.resolve_artifact(job_id, "report.json")
@@ -348,7 +371,7 @@ class JobManager:
         record = self.require(job_id)
         if record.cancellation.is_set():
             record.update(JobStatus.CANCELLED, "Job cancelled before execution")
-            shutil.rmtree(record.directory, ignore_errors=True)
+            self._store.discard(record.job_id)
             return
         record.update(JobStatus.PROBING, "Starting local analysis")
         try:
@@ -389,7 +412,7 @@ class JobManager:
             )
         finally:
             if record.snapshot().status is JobStatus.CANCELLED:
-                shutil.rmtree(record.directory, ignore_errors=True)
+                self._store.discard(record.job_id)
 
     @staticmethod
     def _handle_progress(record: JobRecord, message: str) -> None:
@@ -437,29 +460,11 @@ class JobManager:
             )
             records = tuple(self._jobs.pop(job_id) for job_id in expired)
         for record in records:
-            shutil.rmtree(record.directory, ignore_errors=True)
-        self._cleanup_orphan_directories(cutoff)
-        return expired
-
-    def _cleanup_orphan_directories(self, cutoff: datetime) -> None:
-        cutoff_timestamp = cutoff.timestamp()
-        try:
-            children = tuple(self.job_root.iterdir())
-        except OSError:
-            return
+            self._store.discard(record.job_id)
         with self._lock:
             active_ids = set(self._jobs)
-        for child in children:
-            if (
-                child.is_dir()
-                and _JOB_ID.fullmatch(child.name)
-                and child.name not in active_ids
-            ):
-                try:
-                    if child.stat().st_mtime <= cutoff_timestamp:
-                        shutil.rmtree(child, ignore_errors=True)
-                except OSError:
-                    continue
+        self._store.cleanup_orphans(cutoff=cutoff, active_job_ids=active_ids)
+        return expired
 
     def start_cleanup(self) -> None:
         """Start one daemon retention loop."""

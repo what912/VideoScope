@@ -3,7 +3,7 @@ import path from "node:path";
 
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter } from "react-router";
 
 import { AppProviders } from "../../app/AppProviders";
 import { TestApp } from "../../app/router";

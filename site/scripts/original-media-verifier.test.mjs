@@ -34,8 +34,8 @@ const roleScenes = [
 const videoItem = Object.freeze({
   role: "product-proof",
   scene: "night-observation-grid",
-  workingWidth: 1920,
-  workingHeight: 1080,
+  workingWidth: 1280,
+  workingHeight: 720,
   outputWidth: 1280,
   outputHeight: 720,
   frameRate: 24,
@@ -67,8 +67,8 @@ function manifest() {
       const base = {
         role,
         scene,
-        workingWidth: 1920,
-        workingHeight: 1080,
+        workingWidth: 1280,
+        workingHeight: 720,
         outputWidth: 1280,
         outputHeight: 720,
         frameRate: 24,
@@ -295,8 +295,8 @@ describe("original media file and provenance verification", () => {
   });
 
   it.each([
-    ["workingWidth", 1280],
-    ["workingHeight", 720],
+    ["workingWidth", 1920],
+    ["workingHeight", 1080],
     ["outputWidth", 1920],
     ["outputHeight", 1080],
     ["frameRate", 30],

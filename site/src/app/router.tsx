@@ -2,10 +2,10 @@ import { lazy, Suspense } from "react";
 import {
   createBrowserRouter,
   createMemoryRouter,
-  RouterProvider,
   type InitialEntry,
   type RouteObject,
-} from "react-router-dom";
+} from "react-router";
+import { RouterProvider } from "react-router/dom";
 
 import { LoadingState } from "../components/feedback/LoadingState";
 import { HomePage } from "../features/home/HomePage";

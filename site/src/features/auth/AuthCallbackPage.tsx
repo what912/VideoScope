@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation } from "react-router";
 
 import { useI18n } from "../../i18n/I18nProvider";
 import { useAuth } from "./AuthProvider";

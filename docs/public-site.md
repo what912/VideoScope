@@ -92,7 +92,7 @@ translated.
 
 ## Local development
 
-Node.js 22.13 or newer:
+Node.js 22.22 or newer:
 
 ```powershell
 cd site

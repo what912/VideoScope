@@ -9,6 +9,7 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import { inspect } from "node:util";
 
 import { afterEach, describe, expect, it } from "vitest";
@@ -25,8 +26,8 @@ const temporaryDirectories = [];
 const videoItem = Object.freeze({
   role: "hero",
   scene: "optical-aperture",
-  workingWidth: 1920,
-  workingHeight: 1080,
+  workingWidth: 1280,
+  workingHeight: 720,
   outputWidth: 1280,
   outputHeight: 720,
   frameRate: 24,
@@ -39,8 +40,8 @@ const videoItem = Object.freeze({
 const stillItem = Object.freeze({
   role: "evidence-a",
   scene: "cyan-caustic",
-  workingWidth: 1920,
-  workingHeight: 1080,
+  workingWidth: 1280,
+  workingHeight: 720,
   outputWidth: 1280,
   outputHeight: 720,
   frameRate: 24,
@@ -93,7 +94,7 @@ describe("offline original media generation", () => {
     expect(calls).toHaveLength(2);
     expect(calls.every(({ args }) => args.includes("-f") && args.includes("lavfi"))).toBe(true);
     expect(calls.every(({ options }) => options.shell === false)).toBe(true);
-    expect(calls.every(({ options }) => options.timeout === 600_000)).toBe(true);
+    expect(calls.every(({ options }) => options.timeout === 900_000)).toBe(true);
     expect(calls.every(({ options }) => options.maxBuffer === 64 * 1024)).toBe(true);
     expect(JSON.stringify(calls)).not.toMatch(/https?:|fetch|download/iu);
   });
@@ -145,7 +146,7 @@ describe("offline original media generation", () => {
     }
 
     expect(caught.message).toBe(
-      "FFmpeg failed: FFmpeg exceeded the bounded 600000ms render timeout.",
+      "FFmpeg failed: FFmpeg exceeded the bounded 900000ms render timeout.",
     );
     const renderedError = inspect(caught, { depth: null });
     expect(renderedError).not.toContain(windowsPrivatePath);
@@ -198,6 +199,30 @@ describe("offline original media generation", () => {
     await expect(readFile(path.join(mediaDirectory, completeItems[0].video), "utf8")).resolves.toBe("generated media");
     await expect(readFile(path.join(mediaDirectory, completeItems[0].poster), "utf8")).resolves.toBe("generated media");
     await expect(readFile(path.join(mediaDirectory, completeItems.at(-1).poster), "utf8")).resolves.toBe("generated media");
+  });
+
+  it("bounds independent renders to two concurrent FFmpeg processes", async () => {
+    const mediaDirectory = await temporaryDirectory();
+    let active = 0;
+    let maximumActive = 0;
+
+    await generateOriginalMedia({
+      items: completeItems,
+      mediaDirectory,
+      runner: async (_file, args) => {
+        active += 1;
+        maximumActive = Math.max(maximumActive, active);
+        try {
+          await delay(5);
+          await writeFakeOutputsFromArguments(args);
+        } finally {
+          active -= 1;
+        }
+      },
+    });
+
+    expect(maximumActive).toBe(2);
+    expect(active).toBe(0);
   });
 
   it.each([

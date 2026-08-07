@@ -99,8 +99,34 @@ def test_probe_normal_video_and_unicode_path(
     assert metadata.has_audio is True
     assert metadata.file_size_bytes == len(b"synthetic-video")
     assert metadata.creation_time is not None
+    assert metadata.raw_probe["audio_codec"] == "aac"
     assert "filename" not in metadata.raw_probe
     assert "tags" not in metadata.raw_probe
+
+
+def test_probe_summary_omits_missing_audio_codec_and_sensitive_metadata(
+    tmp_path: Path,
+) -> None:
+    input_path = tmp_path / "客户 私密标题.mov"
+    input_path.write_bytes(b"video")
+    payload = ffprobe_payload()
+    audio_stream = payload["streams"][1]  # type: ignore[index]
+    assert isinstance(audio_stream, dict)
+    audio_stream.pop("codec_name")
+    audio_stream["tags"] = {
+        "title": "must-not-be-copied",
+        "author": "must-not-be-copied",
+        "location": "+00.0000+000.0000/",
+    }
+
+    metadata = metadata_from_ffprobe(payload, input_path=input_path)
+
+    assert "audio_codec" not in metadata.raw_probe
+    assert "tags" not in metadata.raw_probe
+    assert "title" not in metadata.raw_probe
+    assert "author" not in metadata.raw_probe
+    assert "location" not in metadata.raw_probe
+    assert input_path.name not in str(metadata.raw_probe)
 
 
 def test_missing_duration_and_frame_count_are_tolerated(tmp_path: Path) -> None:

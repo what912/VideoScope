@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VideoScope useful-content report</title>
+  <style>
+    :root { color-scheme: dark; font-family: Inter, system-ui, sans-serif; --bg:#0c1012; --panel:#151b1e; --ink:#eef5f4; --muted:#9aabaa; --line:#2a3639; --cyan:#69e0d5; --ok:#b4ea72; --warn:#ffc36d; --bad:#ff8178; }
+    * { box-sizing: border-box; }
+    body { margin:0; background:var(--bg); color:var(--ink); line-height:1.55; }
+    main { width:min(74rem, calc(100% - 2rem)); margin:auto; padding:2rem 0 5rem; }
+    header { padding:2rem 0; display:grid; gap:.5rem; }
+    h1,h2 { letter-spacing:-.025em; }
+    h1 { margin:0; font-size:clamp(2rem, 5vw, 4rem); }
+    section { border-top:1px solid var(--line); padding:1.5rem 0; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(15rem,1fr)); gap:1rem; }
+    .panel { background:var(--panel); padding:1rem; border-radius:.65rem; }
+    dl { display:grid; grid-template-columns:max-content 1fr; gap:.5rem 1rem; }
+    dt { color:var(--muted); } dd { margin:0; overflow-wrap:anywhere; }
+    code,.number { font-family:ui-monospace,SFMono-Regular,Consolas,monospace; }
+    .status { font-weight:750; text-transform:uppercase; letter-spacing:.05em; }
+    .passed { color:var(--ok); } .failed { color:var(--bad); } .needs_review { color:var(--warn); }
+    video { display:block; width:100%; max-height:34rem; background:#000; border-radius:.65rem; }
+    a { color:var(--cyan); } li { margin:.55rem 0; }
+    table { width:100%; border-collapse:collapse; font-size:.94rem; }
+    th,td { padding:.65rem; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; }
+    @media (max-width:42rem) { main{width:min(100% - 1rem,74rem)} table{display:block;overflow:auto} dl{grid-template-columns:1fr} }
+    @media print { :root{color-scheme:light} body{background:#fff;color:#111} .panel{background:#f4f5f5} video{display:none} }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <p>VideoScope · local-first useful-content result</p>
+    <h1>Long video, traceable result.</h1>
+    <p>Every retained output interval maps back to an exact source interval. No private review material is included.</p>
+  </header>
+
+  <section aria-labelledby="result-summary">
+    <h2 id="result-summary">Result summary</h2>
+    <div class="grid">
+      <div class="panel"><dl>
+        <dt>Goal</dt><dd>{{ report.goal }}</dd>
+        <dt>Outcome</dt><dd class="status {{ report.outcome }}">{{ report.outcome }}</dd>
+        <dt>Coverage</dt><dd class="number">{{ "%.2f"|format(plan.storyboard.estimated_source_coverage * 100) }}%</dd>
+        <dt>Output duration</dt><dd class="number">{{ "%.3f"|format(plan.storyboard.estimated_output_duration_seconds) }} s estimated</dd>
+      </dl></div>
+      <div class="panel"><dl>
+        <dt>Input SHA-256</dt><dd><code>{{ report.input_hash }}</code></dd>
+        <dt>Plan digest</dt><dd><code>{{ report.plan_digest }}</code></dd>
+        <dt>Schema</dt><dd>{{ report.schema_version }}</dd>
+      </dl></div>
+    </div>
+    {% if "content-output/useful-content.mp4" in plan.public_artifacts %}
+      <video controls preload="metadata" src="useful-content.mp4" aria-label="Verified useful-content video"></video>
+    {% endif %}
+  </section>
+
+  <section aria-labelledby="storyboard">
+    <h2 id="storyboard">Storyboard decisions</h2>
+    <table><thead><tr><th>Source</th><th>Decision</th><th>Source</th><th>Reason</th></tr></thead><tbody>
+    {% for item in plan.storyboard.items %}
+      <tr><td class="number">{{ "%.3f"|format(item.source_range.start_seconds) }}–{{ "%.3f"|format(item.source_range.end_seconds) }} s</td><td>{{ item.decision }}</td><td>{{ item.decision_source }}</td><td>{{ item.reason }}</td></tr>
+    {% else %}<tr><td colspan="4">No storyboard item was recorded.</td></tr>{% endfor %}
+    </tbody></table>
+  </section>
+
+  <section aria-labelledby="chapters">
+    <h2 id="chapters">Chapters</h2>
+    <ol>{% for chapter in report.chapters %}<li><span class="number">{{ "%.3f"|format(chapter.source_range.start_seconds) }} s</span> — {{ chapter.title }} <small>({{ chapter.title_source }})</small></li>{% else %}<li>No chapter artifact was requested.</li>{% endfor %}</ol>
+  </section>
+
+  <section aria-labelledby="mappings">
+    <h2 id="mappings">Exact source mappings</h2>
+    <table><thead><tr><th>Output</th><th>Source</th><th>Transition</th><th>State</th></tr></thead><tbody>
+    {% for item in report.source_mappings %}<tr><td class="number">{{ "%.3f"|format(item.output_range.start_seconds) }}–{{ "%.3f"|format(item.output_range.end_seconds) }} s</td><td class="number">{{ "%.3f"|format(item.source_range.start_seconds) }}–{{ "%.3f"|format(item.source_range.end_seconds) }} s</td><td>{{ item.transition }}</td><td>{{ item.state }}</td></tr>{% else %}<tr><td colspan="4">No mapping was published.</td></tr>{% endfor %}
+    </tbody></table>
+  </section>
+
+  <section aria-labelledby="changes"><h2 id="changes">Change ledger</h2><ul>
+    {% if report.change_log %}{% for execution in report.change_log.executions %}<li><code>{{ execution.action_id }}</code>: <span class="status {{ execution.status }}">{{ execution.status }}</span>{% if execution.reason %} — {{ execution.reason }}{% endif %}</li>{% else %}<li>No executable action was recorded.</li>{% endfor %}{% else %}<li>No change log was available.</li>{% endif %}
+  </ul></section>
+
+  <section aria-labelledby="verification"><h2 id="verification">Independent verification</h2><ul>
+    {% for check in report.verification.checks %}<li><strong>{{ check.check_id }}</strong>: <span class="status {{ check.status }}">{{ check.status }}</span> — {{ check.message }}{% if check.measured %} <code>{{ check.measured|tojson }}</code>{% endif %}</li>{% endfor %}
+  </ul></section>
+
+  <section aria-labelledby="limits"><h2 id="limits">Limitations and notes</h2><ul>
+    {% for text in report.limitations %}<li>{{ text }}</li>{% endfor %}
+    {% for text in report.warnings %}<li>{{ text }}</li>{% endfor %}
+    {% if not report.limitations and not report.warnings %}<li>No additional limitation was recorded.</li>{% endif %}
+  </ul></section>
+
+  <section aria-labelledby="artifacts"><h2 id="artifacts">Artifacts</h2><ul>
+    {% for artifact in report.artifacts %}<li><a href="{{ artifact.relative_path|replace('content-output/', '') }}">{{ artifact.relative_path }}</a> — {{ artifact.description }} · <code>{{ artifact.sha256 }}</code></li>{% else %}<li>No downloadable artifact record was included.</li>{% endfor %}
+  </ul></section>
+</main>
+</body>
+</html>
