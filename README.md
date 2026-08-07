@@ -82,7 +82,7 @@ VideoScope 可以把本地长视频整理成可复核、可追溯的成品，全
 **选定片段**（只导出用户明确选择的时刻）。
 
 ```powershell
-python -m pip install https://github.com/what912/VideoScope/releases/download/v0.8.0-dev.0/genvideoscope-0.8.0.dev0-py3-none-any.whl
+python -m pip install https://github.com/what912/VideoScope/releases/download/v0.8.0.dev0/genvideoscope-0.8.0.dev0-py3-none-any.whl
 videoscope content meeting.mp4 `
   --goal faithful_clean `
   --exclude-range 120:148:"Long reviewed pause" `
@@ -111,7 +111,7 @@ video, and audio problems. It never overwrites the source. Install the base whee
 and provide local `ffmpeg` and `ffprobe` on `PATH`:
 
 ```powershell
-python -m pip install https://github.com/what912/VideoScope/releases/download/v0.8.0-dev.0/genvideoscope-0.8.0.dev0-py3-none-any.whl
+python -m pip install https://github.com/what912/VideoScope/releases/download/v0.8.0.dev0/genvideoscope-0.8.0.dev0-py3-none-any.whl
 videoscope doctor
 videoscope rescue input.mp4 `
   --output runs\video-rescue `
@@ -316,7 +316,7 @@ brew install ffmpeg
 安装公开的 GitHub 开发候选版：
 
 ```powershell
-python -m pip install https://github.com/what912/VideoScope/releases/download/v0.8.0-dev.0/genvideoscope-0.8.0.dev0-py3-none-any.whl
+python -m pip install https://github.com/what912/VideoScope/releases/download/v0.8.0.dev0/genvideoscope-0.8.0.dev0-py3-none-any.whl
 videoscope doctor
 ```
 
@@ -492,7 +492,7 @@ cd ..
 videoscope serve
 ```
 
-默认绑定 `127.0.0.1`，端口 `0` 由操作系统选择。Dashboard 位于 `/`，
+默认绑定 `127.0.0.1:8765`，便于公开网站稳定发现本地连接器。Dashboard 位于 `/`，
 本地 API 文档位于 `/docs`。非回环绑定必须显式使用
 `--allow-network`；这会扩大信任边界，服务没有用户账户或身份认证。
 
