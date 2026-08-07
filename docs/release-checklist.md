@@ -7,7 +7,7 @@ Target:
 - Python package: `videoscope`
 - CLI: `videoscope`
 - development version: `0.7.0.dev0`
-- candidate tag: not assigned; tagging requires a separate release audit
+- candidate tag: `v0.7.0-dev.0` (create only after the final public tree passes)
 
 Do not publish while any item marked **blocking** is unresolved.
 
@@ -147,7 +147,7 @@ Do not publish while any item marked **blocking** is unresolved.
   binding fails closed and requires a new preparation rather than execution.
 - [x] partial salvage publishes exact source mappings and unrecovered ranges;
   `needs_review` and `failed` never masquerade as complete recovery.
-- [ ] base CI installs no AI/OCR extra, downloads no model, and requires no GPU.
+- [x] base CI installs no AI/OCR extra, downloads no model, and requires no GPU.
 - [x] documentation states that filters cannot reconstruct absent source
   information and makes no unmeasured recovery/accuracy/performance claim.
 
@@ -241,19 +241,24 @@ python -m videoscope rescue tests/fixtures/generated/rescue_dark_noise.mp4 `
 The base-wheel smoke installs no AI, OCR, or Web extra and performs no model
 download. Optional extras require separate, explicitly authorized release checks.
 
-Local audit evidence on 2026-08-06:
+Local and public CI audit evidence on 2026-08-07:
 
-- unified validation: Ruff and format passed, mypy passed 300 files, pytest
-  passed 1,414 tests with 17 explicit optional/environment skips;
+- unified validation: Ruff and format passed 362 files, mypy passed 300 files,
+  pytest passed 1,417 tests with 17 explicit optional/environment skips;
 - required real fixtures: 36 passed in 226.32 seconds;
 - supplemental native media gates: 208 passed, one platform-capability skip;
-- frontend: 113 tests passed and the production build passed;
+- frontend: 114 tests passed and the production build passed;
 - standard isolated build, both distribution audits, and the clean-wheel Publish
   Check / Publish Ready / Safe Sharing / Conservative Rescue / Balanced Rescue /
   Faithful Clean / Chaptered Full / Selected Clips smoke passed; a separate clean
   `[web]` environment passed the loopback API health gate.
 
-These local results do not close the exact-commit CI or human gates below.
+The public integration tree also passed Ubuntu and Windows on Python 3.11 and
+3.12, the independent public-site audit, and the independent distribution
+build/audit/clean-wheel smoke job. The first `main` Windows/Python 3.12 run had
+one non-reproduced strict Rescue fixture status mismatch; the exact-job rerun
+passed without weakening the gate, and future diagnostics now isolate only the
+non-passing checks. Human and real-model gates below remain open.
 
 ## Manual local Web acceptance
 
@@ -300,17 +305,17 @@ These local results do not close the exact-commit CI or human gates below.
 - [ ] Review [release-audit.md](../release-audit.md).
 - [ ] Confirm no unpublished private media is present in the Git index.
 - [ ] Review the complete staged diff.
-- [ ] Confirm CI passes on Windows and Linux, Python 3.11 and 3.12.
+- [x] Confirm CI passes on Windows and Linux, Python 3.11 and 3.12.
 - [ ] Confirm the candidate on a clean macOS environment if macOS is advertised.
-- [ ] Enable GitHub private vulnerability reporting.
+- [x] Enable GitHub private vulnerability reporting.
 - [ ] Create the commit and local candidate tag only after all blockers close.
 
 Suggested commands, intentionally not executed by the audit:
 
 ```powershell
 git add .
-git commit -m "release: prepare Long Video to Useful Content CPU MVP"
-git tag v0.6.0-dev.0
+git commit -m "docs: record final 0.7 release evidence"
+git tag v0.7.0-dev.0
 ```
 
 Publishing commands belong to a later, separately authorized release operation.
