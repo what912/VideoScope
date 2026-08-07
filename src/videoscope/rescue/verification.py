@@ -66,7 +66,10 @@ _SUPPLEMENTARY_IDS = (
     "stabilization_crop",
 )
 _DEFAULT_MAX_CLIP_INCREASE = 0.0
-_DEFAULT_MAX_NOISE_INCREASE = 0.0
+# Codec-aligned reference renders can differ by one 8-bit luma code value across
+# FFmpeg builds.  This bound only applies when no explicit denoise action supplies
+# its stricter, user-visible ``maximum_residual_increase`` parameter.
+_DEFAULT_MAX_NOISE_INCREASE = 1.0 / 255.0
 _DEFAULT_MAX_SHARPNESS_LOSS_RATIO = 0.1
 _DEFAULT_MAX_CROP_RATIO = 0.12
 _DEFAULT_LOUDNESS_TOLERANCE_LU = 1.0
@@ -668,6 +671,9 @@ class RescueVerifier:
         parameters = (
             faithful_parameters if artifact == "faithful" else improvement_parameters
         )
+        maximum_noise_increase = _parameter(
+            parameters, "maximum_residual_increase", _DEFAULT_MAX_NOISE_INCREASE
+        )
         visual_comparison_applicable = visual_reference is not None
         comparison = visual_reference or source
         source_hash = _stream_hash(source.path)
@@ -831,15 +837,15 @@ class RescueVerifier:
                 artifact,
                 visual_comparison_applicable
                 and candidate.noise_residual - comparison.noise_residual
-                <= _parameter(
-                    parameters, "maximum_residual_increase", _DEFAULT_MAX_NOISE_INCREASE
-                ),
-                "Denoising did not introduce an excessive residual regression.",
+                <= maximum_noise_increase,
+                "Noise residual increase remains within the applicable measured "
+                "tolerance.",
                 _visual_comparison_values(
                     visual_comparison_applicable,
                     {
                         "source_residual": comparison.noise_residual,
                         "output_residual": candidate.noise_residual,
+                        "maximum_residual_increase": maximum_noise_increase,
                     },
                     reference=visual_reference_name,
                     reason=visual_reference_reason,
