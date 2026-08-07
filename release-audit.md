@@ -1,10 +1,10 @@
 # GenVideoScope 0.7.0 development release audit
 
-Audit date: 2026-08-06
+Audit date: 2026-08-07
 
 Candidate: `genvideoscope 0.7.0.dev0`
 
-Branch: `codex/advanced-ai-useful-content`
+Public integration: pull request `what912/VideoScope#18`, squash-merged to `main`
 
 Scope: the local-first CPU product line—Check, A Publish Ready, D Safe Sharing,
 B Video Rescue, C Long Video to Useful Content—and the optional, review-first
@@ -15,8 +15,8 @@ certification or a real-world semantic-accuracy/usefulness claim.
 
 ### Repository and native media
 
-- `python scripts/validate.py` passed Ruff and formatting for 356 files, strict
-  mypy for 300 source files, and pytest with 1,414 passed and 17 explicit
+- `python scripts/validate.py` passed Ruff and formatting for 362 files, strict
+  mypy for 300 source files, and pytest with 1,417 passed and 17 explicit
   optional/environment skips on Windows/Python 3.12.
 - `python scripts/generate_test_videos.py --force` generated and decoded 29
   local synthetic videos twice with FFmpeg 9.0. File hashes matched between
@@ -36,7 +36,7 @@ certification or a real-world semantic-accuracy/usefulness claim.
 
 ### Frontend and local API
 
-- `npm test -- --run` passed 113 tests across 17 files.
+- `npm test` passed 114 tests across 18 files.
 - TypeScript checks and `npm run build` passed and the packaged static dashboard
   was synchronized.
 - English and Simplified Chinese Advanced AI and C review flows, stable
@@ -46,7 +46,7 @@ certification or a real-world semantic-accuracy/usefulness claim.
 - The Advanced AI API is loopback-only. It has a bounded semaphore, rejects
   stale C revisions and changed inputs, and keeps transcript/evidence/review
   artifacts outside public artifact routes.
-- The GitHub Pages application passed lint, TypeScript, 519 tests across 55
+- The GitHub Pages application passed lint, TypeScript, 520 tests across 55
   files, a production build, and exact allowlist verification for 15
   deterministically generated project-authored media files.
 - React Router was migrated to the patched 8.3.0 package and Vite to 8.2.0;
@@ -104,6 +104,12 @@ certification or a real-world semantic-accuracy/usefulness claim.
 - FFmpeg build, codec, VFR, damaged-media and player differences remain
   operational risks. Reports, filenames, hashes, transcripts, prompts,
   thumbnails, previews, video and audio can all contain sensitive information.
+- The first `main` Windows/Python 3.12 run reported one non-reproduced Rescue
+  status mismatch on the intentionally damaged middle-range fixture. The same
+  tree had already passed in the pull request, its exact-job rerun passed, and
+  eight repeated local native runs passed. This candidate keeps the strict
+  gate and makes future failure output list only the non-passing checks; the
+  transient remains a monitored native-media risk rather than a waived test.
 - The loopback workbench has no public account, TLS, billing, quota or
   multi-tenant isolation boundary and must not be exposed as a public server.
 
@@ -123,10 +129,12 @@ certification or a real-world semantic-accuracy/usefulness claim.
 
 ## Externally unverified
 
-- GitHub Actions has not yet run on the exact final commit. Windows/Linux and
-  Python 3.11/3.12 remain external evidence until that matrix is green.
-- Native Linux/macOS media and player behavior is not verified in this local
-  Windows run.
+- GitHub Actions passed on the public integration tree for Ubuntu and Windows,
+  Python 3.11 and 3.12. Ubuntu reported 1,426 passed and 8 explicit skips;
+  Windows reported 1,417 passed and 17 explicit skips. The independent public
+  site and distribution jobs also passed.
+- Native macOS media and player behavior remains unverified. CI verifies native
+  FFmpeg workflows on Ubuntu and Windows, but not every codec or target player.
 - No representative private user media, uncommon codec corpus, encrypted
   input, multi-hour run, current-browser manual session, real ASR/Ollama/AI/OCR
   model, GPU or model download was used.
@@ -134,11 +142,10 @@ certification or a real-world semantic-accuracy/usefulness claim.
 
 ## Release decision
 
-The CPU product and optional review-first Advanced AI layer have a green local
-automated baseline and are suitable for an openly labeled development or release
-candidate publication after the exact-commit CI passes. A stable release claim
-remains premature until the human, real-model, supply-chain and cross-platform
-gates above close.
+The CPU product and optional review-first Advanced AI layer have green local and
+public CI baselines and are suitable for an openly labeled development
+prerelease. A stable release claim remains premature until the human,
+real-model, supply-chain and remaining platform gates above close.
 
 The static public website may run browser-side CPU diagnostics and link to local
 installation. It must not imply that GitHub Pages runs Python, FFmpeg or private

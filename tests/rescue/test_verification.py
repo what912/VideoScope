@@ -735,6 +735,48 @@ def test_visual_regressions_require_review(
     assert _check(report, "faithful", check_id).measured["applicable"] is True
 
 
+def test_codec_noise_quantization_tolerance_is_bounded_and_reported(
+    tmp_path: Path,
+) -> None:
+    one_luma_step = 1.0 / 255.0
+    within = _verify(
+        tmp_path / "within",
+        faithful_updates={"noise_residual": one_luma_step},
+    )
+    outside = _verify(
+        tmp_path / "outside",
+        faithful_updates={"noise_residual": one_luma_step + 1e-6},
+    )
+
+    within_check = _check(within, "faithful", "noise_side_effects")
+    assert within_check.status is RescueVerificationStatus.PASSED
+    assert _json_number(
+        within_check.measured["maximum_residual_increase"]
+    ) == pytest.approx(one_luma_step)
+    assert (
+        _check(outside, "faithful", "noise_side_effects").status
+        is RescueVerificationStatus.NEEDS_REVIEW
+    )
+
+
+def test_confirmed_denoise_keeps_its_configured_zero_noise_tolerance(
+    tmp_path: Path,
+) -> None:
+    denoise = _action(
+        RescueActionKind.DENOISE_VIDEO,
+        {"maximum_residual_increase": 0.0},
+    )
+    report = _verify(
+        tmp_path,
+        improved_updates={"noise_residual": 1e-9},
+        actions=(denoise,),
+    )
+
+    check = _check(report, "improved", "noise_side_effects")
+    assert check.status is RescueVerificationStatus.NEEDS_REVIEW
+    assert _json_number(check.measured["maximum_residual_increase"]) == 0.0
+
+
 def test_visual_side_effect_comparison_is_not_applicable_across_removed_ranges(
     tmp_path: Path,
 ) -> None:

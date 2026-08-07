@@ -67,11 +67,21 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _verification_diagnostics(result: RescueResult) -> tuple[dict[str, Any], ...]:
-    """Keep cross-platform acceptance failures actionable in CI logs."""
+def _verification_diagnostics(result: RescueResult) -> dict[str, Any]:
+    """Keep cross-platform acceptance failures concise and actionable in CI."""
     if result.verification is None:
-        return ()
-    return tuple(check.model_dump(mode="json") for check in result.verification.checks)
+        return {"result_status": result.status.value, "verification": None}
+    verification = result.verification
+    return {
+        "result_status": result.status.value,
+        "verification_outcome": verification.outcome.value,
+        "faithful_status": verification.faithful_status.value,
+        "non_passing_checks": tuple(
+            check.model_dump(mode="json")
+            for check in verification.checks
+            if check.status is not RescueVerificationStatus.PASSED
+        ),
+    }
 
 
 @pytest.fixture
