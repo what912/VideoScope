@@ -687,7 +687,7 @@ def test_models_doctor_is_offline_and_allows_no_provider(
     assert "4 provider model(s) registered" in result.stdout
 
 
-def test_serve_defaults_to_loopback_and_random_port(
+def test_serve_defaults_to_loopback_and_public_connector_port(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -705,7 +705,7 @@ def test_serve_defaults_to_loopback_and_random_port(
 
     assert result.exit_code == 0
     assert captured["host"] == "127.0.0.1"
-    assert captured["port"] == 0
+    assert captured["port"] == 8765
     assert captured["cpu_concurrency"] == 2
     assert captured["heavy_ai_concurrency"] == 1
     assert captured["allow_network"] is False

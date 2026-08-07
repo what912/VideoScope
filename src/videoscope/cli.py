@@ -189,11 +189,14 @@ def serve(
         help="Bind address; loopback is required unless --allow-network is set.",
     ),
     port: int = typer.Option(
-        0,
+        8765,
         "--port",
         min=0,
         max=65535,
-        help="TCP port. Zero asks the operating system for an available port.",
+        help=(
+            "TCP port. The public VideoScope site expects 8765; zero asks the "
+            "operating system for an available port."
+        ),
     ),
     job_directory: Path | None = typer.Option(
         None,
@@ -231,6 +234,11 @@ def serve(
         "--allow-network",
         help="Explicitly permit binding to a non-loopback address.",
     ),
+    public_site_origin: str = typer.Option(
+        "https://what912.github.io",
+        "--public-site-origin",
+        help="Exact HTTPS origin allowed to pair with this loopback connector.",
+    ),
 ) -> None:
     """Run the optional local API and packaged React dashboard."""
     if not host.strip():
@@ -265,6 +273,7 @@ def serve(
         heavy_ai_concurrency=heavy_ai_concurrency,
         job_ttl_seconds=job_ttl_hours * 60 * 60,
         allow_network=allow_network,
+        public_site_origin=public_site_origin,
     )
 
 

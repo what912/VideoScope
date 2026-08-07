@@ -14,8 +14,8 @@ import tempfile
 import venv
 from pathlib import Path
 
-EXPECTED_VERSION = "VideoScope 0.7.0.dev0"
-EXPECTED_DISTRIBUTION_PREFIX = "genvideoscope-0.7.0.dev0-"
+EXPECTED_VERSION = "VideoScope 0.8.0.dev0"
+EXPECTED_DISTRIBUTION_PREFIX = "genvideoscope-0.8.0.dev0-"
 SMOKE_COMMAND_TIMEOUT_SECONDS = 1800.0
 MAX_DIAGNOSTIC_CHARACTERS = 12_000
 PERSONAL_PATH_PATTERNS = (

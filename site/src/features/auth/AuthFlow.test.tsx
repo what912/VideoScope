@@ -6,6 +6,7 @@ import { AppProviders } from "../../app/AppProviders";
 import {
   createAuthClient,
   FakeAuthClient,
+  LocalDeviceAuthClient,
   UnavailableAuthClient,
 } from "../../services/auth";
 import type { AuthSession } from "../../types/auth";
@@ -91,11 +92,11 @@ describe("optional authentication", () => {
     [{ anonKey: "public-anon-key", url: "" }],
     [{ anonKey: undefined, url: undefined }],
   ])(
-    "uses an unavailable adapter when either public setting is missing",
+    "uses an encrypted device account when cloud settings are missing",
     async (environment) => {
       const client = createAuthClient(environment);
 
-      expect(client).toBeInstanceOf(UnavailableAuthClient);
+      expect(client).toBeInstanceOf(LocalDeviceAuthClient);
       await expect(client.getSession()).resolves.toBeNull();
     },
   );

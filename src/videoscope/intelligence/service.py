@@ -210,7 +210,7 @@ def run_content_intelligence(
         raise
     except Exception as exc:
         raise IntelligenceError(
-            f"Local content intelligence failed: {type(exc).__name__}"
+            f"Content intelligence failed: {type(exc).__name__}"
         ) from None
 
 

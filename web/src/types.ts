@@ -275,6 +275,25 @@ export interface AdvancedAIPrepareOptions {
   device: "auto" | "cpu" | "cuda";
   allow_model_download: boolean;
   maximum_suggestions: number;
+  provider_profile_id?: string | null;
+  remote_data_consent?: boolean;
+}
+
+export interface ConnectorProviderProfile {
+  profile_id: string;
+  display_name: string;
+  provider_id: string;
+  protocol: "openai_compatible" | "ollama";
+  api_base_url: string;
+  model_id: string;
+  capabilities: Array<"structured_text" | "vision" | "audio" | "transcription">;
+  request_json_object: boolean;
+  credential_state: "memory_only";
+}
+
+export interface ConnectorProviderProfileInput
+  extends Omit<ConnectorProviderProfile, "credential_state"> {
+  api_key: string;
 }
 
 export type PublishProfileId =

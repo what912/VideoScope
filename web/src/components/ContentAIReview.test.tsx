@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AISuggestionBatch, ContentJobResponse } from "../types";
 import { ContentAIReview, type ContentAIReviewApi } from "./ContentAIReview";
 
@@ -51,6 +51,8 @@ function api(): ContentAIReviewApi {
 }
 
 describe("ContentAIReview", () => {
+  afterEach(() => vi.restoreAllMocks());
+
   it("keeps suggestions rejected until a human accepts and applies the exact review", async () => {
     const fake = api();
     const onApplied = vi.fn(async () => undefined);
@@ -75,5 +77,39 @@ describe("ContentAIReview", () => {
     render(<ContentAIReview jobId={"1".repeat(32)} revision={0} locale="zh-CN" busy={false} api={api()} onApplied={vi.fn(async () => undefined)} />);
     expect(screen.getByText(/不会离开这台电脑/)).toBeVisible();
     expect(screen.getByText(/绝不会自动拉取 Ollama 模型/)).toBeVisible();
+  });
+
+  it("requires explicit consent before a configured BYOK provider is used", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify([{
+        profile_id: "my-ai",
+        display_name: "My remote AI",
+        provider_id: "custom-openai",
+        protocol: "openai_compatible",
+        api_base_url: "https://provider.example/v1",
+        model_id: "user-paid-model",
+        capabilities: ["structured_text"],
+        request_json_object: false,
+        credential_state: "memory_only",
+      }]), { status: 200, headers: { "content-type": "application/json" } }),
+    );
+    const fake = api();
+    const user = userEvent.setup();
+    render(<ContentAIReview jobId={"1".repeat(32)} revision={1} locale="en" busy={false} api={fake} onApplied={vi.fn(async () => undefined)} />);
+
+    const providerSelect = await screen.findByLabelText("Content intelligence provider");
+    await user.selectOptions(providerSelect, "my-ai");
+    expect(screen.getByText(/provider charges are paid by your own account/)).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Prepare private AI suggestions" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("Approve the described remote data transfer");
+    expect(fake.prepare).not.toHaveBeenCalled();
+
+    await user.click(screen.getByLabelText(/I approve sending the bounded transcript/));
+    await user.click(screen.getByRole("button", { name: "Prepare private AI suggestions" }));
+    expect(fake.prepare).toHaveBeenCalledWith("1".repeat(32), expect.objectContaining({
+      provider_profile_id: "my-ai",
+      remote_data_consent: true,
+      semantic_model_id: "user-paid-model",
+    }));
   });
 });

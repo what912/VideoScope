@@ -33,6 +33,10 @@ const AuthCallbackPage = lazy(async () => {
   const module = await import("../features/auth/AuthCallbackPage");
   return { default: module.AuthCallbackPage };
 });
+const ConnectorPage = lazy(async () => {
+  const module = await import("../features/connector/ConnectorPage");
+  return { default: module.ConnectorPage };
+});
 const PrivacyPage = lazy(async () => {
   const module = await import("../features/static/PrivacyPage");
   return { default: module.PrivacyPage };
@@ -65,6 +69,7 @@ const routes: RouteObject[] = [
       { path: "compare", element: <LazyRoute component={ComparePage} /> },
       { path: "report/:reportId", element: <LazyRoute component={ReportPage} /> },
       { path: "auth", element: <LazyRoute component={AuthPage} /> },
+      { path: "connect", element: <LazyRoute component={ConnectorPage} /> },
       {
         path: "auth/callback",
         element: <LazyRoute component={AuthCallbackPage} />,

@@ -6,6 +6,37 @@
 
 ## [Unreleased]
 
+### 0.8.0 development line
+
+### Added
+
+- A fixed-origin local connector for the public GitHub Pages entry, with
+  expiring pairing sessions and complete A/B/C/D workbench links.
+- Memory-only BYOK provider profiles and an OpenAI-compatible structured-text
+  adapter for the existing evidence-grounded Advanced AI review flow.
+- An encrypted local device account with register/unlock, encrypted backup,
+  import, sign-out and deletion, while preserving anonymous browser use.
+
+### Security and privacy
+
+- Public-site requests require an exact allowlisted origin and connector
+  session. Provider secrets can be written only from the loopback UI, do not
+  appear in OpenAPI or responses, and are cleared when the process exits.
+- Remote AI requires explicit per-run data-transfer consent. Provider failures
+  remain isolated from CPU results and never authorize an automatic edit.
+- The official deployment continues to provide no central video upload,
+  storage, inference queue or mandatory subscription.
+
+### Known limitations
+
+- Full Python/FFmpeg workflows require a one-time local connector installation;
+  a static site cannot safely provide those capabilities by itself.
+- The default account is device-local and has no server-side recovery or
+  automatic cross-device sync. Optional cloud auth remains deployment-owned.
+- Initial BYOK support targets bounded structured text on explicitly compatible
+  endpoints. Native Claude, Gemini, media-generation and other protocols need
+  dedicated adapters before they can be advertised as supported.
+
 ### 0.7.0 development line
 
 ### Added

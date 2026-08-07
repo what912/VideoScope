@@ -1,6 +1,6 @@
 import type { AuthClient } from "../../types/auth";
 import { SupabaseAuthClient } from "./supabase-auth-client";
-import { UnavailableAuthClient } from "./unavailable-auth-client";
+import { LocalDeviceAuthClient } from "./local-device-auth-client";
 
 export interface AuthEnvironment {
   anonKey?: string;
@@ -20,7 +20,7 @@ export function createAuthClient(
   const url = environment.url?.trim();
   const anonKey = environment.anonKey?.trim();
   if (!url || !anonKey) {
-    return new UnavailableAuthClient();
+    return new LocalDeviceAuthClient();
   }
   return new SupabaseAuthClient({ anonKey, url });
 }

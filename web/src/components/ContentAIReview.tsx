@@ -13,7 +13,9 @@ import type {
   AIReviewDecision,
   AIReviewDecisionKind,
   ContentJobResponse,
+  ConnectorProviderProfile,
 } from "../types";
+import { ProviderSettings } from "./ProviderSettings";
 
 export interface ContentAIReviewApi {
   prepare(jobId: string, options: AdvancedAIPrepareOptions): Promise<AISuggestionBatch>;
@@ -41,7 +43,8 @@ const COPY = {
     eyebrow: "OPTIONAL / LOCAL ADVANCED AI",
     title: "Ask local models to structure the story",
     intro: "Generate grounded chapter, highlight, summary and title suggestions. Nothing is applied until you review every item.",
-    disclosure: "Uses your local Ollama service and optional local Faster Whisper. Video and transcript stay on this computer. VideoScope never pulls an Ollama model automatically.",
+    localDisclosure: "Uses your local Ollama service and optional local Faster Whisper. Video and transcript stay on this computer. VideoScope never pulls an Ollama model automatically.",
+    remoteDisclosure: "The selected BYOK provider receives only the bounded transcript and structural evidence required for this run after your explicit approval. Your API key stays in connector memory; provider charges are paid by your own account.",
     model: "Ollama model already installed",
     endpoint: "Loopback Ollama endpoint",
     language: "ASR language (optional)",
@@ -63,12 +66,17 @@ const COPY = {
     applied: "Accepted ranges were added. Continue with the ordinary storyboard and private preview gates below.",
     noRange: "Text suggestion; it will not change the video timeline.",
     required: "Enter the exact ID of a model already available in Ollama.",
+    provider: "Content intelligence provider",
+    localProvider: "Local Ollama (no remote data transfer)",
+    remoteConsent: "I approve sending the bounded transcript and structural ranges to this provider for this run.",
+    remoteConsentRequired: "Approve the described remote data transfer before using BYOK AI.",
   },
   "zh-CN": {
     eyebrow: "可选 / 本地高级 AI",
     title: "让本地模型协助梳理视频内容",
     intro: "生成有来源证据的章节、精华、摘要和标题建议。你逐项审核前，任何建议都不会生效。",
-    disclosure: "使用本机 Ollama 与可选的本地 Faster Whisper。视频和转写不会离开这台电脑；VideoScope 绝不会自动拉取 Ollama 模型。",
+    localDisclosure: "使用本机 Ollama 与可选的本地 Faster Whisper。视频和转写不会离开这台电脑；VideoScope 绝不会自动拉取 Ollama 模型。",
+    remoteDisclosure: "只有在你明确同意后，所选 BYOK 供应商才会收到本次所需的有界转写和结构证据。API Key 仅留在连接器内存，调用费用由你的供应商账户承担。",
     model: "本机已安装的 Ollama 模型",
     endpoint: "Ollama 本机回环地址",
     language: "转写语言（可选）",
@@ -90,6 +98,10 @@ const COPY = {
     applied: "已接受的区间已加入。请继续使用下方普通故事板和私有预览门禁。",
     noRange: "这是文本建议，不会直接改变视频时间轴。",
     required: "请输入 Ollama 中已经存在的准确模型 ID。",
+    provider: "内容智能供应商",
+    localProvider: "本机 Ollama（不传输远程数据）",
+    remoteConsent: "我同意本次把有限字幕和结构区间发送给所选供应商。",
+    remoteConsentRequired: "使用 BYOK AI 前，请确认上述远程数据传输。",
   },
 } as const;
 
@@ -124,6 +136,9 @@ export function ContentAIReview({
   const [asrModel, setAsrModel] = useState("small");
   const [language, setLanguage] = useState("");
   const [allowDownload, setAllowDownload] = useState(false);
+  const [providerProfiles, setProviderProfiles] = useState<ConnectorProviderProfile[]>([]);
+  const [providerProfileId, setProviderProfileId] = useState("");
+  const [remoteConsent, setRemoteConsent] = useState(false);
   const [batch, setBatch] = useState<AISuggestionBatch | null>(null);
   const [drafts, setDrafts] = useState<Record<string, DraftDecision>>({});
   const [reviewSaved, setReviewSaved] = useState(false);
@@ -134,8 +149,13 @@ export function ContentAIReview({
   const ordered = useMemo(() => batch?.suggestions ?? [], [batch]);
 
   const prepare = async (): Promise<void> => {
-    if (!model.trim()) {
+    const remoteProfile = providerProfiles.find((item) => item.profile_id === providerProfileId);
+    if (!remoteProfile && !model.trim()) {
       setError(text.required);
+      return;
+    }
+    if (remoteProfile && !remoteConsent) {
+      setError(text.remoteConsentRequired);
       return;
     }
     setBusy(true);
@@ -143,7 +163,7 @@ export function ContentAIReview({
     setMessage(null);
     try {
       const next = await api.prepare(jobId, {
-        semantic_model_id: model.trim(),
+        semantic_model_id: remoteProfile?.model_id ?? model.trim(),
         asr_model_id: asrModel.trim() || "small",
         asr_language: language.trim() || null,
         ollama_endpoint: endpoint.trim(),
@@ -151,6 +171,8 @@ export function ContentAIReview({
         device: "auto",
         allow_model_download: allowDownload,
         maximum_suggestions: 24,
+        provider_profile_id: remoteProfile?.profile_id ?? null,
+        remote_data_consent: remoteProfile ? remoteConsent : false,
       });
       setBatch(next);
       setDrafts(Object.fromEntries(next.suggestions.map((item) => [item.id, initialDecision(item)])));
@@ -220,18 +242,24 @@ export function ContentAIReview({
           <h2 id="content-ai-title">{text.title}</h2>
           <p>{text.intro}</p>
         </div>
-        <span className="content-ai-local">LOCAL</span>
+        <span className="content-ai-local">{providerProfileId ? "BYOK" : "LOCAL"}</span>
       </div>
-      <p className="content-ai-disclosure">ⓘ {text.disclosure}</p>
+      <p className="content-ai-disclosure">ⓘ {providerProfileId ? text.remoteDisclosure : text.localDisclosure}</p>
+      <details className="content-ai-settings">
+        <summary>{text.provider}</summary>
+        <ProviderSettings locale={locale} onProfiles={setProviderProfiles} />
+      </details>
       <details className="content-ai-settings">
         <summary>{text.model}</summary>
         <div className="content-ai-settings-grid">
+          <label>{text.provider}<select value={providerProfileId} onChange={(event) => { setProviderProfileId(event.currentTarget.value); setRemoteConsent(false); }}><option value="">{text.localProvider}</option>{providerProfiles.map((profile) => <option key={profile.profile_id} value={profile.profile_id}>{profile.display_name} · {profile.model_id}</option>)}</select></label>
           <label>{text.model}<input value={model} onChange={(event) => setModel(event.currentTarget.value)} placeholder="qwen2.5:7b" /></label>
           <label>{text.endpoint}<input value={endpoint} onChange={(event) => setEndpoint(event.currentTarget.value)} inputMode="url" /></label>
           <label>{text.asr}<input value={asrModel} onChange={(event) => setAsrModel(event.currentTarget.value)} /></label>
           <label>{text.language}<input value={language} onChange={(event) => setLanguage(event.currentTarget.value)} placeholder="zh / en" /></label>
         </div>
         <label className="content-ai-check"><input type="checkbox" checked={allowDownload} onChange={(event) => setAllowDownload(event.currentTarget.checked)} />{text.download}</label>
+        {providerProfileId && <label className="content-ai-check"><input type="checkbox" checked={remoteConsent} onChange={(event) => setRemoteConsent(event.currentTarget.checked)} />{text.remoteConsent}</label>}
       </details>
       <div className="content-ai-actions">
         <button type="button" className="secondary-button" disabled={disabled} onClick={() => void prepare()}>{busy && !batch ? text.preparing : text.prepare}</button>

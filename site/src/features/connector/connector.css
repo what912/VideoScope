@@ -1,0 +1,29 @@
+.connector-page { width: min(100%, 76rem); margin-inline: auto; display: grid; gap: var(--space-10); padding-block: var(--space-8) var(--space-16); }
+.connector-hero { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-8); align-items: end; border-bottom: 1px solid var(--color-border); padding-block: var(--space-8); }
+.connector-hero h1 { max-width: 13ch; margin: var(--space-3) 0 var(--space-4); font-size: var(--font-size-2xl); line-height: var(--line-height-tight); letter-spacing: var(--tracking-tight); }
+.connector-hero p { max-width: 62rem; color: var(--color-text-muted); }
+.connector-signal { min-width: 12rem; display: grid; grid-template-columns: auto 1fr; gap: .35rem var(--space-3); align-items: center; padding: var(--space-4); border: 1px solid var(--color-border); background: var(--color-surface-elevated); }
+.connector-signal span { width: .65rem; height: .65rem; border-radius: 50%; background: var(--color-warning-amber); box-shadow: 0 0 0 .3rem color-mix(in srgb, var(--color-warning-amber), transparent 82%); }
+.connector-signal small { grid-column: 2; color: var(--color-text-muted); font-family: var(--font-mono); }
+.connector-signal--paired span { background: var(--color-diagnostic-lime); box-shadow: 0 0 0 .3rem color-mix(in srgb, var(--color-diagnostic-lime), transparent 82%); }
+.connector-signal--offline span, .connector-signal--error span { background: var(--color-critical-coral); }
+.connector-setup, .connector-modes { display: grid; gap: 1px; background: var(--color-border); border: 1px solid var(--color-border); }
+.connector-step, .connector-mode { display: grid; grid-template-columns: 3rem minmax(0, 1fr) auto; gap: var(--space-5); padding: var(--space-6); background: var(--color-surface); color: inherit; text-decoration: none; }
+.connector-step > span, .connector-mode > span { color: var(--color-accent); font-family: var(--font-mono); font-weight: 800; }
+.connector-step h2, .connector-mode h2 { margin: 0 0 var(--space-2); }
+.connector-step p, .connector-mode p { margin: 0 0 var(--space-4); color: var(--color-text-muted); }
+.connector-step code { display: inline-block; padding: var(--space-3) var(--space-4); background: var(--color-obsidian); color: var(--color-accent); font-family: var(--font-mono); }
+.connector-mode { transition: background-color var(--duration-fast), transform var(--duration-fast); }
+.connector-mode:hover, .connector-mode:focus-visible { background: var(--color-surface-elevated); transform: translateX(.2rem); }
+.connector-pair, .connector-providers { display: grid; gap: var(--space-5); padding: var(--space-7); border: 1px solid var(--color-accent); background: linear-gradient(135deg, rgb(98 234 216 / 8%), transparent 58%), var(--color-surface-elevated); }
+.connector-pair label { font-weight: 700; }
+.connector-pair__controls { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-3); }
+.connector-pair input { min-width: 0; }
+.connector-trust { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-5); }
+.connector-trust > div { padding-block: var(--space-5); border-top: 2px solid var(--color-accent); }
+.connector-trust p { color: var(--color-text-muted); }
+.connector-providers ul { display: grid; gap: 1px; padding: 0; margin: 0; background: var(--color-border); list-style: none; }
+.connector-providers li { display: grid; grid-template-columns: 1fr 1fr auto; gap: var(--space-4); padding: var(--space-4); background: var(--color-surface); }
+.connector-providers li span, .connector-providers li small, .connector-providers__empty { color: var(--color-text-muted); }
+@media (max-width: 760px) { .connector-hero, .connector-trust { grid-template-columns: 1fr; } .connector-signal { width: 100%; } .connector-pair__controls { grid-template-columns: 1fr; } .connector-step, .connector-mode { grid-template-columns: 2rem minmax(0, 1fr); } .connector-step > :last-child, .connector-mode > b { grid-column: 2; } .connector-providers li { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) { .connector-mode { transition: none; } .connector-mode:hover, .connector-mode:focus-visible { transform: none; } }

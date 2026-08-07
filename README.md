@@ -12,14 +12,37 @@ uploads by default, and never overwrites the source.
 
 **Source, issues and contributions:** https://github.com/what912/VideoScope
 
+The public site provides an immediate browser CPU scan. To unlock every local
+workflow without creating a VideoScope cloud bill, install the connector once:
+
 ```powershell
-python -m pip install https://github.com/what912/VideoScope/releases/download/v0.7.0-dev.0/genvideoscope-0.7.0.dev0-py3-none-any.whl
+git clone https://github.com/what912/VideoScope.git
+cd VideoScope
+py -3.11 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -e ".[web]"
 videoscope doctor
 videoscope serve
 ```
 
-Open the printed loopback URL for the bilingual workbench, or run a first
-diagnosis directly:
+Keep that terminal open, then visit
+[`/VideoScope/connect`](https://what912.github.io/VideoScope/connect), enter the
+short pairing code printed by the connector, and open any A/B/C/D workflow.
+The connector binds only to `127.0.0.1:8765`; videos and working files remain on
+the user's computer.
+
+The optional account on the public site is an encrypted **device account**. It
+unlocks that browser's local workspace and supports encrypted backup/import,
+but it is deliberately not a cloud-sync account and has no server-side password
+recovery. Anonymous browser analysis remains available.
+
+Users can also configure a compatible AI provider in the loopback workbench.
+Their API Key is kept only in connector process memory, is cleared on exit, and
+is never accepted by the public site. Any provider charge belongs to the user's
+own provider account. Provider presets are compatibility helpers, not a promise
+that every branded model or media service implements the same API.
+
+Or run a first diagnosis directly:
 
 ```powershell
 videoscope analyze input.mp4 --output runs\first-check
@@ -33,15 +56,17 @@ videoscope analyze input.mp4 --output runs\first-check
 | **B · Video Rescue** | Faithful salvage and optional bounded viewing improvement |
 | **C · Useful Content** | Reviewed chapters, selected clips, source map and report |
 
-Advanced AI in the `0.7.0.dev0` line is optional and local: trusted transcript
-or Faster Whisper ASR plus a loopback Ollama model can propose grounded chapters,
-highlights, summaries and titles. Suggestions start rejected and cannot bypass
-human review, C's private preview, exact confirmation or final verification.
-See [Advanced AI setup and trust boundaries](docs/advanced-ai.md).
+Advanced AI is optional: trusted transcript or explicitly approved Faster
+Whisper ASR plus either loopback Ollama or a user-funded OpenAI-compatible
+provider can propose grounded chapters, highlights, summaries and titles.
+Remote use requires per-run data-transfer consent. Suggestions start rejected
+and cannot bypass human review, C's private preview, exact confirmation or final
+verification. See [Advanced AI setup and trust boundaries](docs/advanced-ai.md)
+and the [zero-cost/BYOK architecture](docs/zero-cost-access.md).
 
-> Public static demos can run the browser CPU check locally. Python/FFmpeg and
-> local-model workflows run through the installed CLI or loopback Web app; this
-> repository does not pretend GitHub Pages is a public video-processing server.
+> GitHub Pages is the public entry, not a hidden video-processing cloud.
+> Python/FFmpeg, long-video workflows, optional models and BYOK requests run
+> through the user's paired loopback connector.
 
 ## C · Long Video to Useful Content / 长视频变成有用成品
 
@@ -57,7 +82,7 @@ VideoScope 可以把本地长视频整理成可复核、可追溯的成品，全
 **选定片段**（只导出用户明确选择的时刻）。
 
 ```powershell
-python -m pip install https://github.com/what912/VideoScope/releases/download/v0.7.0-dev.0/genvideoscope-0.7.0.dev0-py3-none-any.whl
+python -m pip install https://github.com/what912/VideoScope/releases/download/v0.8.0-dev.0/genvideoscope-0.8.0.dev0-py3-none-any.whl
 videoscope content meeting.mp4 `
   --goal faithful_clean `
   --exclude-range 120:148:"Long reviewed pause" `
@@ -86,7 +111,7 @@ video, and audio problems. It never overwrites the source. Install the base whee
 and provide local `ffmpeg` and `ffprobe` on `PATH`:
 
 ```powershell
-python -m pip install https://github.com/what912/VideoScope/releases/download/v0.7.0-dev.0/genvideoscope-0.7.0.dev0-py3-none-any.whl
+python -m pip install https://github.com/what912/VideoScope/releases/download/v0.8.0-dev.0/genvideoscope-0.8.0.dev0-py3-none-any.whl
 videoscope doctor
 videoscope rescue input.mp4 `
   --output runs\video-rescue `
@@ -291,7 +316,7 @@ brew install ffmpeg
 安装公开的 GitHub 开发候选版：
 
 ```powershell
-python -m pip install https://github.com/what912/VideoScope/releases/download/v0.7.0-dev.0/genvideoscope-0.7.0.dev0-py3-none-any.whl
+python -m pip install https://github.com/what912/VideoScope/releases/download/v0.8.0-dev.0/genvideoscope-0.8.0.dev0-py3-none-any.whl
 videoscope doctor
 ```
 
@@ -321,7 +346,7 @@ python scripts/validate.py
 
 ```powershell
 python -m build
-python -m pip install dist/genvideoscope-0.7.0.dev0-py3-none-any.whl
+python -m pip install dist/genvideoscope-0.8.0.dev0-py3-none-any.whl
 ```
 
 正式上传 PyPI 后，用户安装命令将是：
@@ -532,7 +557,7 @@ Benchmark 分 detector 报告 temporal IoU、event precision/recall/F1、起止
 
 ## Roadmap
 
-The `0.7.0.dev0` line adds grounded, human-reviewed local AI assistance on top
+The `0.8.0.dev0` line adds grounded, human-reviewed local or BYOK AI assistance on top
 of the completed Check → A → D/B → C foundation. The base installation remains
 local-first, CPU-only and model-free. 后续方向是：
 
@@ -559,7 +584,7 @@ npm run build
 ```
 
 发布检查见 [docs/release-checklist.md](docs/release-checklist.md)。当前
-`0.7.0.dev0` Advanced AI 开发线的最终实测结论记录在
+`0.8.0.dev0` Advanced AI 与 BYOK 连接器开发线的最终实测结论记录在
 [release-audit.md](release-audit.md)；未执行的外部验证会明确标记为未验证。
 
 ## 许可证与引用

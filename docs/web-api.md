@@ -12,12 +12,12 @@ python -m pip install -e ".[web]"
 videoscope serve
 ```
 
-The default bind address is `127.0.0.1`. Port `0` asks the operating system to
-choose an available port; Uvicorn prints the selected address. A fixed port can
-be selected explicitly:
+The default bind address is `127.0.0.1:8765`, matching the fixed loopback
+connector address used by the public VideoScope site. Port `0` can still be
+requested explicitly when public-site pairing is not needed:
 
 ```text
-videoscope serve --port 8765
+videoscope serve --port 0
 ```
 
 OpenAPI JSON and the self-contained API reference are local:

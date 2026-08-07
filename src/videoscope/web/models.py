@@ -7,7 +7,7 @@ from enum import StrEnum
 from pathlib import Path
 
 from platformdirs import user_data_path
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from videoscope.ai.models import DevicePreference
 from videoscope.content.models import (
@@ -213,6 +213,10 @@ class AdvancedAIPrepareRequest(WebModel):
     device: DevicePreference = DevicePreference.AUTO
     allow_model_download: bool = False
     maximum_suggestions: int = Field(default=24, ge=1, le=200)
+    provider_profile_id: str | None = Field(
+        default=None, pattern=r"^[a-z][a-z0-9_-]{0,63}$"
+    )
+    remote_data_consent: bool = False
 
 
 class AdvancedAIReviewRequest(WebModel):
@@ -278,6 +282,36 @@ class WebServerConfig(WebModel):
         "testserver",
     )
     allow_non_loopback_origin: bool = False
+    allowed_browser_origins: tuple[str, ...] = ("https://what912.github.io",)
+    connector_pairing_code: str | None = Field(
+        default=None, min_length=6, max_length=200, exclude=True, repr=False
+    )
+    connector_session_ttl_seconds: float = Field(default=12 * 60 * 60, gt=0)
+
+    @field_validator("allowed_browser_origins")
+    @classmethod
+    def validate_allowed_browser_origins(
+        cls, values: tuple[str, ...]
+    ) -> tuple[str, ...]:
+        from urllib.parse import urlsplit
+
+        normalized: list[str] = []
+        for value in values:
+            parsed = urlsplit(value)
+            if (
+                parsed.scheme != "https"
+                or not parsed.hostname
+                or parsed.username
+                or parsed.password
+                or parsed.path not in {"", "/"}
+                or parsed.query
+                or parsed.fragment
+            ):
+                raise ValueError("browser origins must be exact HTTPS origins")
+            origin = f"https://{parsed.netloc}"
+            if origin not in normalized:
+                normalized.append(origin)
+        return tuple(normalized)
 
 
 class JobEvent(WebModel):

@@ -1,4 +1,4 @@
-# GenVideoScope v0.7.0 Advanced AI development release checklist
+# GenVideoScope v0.8.0 Zero-cost BYOK connector development release checklist
 
 Target:
 
@@ -6,8 +6,8 @@ Target:
 - PyPI distribution: `genvideoscope`
 - Python package: `videoscope`
 - CLI: `videoscope`
-- development version: `0.7.0.dev0`
-- candidate tag: `v0.7.0-dev.0` (create only after the final public tree passes)
+- development version: `0.8.0.dev0`
+- candidate tag: `v0.8.0-dev.0` (create only after the final public tree passes)
 
 Do not publish while any item marked **blocking** is unresolved.
 
@@ -15,7 +15,7 @@ Do not publish while any item marked **blocking** is unresolved.
 
 - [x] `pyproject.toml` name is `genvideoscope`.
 - [x] package import and CLI remain `videoscope`.
-- [x] `videoscope --version` prints `VideoScope 0.7.0.dev0` in the final
+- [x] `videoscope --version` prints `VideoScope 0.8.0.dev0` in the final
   clean-wheel run.
 - [x] GitHub repository name and links use `GenVideoScope`.
 - [ ] PyPI name availability and project ownership are checked manually.
@@ -29,7 +29,8 @@ Do not publish while any item marked **blocking** is unresolved.
 - [x] upload size, prompt size, and configuration size are bounded.
 - [x] ffprobe, not extension or MIME, validates uploaded video content.
 - [x] artifact, evidence, and upload paths have traversal tests.
-- [x] default Web bind, Host, Origin, and CORS behavior are local-only.
+- [x] default Web bind remains loopback-only; the one exact public origin needs
+  an expiring pairing session and receives no wildcard CORS.
 - [x] HTML uses autoescaping and rejects unsafe local artifact paths.
 - [x] reports contain no absolute workspace path.
 - [ ] maintainers manually review what filename, prompt, SHA-256, timestamps,
@@ -75,6 +76,25 @@ Do not publish while any item marked **blocking** is unresolved.
   model download, GPU or private-media upload.
 - [ ] Maintainers manually evaluate an authorized real transcript/model pair;
   Fake-provider engineering tests are not semantic-quality evidence.
+
+## Zero-cost connector, BYOK and device account
+
+- [x] `videoscope serve` defaults to `127.0.0.1:8765` and prints a fresh pairing
+  code; the public-site bridge never requires a central VideoScope server.
+- [x] exact-origin CORS/PNA, failed pairing, expired/missing session and unknown
+  origin paths are covered without using `*`.
+- [x] provider keys can be written only from the loopback UI, never appear in
+  OpenAPI/responses/logs, stay in process memory and are cleared on shutdown.
+- [x] remote structured-text AI requires per-run data-transfer consent and a
+  capability-compatible profile; failure preserves CPU work.
+- [x] the public site supports anonymous use plus an encrypted device account,
+  wrong-passphrase rejection, encrypted export/import, sign-out and deletion.
+- [x] the UI states that the local account has no server recovery or automatic
+  cloud sync and that provider charges belong to the user's account.
+- [ ] Manually test current Firefox and Chromium private-network prompts from
+  the deployed HTTPS origin to the loopback connector.
+- [ ] Manually verify one user-owned provider account with a low spending cap;
+  do not put a maintainer key into the public site or release assets.
 
 ## Publish Ready contract
 
@@ -214,6 +234,12 @@ cd web
 npm test
 npm run build
 cd ..
+cd site
+npm run lint
+npm run typecheck
+npm test
+npm run build
+cd ..
 python -m build
 python scripts/audit_distribution.py dist
 $wheel = (Get-ChildItem dist\*.whl | Select-Object -First 1).FullName
@@ -223,7 +249,7 @@ python scripts/smoke_test.py --wheel $wheel
 Clean-profile checks:
 
 ```powershell
-python -m pip install dist/genvideoscope-0.7.0.dev0-py3-none-any.whl
+python -m pip install dist/genvideoscope-0.8.0.dev0-py3-none-any.whl
 python -m videoscope --version
 python -m videoscope doctor
 python -m videoscope publish tests/fixtures/generated/publish_av.mp4 `
@@ -241,24 +267,24 @@ python -m videoscope rescue tests/fixtures/generated/rescue_dark_noise.mp4 `
 The base-wheel smoke installs no AI, OCR, or Web extra and performs no model
 download. Optional extras require separate, explicitly authorized release checks.
 
-Local and public CI audit evidence on 2026-08-07:
+Local candidate evidence on 2026-08-07:
 
-- unified validation: Ruff and format passed 362 files, mypy passed 300 files,
-  pytest passed 1,417 tests with 17 explicit optional/environment skips;
-- required real fixtures: 36 passed in 226.32 seconds;
-- supplemental native media gates: 208 passed, one platform-capability skip;
-- frontend: 114 tests passed and the production build passed;
-- standard isolated build, both distribution audits, and the clean-wheel Publish
-  Check / Publish Ready / Safe Sharing / Conservative Rescue / Balanced Rescue /
-  Faithful Clean / Chaptered Full / Selected Clips smoke passed; a separate clean
-  `[web]` environment passed the loopback API health gate.
+- unified validation: Ruff and format passed 367 files, mypy passed 304 files,
+  pytest passed 1,347 tests with 96 explicit optional/environment skips;
+- local dashboard: 116 tests across 19 files and production build passed;
+- public site: lint, typecheck, 526 tests across 58 files and production build
+  passed;
+- no-isolation build produced the v0.8.0 wheel/sdist, the wheel distribution
+  audit passed, and the exact wheel passed clean-install CPU Check, Publish
+  Ready, Safe Sharing, Conservative/Balanced Rescue and all three C goals;
+- an in-process HTTP smoke proved exact public-origin CORS, pairing, zero
+  persisted credentials, an empty provider vault and packaged dashboard status
+  200.
 
-The public integration tree also passed Ubuntu and Windows on Python 3.11 and
-3.12, the independent public-site audit, and the independent distribution
-build/audit/clean-wheel smoke job. The first `main` Windows/Python 3.12 run had
-one non-reproduced strict Rescue fixture status mismatch; the exact-job rerun
-passed without weakening the gate, and future diagnostics now isolate only the
-non-passing checks. Human and real-model gates below remain open.
+The isolated local build could not bootstrap setuptools in the restricted
+environment and exposed a Windows output-decoding error in `build`; the
+no-isolation build passed. Exact-commit GitHub Actions for v0.8 remains open and
+must not be inferred from the older public tree.
 
 ## Manual local Web acceptance
 
@@ -305,7 +331,8 @@ non-passing checks. Human and real-model gates below remain open.
 - [ ] Review [release-audit.md](../release-audit.md).
 - [ ] Confirm no unpublished private media is present in the Git index.
 - [ ] Review the complete staged diff.
-- [x] Confirm CI passes on Windows and Linux, Python 3.11 and 3.12.
+- [ ] Confirm the exact v0.8 candidate CI passes on Windows and Linux, Python
+  3.11 and 3.12.
 - [ ] Confirm the candidate on a clean macOS environment if macOS is advertised.
 - [x] Enable GitHub private vulnerability reporting.
 - [ ] Create the commit and local candidate tag only after all blockers close.
@@ -314,8 +341,8 @@ Suggested commands, intentionally not executed by the audit:
 
 ```powershell
 git add .
-git commit -m "docs: record final 0.7 release evidence"
-git tag v0.7.0-dev.0
+git commit -m "release: prepare zero-cost BYOK connector v0.8.0"
+git tag v0.8.0-dev.0
 ```
 
 Publishing commands belong to a later, separately authorized release operation.

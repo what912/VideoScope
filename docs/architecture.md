@@ -435,7 +435,9 @@ artifact root. CPU and optional-model work use separate bounded thread pools;
 the default heavy-model pool has one worker. The Pipeline receives the job's
 progress and cooperative cancellation callbacks.
 
-The default server binds to `127.0.0.1` on an operating-system-selected port.
+The default server binds to `127.0.0.1:8765` so the allowlisted public site can
+discover the local connector deterministically. Passing `--port 0` remains
+available for isolated local sessions that do not use the public-site bridge.
 Non-loopback binding requires explicit CLI permission. No wildcard CORS,
 accounts, external database, or cloud upload is included.
 
@@ -630,3 +632,18 @@ provider。真实权重不进入仓库或 wheel，非交互下载必须显式授
 AI 私有复核树包含转写、证据请求、原始验证后建议和拒绝项。公共技术报告只包含
 接受项的脱敏来源摘要、provider/model 标识、限制和执行状态，不包含原始 prompt、
 完整字幕、用户路径或私有缩略图。
+
+## 19. v0.8 public entry, local connector, and BYOK
+
+GitHub Pages 是统一公开入口但不是云计算服务。浏览器 CPU 分析在本地服务
+缺席时继续可用；完整工作流通过精确来源、配对码和短期会话协议委托给只
+绑定回环地址的本地 API。
+
+远程 AI 凭据只在回环设置页面输入并仅存在 Connector 进程内存。公开站
+JavaScript 只接收 provider 能力摘要，不接收凭据值。Provider 按协议和能力
+路由；首个远程协议是显式配置的 OpenAI-compatible 结构化文本接口，非兼容
+Provider 必须使用原生适配器。
+
+设备身份使用 WebCrypto 加密本地工作区资料，不宣称云端找回或自动同步。
+可选 Supabase 登录与本地分析隔离。信任边界和验收门禁见
+`docs/zero-cost-access.md`。

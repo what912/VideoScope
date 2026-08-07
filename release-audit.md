@@ -1,10 +1,11 @@
-# GenVideoScope 0.7.0 development release audit
+# GenVideoScope 0.8.0 development release audit
 
 Audit date: 2026-08-07
 
-Candidate: `genvideoscope 0.7.0.dev0`
+Candidate: `genvideoscope 0.8.0.dev0`
 
-Public integration: pull request `what912/VideoScope#18`, squash-merged to `main`
+Public integration: not yet pushed; this audit covers the local candidate branch
+`codex/zero-cost-byok-local-connector` only.
 
 Scope: the local-first CPU product line—Check, A Publish Ready, D Safe Sharing,
 B Video Rescue, C Long Video to Useful Content—and the optional, review-first
@@ -15,8 +16,8 @@ certification or a real-world semantic-accuracy/usefulness claim.
 
 ### Repository and native media
 
-- `python scripts/validate.py` passed Ruff and formatting for 362 files, strict
-  mypy for 300 source files, and pytest with 1,417 passed and 17 explicit
+- `python scripts/validate.py` passed Ruff and formatting for 367 files, strict
+  mypy for 304 source files, and pytest with 1,347 passed and 96 explicit
   optional/environment skips on Windows/Python 3.12.
 - `python scripts/generate_test_videos.py --force` generated and decoded 29
   local synthetic videos twice with FFmpeg 9.0. File hashes matched between
@@ -36,7 +37,7 @@ certification or a real-world semantic-accuracy/usefulness claim.
 
 ### Frontend and local API
 
-- `npm test` passed 114 tests across 18 files.
+- `npm test` passed 116 tests across 19 files.
 - TypeScript checks and `npm run build` passed and the packaged static dashboard
   was synchronized.
 - English and Simplified Chinese Advanced AI and C review flows, stable
@@ -46,7 +47,7 @@ certification or a real-world semantic-accuracy/usefulness claim.
 - The Advanced AI API is loopback-only. It has a bounded semaphore, rejects
   stale C revisions and changed inputs, and keeps transcript/evidence/review
   artifacts outside public artifact routes.
-- The GitHub Pages application passed lint, TypeScript, 520 tests across 55
+- The GitHub Pages application passed lint, TypeScript, 526 tests across 58
   files, a production build, and exact allowlist verification for 15
   deterministically generated project-authored media files.
 - React Router was migrated to the patched 8.3.0 package and Vite to 8.2.0;
@@ -56,7 +57,7 @@ certification or a real-world semantic-accuracy/usefulness claim.
 ### Build and distribution
 
 - `python -m build --no-isolation` built
-  `genvideoscope-0.7.0.dev0-py3-none-any.whl` and the matching sdist. The
+  `genvideoscope-0.8.0.dev0-py3-none-any.whl` and the matching sdist. The
   standard isolated command could not bootstrap `setuptools` in the restricted
   local environment; the build still rebuilt the wheel from the produced sdist.
 - `scripts/audit_distribution.py` passed both archives and required the
@@ -91,6 +92,14 @@ certification or a real-world semantic-accuracy/usefulness claim.
   AI cancellation, deletion, provider failure and stale state fail closed.
 - Web uploads are bounded and ffprobe-validated. Artifact paths are normalized
   and restricted. The service binds loopback by default with no wildcard CORS.
+- The public origin is exact, requires an expiring pairing session, and cannot
+  write provider secrets. BYOK keys are accepted only by the loopback UI,
+  excluded from OpenAPI/responses, held in process memory, and cleared at
+  shutdown. Remote use requires per-run data-transfer consent.
+- The default public-site account is an encrypted device account. PBKDF2-derived
+  AES-GCM protects the local profile; the passphrase and derived key are not
+  persisted. The product clearly states that there is no server recovery or
+  automatic cloud synchronization.
 
 ## Risks and known limitations
 
@@ -110,16 +119,17 @@ certification or a real-world semantic-accuracy/usefulness claim.
   eight repeated local native runs passed. This candidate keeps the strict
   gate and makes future failure output list only the non-passing checks; the
   transient remains a monitored native-media risk rather than a waived test.
-- The loopback workbench has no public account, TLS, billing, quota or
-  multi-tenant isolation boundary and must not be exposed as a public server.
+- The loopback workbench has no TLS, central billing, quota or multi-tenant
+  isolation boundary and must not be exposed as a public server. The device
+  account is local UI identity, not a server security boundary.
 
 ## Human inspection required
 
 1. Use authorized meeting, tutorial, lecture, interview and screen-recording
    media; judge every proposal, transcript, join, subtitle and output.
-2. Evaluate a locally cached Faster Whisper model and an explicitly selected
-   Ollama model. Record model/version and separate grounding errors from product
-   workflow defects.
+2. Evaluate a locally cached Faster Whisper/Ollama pair and one explicitly
+   funded compatible BYOK endpoint. Record model/version, exact data consent and
+   provider charges; separate grounding errors from workflow defects.
 3. Test English/Simplified Chinese, keyboard-only focus, reduced motion, mobile
    layout, refresh/recovery, cancellation, deletion and browser console output.
 4. Profile CPU, peak memory and temporary disk on representative 30-minute,
@@ -129,23 +139,22 @@ certification or a real-world semantic-accuracy/usefulness claim.
 
 ## Externally unverified
 
-- GitHub Actions passed on the public integration tree for Ubuntu and Windows,
-  Python 3.11 and 3.12. Ubuntu reported 1,426 passed and 8 explicit skips;
-  Windows reported 1,417 passed and 17 explicit skips. The independent public
-  site and distribution jobs also passed.
+- The v0.8 connector/BYOK/device-account changes have not yet been pushed, so
+  GitHub Actions has not run against this candidate on Ubuntu/Windows or Python
+  3.11/3.12. Older public CI results do not count as v0.8 evidence.
 - Native macOS media and player behavior remains unverified. CI verifies native
   FFmpeg workflows on Ubuntu and Windows, but not every codec or target player.
 - No representative private user media, uncommon codec corpus, encrypted
-  input, multi-hour run, current-browser manual session, real ASR/Ollama/AI/OCR
-  model, GPU or model download was used.
+  input, multi-hour run, current-browser manual session, real
+  ASR/Ollama/BYOK/AI/OCR model, GPU or model download was used.
 - No PyPI upload or production multi-user AI hosting boundary was performed.
 
 ## Release decision
 
-The CPU product and optional review-first Advanced AI layer have green local and
-public CI baselines and are suitable for an openly labeled development
-prerelease. A stable release claim remains premature until the human,
-real-model, supply-chain and remaining platform gates above close.
+The CPU product, local connector, device account and optional review-first AI
+layer have green local engineering gates and are suitable for review as a
+development prerelease. Publication remains blocked on the exact-commit CI and
+human checks above; a stable release claim is premature.
 
 The static public website may run browser-side CPU diagnostics and link to local
 installation. It must not imply that GitHub Pages runs Python, FFmpeg or private

@@ -37,6 +37,8 @@ import type {
   AISuggestionBatch,
   AIReviewDecision,
   AIReviewManifest,
+  ConnectorProviderProfile,
+  ConnectorProviderProfileInput,
 } from "./types";
 
 const API_ROOT = "/api";
@@ -97,6 +99,38 @@ async function requestJson<T>(
 
 export function listDetectors(fetcher?: typeof fetch): Promise<DetectorManifest[]> {
   return requestJson("/detectors", undefined, fetcher);
+}
+
+export function listConnectorProviders(
+  fetcher?: typeof fetch,
+): Promise<ConnectorProviderProfile[]> {
+  return requestJson("/connector/providers", undefined, fetcher);
+}
+
+export function putConnectorProvider(
+  profile: ConnectorProviderProfileInput,
+  fetcher?: typeof fetch,
+): Promise<ConnectorProviderProfile> {
+  return requestJson(
+    `/connector/providers/${encodeURIComponent(profile.profile_id)}`,
+    {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(profile),
+    },
+    fetcher,
+  );
+}
+
+export async function deleteConnectorProvider(
+  profileId: string,
+  fetcher: typeof fetch = fetch,
+): Promise<void> {
+  const response = await fetcher(
+    `${API_ROOT}/connector/providers/${encodeURIComponent(profileId)}`,
+    { method: "DELETE" },
+  );
+  if (!response.ok) throw new ApiError(await parseError(response), response.status);
 }
 
 export function getJob(jobId: string, fetcher?: typeof fetch): Promise<JobResponse> {

@@ -2943,6 +2943,14 @@ select {
 .content-ai-decisions button { border: 1px solid var(--line); background: transparent; color: var(--text); padding: 7px 11px; }
 .content-ai-decisions button.active { border-color: var(--scope-cyan); background: color-mix(in srgb, var(--scope-cyan) 12%, transparent); }
 .content-ai-success { color: var(--diagnostic-lime); }
+.provider-settings { display: grid; gap: 14px; margin-top: 14px; padding: 16px; border: 1px solid var(--line); background: var(--surface-raised); }
+.provider-settings h3, .provider-settings p { margin: 0; }
+.provider-settings form { display: grid; gap: 12px; }
+.provider-settings select, .content-ai-settings select { width: 100%; border: 1px solid var(--line); background: var(--surface-raised); color: var(--text); padding: 10px; }
+.provider-settings ul { display: grid; gap: 8px; padding: 0; margin: 0; list-style: none; }
+.provider-settings li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px; border-top: 1px solid var(--line); }
+.provider-settings li span { display: grid; gap: 3px; }
+.provider-settings li small { color: var(--text-muted); font-family: var(--font-mono); }
 
 @media (max-width: 680px) {
   .content-ai-heading, .content-ai-batch-meta, .content-ai-actions { flex-direction: column; }

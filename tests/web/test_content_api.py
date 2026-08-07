@@ -372,6 +372,94 @@ def test_content_ai_prepare_review_and_apply_uses_revision_gate(
         }
 
 
+def test_content_ai_byok_requires_consent_and_injects_memory_only_provider(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    config = _config(tmp_path)
+    manager = _manager(config)
+    captured: dict[str, Any] = {}
+
+    class FakeAdvancedPipeline:
+        def __init__(self, settings: object, *, dependencies: Any) -> None:
+            captured["settings"] = settings
+            captured["dependencies"] = dependencies
+
+        def prepare(self, source: Path) -> AdvancedAIPreparation:
+            dependencies = captured["dependencies"]
+            provider = dependencies.content_provider
+            captured["provider"] = provider
+            transcript, _ = normalize_asr_transcript(
+                FakeASRProvider(), source, duration_seconds=10
+            )
+            request = ContentIntelligenceRequest(
+                input_hash=compute_file_sha256(source),
+                transcript_hash=transcript.transcript_hash,
+                duration_seconds=10,
+                transcript_segments=transcript.segments,
+            )
+            batch = run_content_intelligence(FakeContentIntelligenceProvider(), request)
+            private_root = tmp_path / "byok-ai-private"
+            private_root.mkdir(parents=True, exist_ok=True)
+            return AdvancedAIPreparation(
+                transcript=transcript,
+                suggestions=batch,
+                private_root=private_root,
+                cpu_map_digest="c" * 64,
+                cpu_warnings=(),
+            )
+
+    monkeypatch.setattr(
+        "videoscope.web.app.AdvancedAIContentPipeline", FakeAdvancedPipeline
+    )
+    provider_payload = {
+        "profile_id": "my-ai",
+        "display_name": "My provider",
+        "provider_id": "custom-openai",
+        "protocol": "openai_compatible",
+        "api_base_url": "https://provider.example/v1",
+        "model_id": "user-paid-model",
+        "api_key": "memory-only-test-key",
+        "capabilities": ["structured_text"],
+        "request_json_object": True,
+    }
+    with TestClient(create_app(config, content_manager=manager)) as client:
+        stored = client.put(
+            "/api/connector/providers/my-ai",
+            headers={"Origin": "http://127.0.0.1:8765"},
+            json=provider_payload,
+        )
+        assert stored.status_code == 200
+        assert "memory-only-test-key" not in stored.text
+        job_id = cast(str, _upload(client)["job_id"])
+        _wait(client, job_id, {"awaiting_review"})
+
+        denied = client.post(
+            f"/api/content/jobs/{job_id}/ai/prepare",
+            json={
+                "semantic_model_id": "user-paid-model",
+                "provider_profile_id": "my-ai",
+                "remote_data_consent": False,
+            },
+        )
+        assert denied.status_code == 422
+        assert captured == {}
+
+        prepared = client.post(
+            f"/api/content/jobs/{job_id}/ai/prepare",
+            json={
+                "semantic_model_id": "user-paid-model",
+                "provider_profile_id": "my-ai",
+                "remote_data_consent": True,
+            },
+        )
+        assert prepared.status_code == 200
+        assert "memory-only-test-key" not in prepared.text
+        provider = captured["provider"]
+        assert provider.provider_id == "custom-openai"
+        assert provider.model_id == "user-paid-model"
+
+
 def test_content_ai_review_state_can_be_cancelled_and_discarded(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

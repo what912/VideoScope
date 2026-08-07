@@ -101,7 +101,7 @@ class OllamaContentIntelligenceProvider:
     ) -> Sequence[AISuggestionDraft]:
         if not self._loaded:
             raise OllamaUnavailableError("Ollama provider is not loaded")
-        prompt = _build_grounded_prompt(request)
+        prompt = build_grounded_prompt(request)
         payload = self._request_json(
             "/api/generate",
             body={
@@ -172,7 +172,7 @@ class OllamaContentIntelligenceProvider:
         return value
 
 
-def _build_grounded_prompt(request: ContentIntelligenceRequest) -> str:
+def build_grounded_prompt(request: ContentIntelligenceRequest) -> str:
     schema = {
         "suggestions": [
             {
@@ -211,4 +211,8 @@ def _build_grounded_prompt(request: ContentIntelligenceRequest) -> str:
     )
 
 
-__all__ = ["OllamaContentIntelligenceProvider", "OllamaUnavailableError"]
+__all__ = [
+    "OllamaContentIntelligenceProvider",
+    "OllamaUnavailableError",
+    "build_grounded_prompt",
+]

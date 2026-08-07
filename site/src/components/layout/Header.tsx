@@ -28,6 +28,7 @@ export function Header({ showSignIn = true }: HeaderProps) {
     { href: "/", label: t.navigation.product },
     { href: "/#features", label: t.navigation.features },
     { href: "/compare", label: t.navigation.compare },
+    { href: "/connect", label: t.navigation.fullModes },
     {
       external: true,
       href: `${REPOSITORY_URL}/tree/main/docs`,

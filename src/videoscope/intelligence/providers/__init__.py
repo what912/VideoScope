@@ -8,10 +8,16 @@ from videoscope.intelligence.providers.ollama import (
     OllamaContentIntelligenceProvider,
     OllamaUnavailableError,
 )
+from videoscope.intelligence.providers.openai_compatible import (
+    OpenAICompatibleContentIntelligenceProvider,
+    OpenAICompatibleUnavailableError,
+)
 
 __all__ = [
     "FasterWhisperASRProvider",
     "FasterWhisperUnavailableError",
     "OllamaContentIntelligenceProvider",
     "OllamaUnavailableError",
+    "OpenAICompatibleContentIntelligenceProvider",
+    "OpenAICompatibleUnavailableError",
 ]

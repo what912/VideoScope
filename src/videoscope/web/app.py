@@ -58,12 +58,16 @@ from videoscope.intelligence import (
     AdvancedAICancelledError,
     AdvancedAIConfig,
     AdvancedAIContentPipeline,
+    AdvancedAIDependencies,
     AdvancedAIPreparation,
     AIReviewManifest,
     AISuggestionBatch,
     build_review_manifest,
     reviewed_content_ranges,
     write_intelligence_json,
+)
+from videoscope.intelligence.providers import (
+    OpenAICompatibleContentIntelligenceProvider,
 )
 from videoscope.privacy.models import PrivacyPlan, PrivacyRiskMap
 from videoscope.privacy.profiles import (
@@ -80,6 +84,17 @@ from videoscope.rescue.models import (
 )
 from videoscope.resolve import PublishPlan, PublishProfileId
 from videoscope.resolve.profiles import PublishProfile, list_publish_profiles
+from videoscope.web.connector import (
+    ConnectorPairingRequest,
+    ConnectorSession,
+    ConnectorSessionStore,
+    ConnectorStatus,
+    ProviderCapability,
+    ProviderCredentialVault,
+    ProviderProfileInput,
+    ProviderProfileSummary,
+    ProviderProtocol,
+)
 from videoscope.web.content_jobs import (
     ContentArtifactUnavailableError,
     ContentConfirmationMismatchError,
@@ -346,6 +361,11 @@ def create_app(
 ) -> FastAPI:
     """Create an app with no CORS middleware or external service dependency."""
     effective_config = config or WebServerConfig()
+    connector_sessions = ConnectorSessionStore(
+        effective_config.connector_pairing_code or token_hex(12),
+        ttl_seconds=effective_config.connector_session_ttl_seconds,
+    )
+    provider_vault = ProviderCredentialVault()
     cpu_limiter = CpuJobLimiter(effective_config.cpu_concurrency)
     job_manager: JobManager = (
         manager
@@ -408,6 +428,7 @@ def create_app(
                             publish_job_manager.shutdown()
                         finally:
                             job_manager.shutdown()
+                            provider_vault.clear()
 
     app = FastAPI(
         title="VideoScope Local API",
@@ -433,6 +454,8 @@ def create_app(
     app.state.advanced_ai_preparations = advanced_ai_preparations
     app.state.advanced_ai_reviews = advanced_ai_reviews
     app.state.advanced_ai_cancellations = advanced_ai_cancellations
+    app.state.connector_sessions = connector_sessions
+    app.state.provider_vault = provider_vault
 
     @app.middleware("http")
     async def reject_cross_site_browser_requests(
@@ -440,16 +463,152 @@ def create_app(
         call_next: Callable[[Request], Awaitable[Response]],
     ) -> Response:
         origin = request.headers.get("origin")
+        public_origin = origin in effective_config.allowed_browser_origins
+        loopback_origin = origin is not None and _is_loopback_origin(origin)
+        if request.method == "OPTIONS" and public_origin:
+            requested_method = request.headers.get(
+                "access-control-request-method", ""
+            ).upper()
+            requested_headers = {
+                item.strip().casefold()
+                for item in request.headers.get(
+                    "access-control-request-headers", ""
+                ).split(",")
+                if item.strip()
+            }
+            allowed_headers = {
+                "accept",
+                "content-type",
+                "last-event-id",
+                "x-videoscope-session",
+            }
+            if requested_method not in {"GET", "POST", "PUT", "DELETE"} or not (
+                requested_headers <= allowed_headers
+            ):
+                return JSONResponse(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    content={"detail": "Connector preflight is not allowed."},
+                )
+            response = Response(status_code=status.HTTP_204_NO_CONTENT)
+            _add_connector_cors_headers(response, origin, request)
+            return response
         if (
             origin is not None
+            and not public_origin
+            and not loopback_origin
             and not effective_config.allow_non_loopback_origin
-            and not _is_loopback_origin(origin)
         ):
             return JSONResponse(
                 status_code=status.HTTP_403_FORBIDDEN,
                 content={"detail": "Cross-site browser origin is not allowed."},
             )
-        return await call_next(request)
+        if public_origin and request.url.path not in {
+            "/api/connector/status",
+            "/api/connector/sessions",
+        }:
+            token = request.headers.get("x-videoscope-session")
+            if not connector_sessions.valid(token):
+                response = JSONResponse(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    content={"detail": "Connector pairing is required."},
+                )
+                _add_connector_cors_headers(response, origin, request)
+                return response
+        response = await call_next(request)
+        if public_origin:
+            _add_connector_cors_headers(response, origin, request)
+        return response
+
+    def _add_connector_cors_headers(
+        response: Response, origin: str, request: Request
+    ) -> None:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE"
+        response.headers["Access-Control-Allow-Headers"] = (
+            "Accept, Content-Type, Last-Event-ID, X-VideoScope-Session"
+        )
+        response.headers["Access-Control-Expose-Headers"] = "Content-Disposition"
+        response.headers["Vary"] = "Origin"
+        if request.headers.get("access-control-request-private-network") == "true":
+            response.headers["Access-Control-Allow-Private-Network"] = "true"
+
+    def _require_loopback_settings(request: Request) -> None:
+        origin = request.headers.get("origin")
+        if not _is_loopback_client(request) or (
+            origin is not None and not _is_loopback_origin(origin)
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail="Provider secrets can be changed only in the loopback UI.",
+            )
+
+    @app.get(
+        "/api/connector/status",
+        response_model=ConnectorStatus,
+        summary="Discover the loopback connector without exposing local data",
+    )
+    async def connector_status() -> ConnectorStatus:
+        return ConnectorStatus(version=__version__)
+
+    @app.post(
+        "/api/connector/sessions",
+        response_model=ConnectorSession,
+        summary="Pair an allowlisted public site with this connector",
+    )
+    async def create_connector_session(
+        pairing: ConnectorPairingRequest,
+    ) -> ConnectorSession:
+        try:
+            return connector_sessions.pair(pairing.pairing_code)
+        except PermissionError as exc:
+            raise HTTPException(
+                status_code=401, detail="Pairing code is invalid."
+            ) from exc
+
+    @app.delete(
+        "/api/connector/sessions/current",
+        status_code=status.HTTP_204_NO_CONTENT,
+    )
+    async def revoke_connector_session(
+        x_videoscope_session: Annotated[str | None, Header()] = None,
+    ) -> Response:
+        connector_sessions.revoke(x_videoscope_session)
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    @app.get(
+        "/api/connector/providers",
+        response_model=list[ProviderProfileSummary],
+        summary="List configured in-memory BYOK profiles without secrets",
+    )
+    async def connector_provider_profiles() -> list[ProviderProfileSummary]:
+        return list(provider_vault.list())
+
+    @app.put(
+        "/api/connector/providers/{profile_id}",
+        response_model=ProviderProfileSummary,
+        include_in_schema=False,
+    )
+    async def put_connector_provider_profile(
+        profile_id: str,
+        profile: ProviderProfileInput,
+        request: Request,
+    ) -> ProviderProfileSummary:
+        _require_loopback_settings(request)
+        if profile.profile_id != profile_id:
+            raise HTTPException(status_code=422, detail="Provider profile ID mismatch.")
+        return provider_vault.put(profile)
+
+    @app.delete(
+        "/api/connector/providers/{profile_id}",
+        status_code=status.HTTP_204_NO_CONTENT,
+        include_in_schema=False,
+    )
+    async def delete_connector_provider_profile(
+        profile_id: str, request: Request
+    ) -> Response:
+        _require_loopback_settings(request)
+        provider_vault.delete(profile_id)
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     @app.get(
         "/docs",
@@ -1327,22 +1486,52 @@ def create_app(
                     previous.set()
                 advanced_ai_cancellations[job_id] = cancellation
 
+            dependencies: AdvancedAIDependencies | None = None
+            if settings.provider_profile_id is not None:
+                if not settings.remote_data_consent:
+                    raise ValueError(
+                        "remote provider use requires explicit data-transfer consent"
+                    )
+                profile = provider_vault.get(settings.provider_profile_id)
+                if profile.summary.protocol is not ProviderProtocol.OPENAI_COMPATIBLE:
+                    raise ValueError("selected provider protocol is not supported here")
+                if (
+                    ProviderCapability.STRUCTURED_TEXT
+                    not in profile.summary.capabilities
+                ):
+                    raise ValueError(
+                        "selected provider lacks structured text capability"
+                    )
+                content_provider = OpenAICompatibleContentIntelligenceProvider(
+                    provider_id=profile.summary.provider_id,
+                    model_id=profile.summary.model_id,
+                    api_base_url=profile.summary.api_base_url,
+                    api_key=profile.api_key,
+                    request_json_object=profile.summary.request_json_object,
+                )
+                dependencies = AdvancedAIDependencies(content_provider=content_provider)
+
             def run() -> AdvancedAIPreparation:
                 with heavy_ai_slots:
-                    pipeline = AdvancedAIContentPipeline(
-                        AdvancedAIConfig(
-                            output_directory=output_directory / "advanced-ai",
-                            transcript_path=transcript_path,
-                            asr_model_id=settings.asr_model_id,
-                            asr_language=settings.asr_language,
-                            semantic_model_id=settings.semantic_model_id,
-                            ollama_endpoint=settings.ollama_endpoint,
-                            locale=cast(Any, settings.locale),
-                            device=settings.device,
-                            allow_model_download=settings.allow_model_download,
-                            maximum_suggestions=settings.maximum_suggestions,
-                            keep_workspace=True,
-                            cancellation_callback=cancellation.is_set,
+                    config = AdvancedAIConfig(
+                        output_directory=output_directory / "advanced-ai",
+                        transcript_path=transcript_path,
+                        asr_model_id=settings.asr_model_id,
+                        asr_language=settings.asr_language,
+                        semantic_model_id=settings.semantic_model_id,
+                        ollama_endpoint=settings.ollama_endpoint,
+                        locale=cast(Any, settings.locale),
+                        device=settings.device,
+                        allow_model_download=settings.allow_model_download,
+                        maximum_suggestions=settings.maximum_suggestions,
+                        keep_workspace=True,
+                        cancellation_callback=cancellation.is_set,
+                    )
+                    pipeline = (
+                        AdvancedAIContentPipeline(config)
+                        if dependencies is None
+                        else AdvancedAIContentPipeline(
+                            config, dependencies=dependencies
                         )
                     )
                     return pipeline.prepare(source_path)
@@ -1375,9 +1564,7 @@ def create_app(
         except AdvancedAICancelledError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         except KeyError as exc:
-            raise HTTPException(
-                status_code=404, detail="Content job not found."
-            ) from exc
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
         except ContentJobStateError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         except (ValueError, ValidationError) as exc:
@@ -1389,8 +1576,8 @@ def create_app(
             raise HTTPException(
                 status_code=503,
                 detail=(
-                    "Local AI preparation failed. Check the selected local models "
-                    f"and provider: {type(exc).__name__}."
+                    "AI preparation failed. Check the selected local model or "
+                    f"BYOK provider: {type(exc).__name__}."
                 ),
             ) from exc
         finally:

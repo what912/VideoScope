@@ -321,7 +321,15 @@ describe("tracked generated-media safety", () => {
     const violations = [];
 
     for (const filename of trackedTextFiles) {
-      const contents = await readFile(path.join(repositoryDirectory, filename));
+      const absolutePath = path.join(repositoryDirectory, filename);
+      try {
+        await access(absolutePath);
+      } catch {
+        // A production rebuild can remove hashed assets before the deletion is
+        // staged. Deleted files are not part of the candidate public output.
+        continue;
+      }
+      const contents = await readFile(absolutePath);
       violations.push(...provenanceViolations(filename, contents));
     }
 
