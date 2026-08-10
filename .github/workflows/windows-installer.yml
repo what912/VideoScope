@@ -1,0 +1,81 @@
+name: Windows installer artifact
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/windows-installer.yml"
+      - "packaging/windows/**"
+      - "scripts/*windows*"
+      - "src/videoscope/windows/**"
+      - "src/videoscope/web/**"
+      - "tests/windows/**"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/windows-installer.yml"
+      - "packaging/windows/**"
+      - "scripts/*windows*"
+      - "src/videoscope/windows/**"
+      - "src/videoscope/web/**"
+      - "tests/windows/**"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build, install, smoke, and uninstall
+    runs-on: windows-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          architecture: x64
+          cache: pip
+
+      - name: Install frozen-runtime and test dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install -e ".[web,dev]"
+          python -m pip install --requirement packaging/windows/requirements-build.txt
+
+      - name: Run Windows launcher unit tests
+        run: python -m pytest tests/windows tests/test_cli.py -q
+
+      - name: Locate or install pinned Inno Setup compiler
+        id: inno
+        shell: pwsh
+        run: |
+          $iscc = Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path -LiteralPath $iscc)) {
+            choco install innosetup --version=6.4.3 --yes --no-progress
+            if ($LASTEXITCODE -ne 0) { throw "Pinned Inno Setup installation failed." }
+          }
+          if (-not (Test-Path -LiteralPath $iscc)) { throw "ISCC.exe is unavailable." }
+          "path=$iscc" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Build audited installer
+        shell: pwsh
+        run: ./scripts/build_windows_installer.ps1 -SkipDependencyInstall -IsccPath '${{ steps.inno.outputs.path }}'
+
+      - name: Smoke-test install, loopback service, and uninstall
+        shell: pwsh
+        run: ./scripts/smoke_windows_installer.ps1 -InstallerPath build/windows/installer/VideoScope-Setup-x64.exe
+
+      - name: Upload installer and checksum
+        uses: actions/upload-artifact@v7
+        with:
+          name: VideoScope-Windows-x64
+          path: |
+            build/windows/installer/VideoScope-Setup-x64.exe
+            build/windows/installer/VideoScope-Setup-x64.exe.sha256
+          if-no-files-found: error

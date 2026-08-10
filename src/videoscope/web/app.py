@@ -10,6 +10,7 @@ import json
 import math
 import mimetypes
 import os
+import shutil
 import threading
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
@@ -350,6 +351,26 @@ def _is_loopback_client(request: Request) -> bool:
         return False
 
 
+def _is_connector_origin(origin: str, request: Request) -> bool:
+    """Accept only the exact loopback origin serving this Connector instance."""
+    parsed = urlsplit(origin)
+    request_port = request.url.port or (443 if request.url.scheme == "https" else 80)
+    origin_port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    return bool(
+        parsed.scheme == request.url.scheme
+        and parsed.hostname
+        and request.url.hostname
+        and parsed.hostname.casefold() == request.url.hostname.casefold()
+        and origin_port == request_port
+        and not parsed.username
+        and not parsed.password
+        and parsed.path in {"", "/"}
+        and not parsed.query
+        and not parsed.fragment
+        and _is_loopback_origin(origin)
+    )
+
+
 def create_app(
     config: WebServerConfig | None = None,
     *,
@@ -464,7 +485,7 @@ def create_app(
     ) -> Response:
         origin = request.headers.get("origin")
         public_origin = origin in effective_config.allowed_browser_origins
-        loopback_origin = origin is not None and _is_loopback_origin(origin)
+        loopback_origin = origin is not None and _is_connector_origin(origin, request)
         if request.method == "OPTIONS" and public_origin:
             requested_method = request.headers.get(
                 "access-control-request-method", ""
@@ -535,7 +556,7 @@ def create_app(
     def _require_loopback_settings(request: Request) -> None:
         origin = request.headers.get("origin")
         if not _is_loopback_client(request) or (
-            origin is not None and not _is_loopback_origin(origin)
+            origin is not None and not _is_connector_origin(origin, request)
         ):
             raise HTTPException(
                 status_code=403,
@@ -548,7 +569,14 @@ def create_app(
         summary="Discover the loopback connector without exposing local data",
     )
     async def connector_status() -> ConnectorStatus:
-        return ConnectorStatus(version=__version__)
+        ffmpeg_available = shutil.which("ffmpeg") is not None
+        ffprobe_available = shutil.which("ffprobe") is not None
+        return ConnectorStatus(
+            status=("ready" if ffmpeg_available and ffprobe_available else "degraded"),
+            version=__version__,
+            ffmpeg_available=ffmpeg_available,
+            ffprobe_available=ffprobe_available,
+        )
 
     @app.post(
         "/api/connector/sessions",

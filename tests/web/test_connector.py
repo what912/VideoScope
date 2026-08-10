@@ -2,9 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
+from pydantic import SecretStr
 
 from videoscope.web.app import create_app
+from videoscope.web.connector import ConnectorSessionStore
 from videoscope.web.models import WebServerConfig
 
 PUBLIC_ORIGIN = "https://what912.github.io"
@@ -29,11 +32,16 @@ def _pair(client: TestClient) -> str:
 
 
 def test_public_origin_requires_pairing_and_gets_exact_cors(tmp_path: Path) -> None:
-    with TestClient(create_app(_config(tmp_path))) as client:
+    with TestClient(
+        create_app(_config(tmp_path)), base_url="http://127.0.0.1:8765"
+    ) as client:
         status = client.get("/api/connector/status", headers={"Origin": PUBLIC_ORIGIN})
         assert status.status_code == 200
         assert status.headers["access-control-allow-origin"] == PUBLIC_ORIGIN
         assert status.json()["credentials_persisted"] is False
+        assert isinstance(status.json()["ffmpeg_available"], bool)
+        assert isinstance(status.json()["ffprobe_available"], bool)
+        assert status.json()["status"] in {"ready", "degraded"}
 
         blocked = client.get(
             "/api/connector/providers", headers={"Origin": PUBLIC_ORIGIN}
@@ -52,7 +60,9 @@ def test_public_origin_requires_pairing_and_gets_exact_cors(tmp_path: Path) -> N
 
 
 def test_preflight_is_bounded_and_unknown_origin_is_rejected(tmp_path: Path) -> None:
-    with TestClient(create_app(_config(tmp_path))) as client:
+    with TestClient(
+        create_app(_config(tmp_path)), base_url="http://127.0.0.1:8765"
+    ) as client:
         preflight = client.options(
             "/api/content/jobs",
             headers={
@@ -88,7 +98,9 @@ def test_provider_key_can_only_be_set_from_loopback_and_never_returns(
         "capabilities": ["structured_text"],
         "request_json_object": True,
     }
-    with TestClient(create_app(_config(tmp_path))) as client:
+    with TestClient(
+        create_app(_config(tmp_path)), base_url="http://127.0.0.1:8765"
+    ) as client:
         token = _pair(client)
         public_write = client.put(
             "/api/connector/providers/my-provider",
@@ -126,7 +138,9 @@ def test_provider_key_can_only_be_set_from_loopback_and_never_returns(
 
 
 def test_pairing_failure_does_not_echo_code(tmp_path: Path) -> None:
-    with TestClient(create_app(_config(tmp_path))) as client:
+    with TestClient(
+        create_app(_config(tmp_path)), base_url="http://127.0.0.1:8765"
+    ) as client:
         response = client.post(
             "/api/connector/sessions",
             headers={"Origin": PUBLIC_ORIGIN},
@@ -135,3 +149,63 @@ def test_pairing_failure_does_not_echo_code(tmp_path: Path) -> None:
         assert response.status_code == 401
         assert "wrong-code" not in response.text
         assert "pair-123456" not in response.text
+
+
+def test_pairing_code_is_one_time_and_rate_limited() -> None:
+    now = 100.0
+    store = ConnectorSessionStore(
+        "pair-123456",
+        pairing_ttl_seconds=600,
+        max_pairing_attempts=3,
+        attempt_window_seconds=60,
+        clock=lambda: now,
+    )
+
+    for _ in range(3):
+        with pytest.raises(PermissionError):
+            store.pair(SecretStr("wrong-code"))
+    with pytest.raises(PermissionError):
+        store.pair(SecretStr("pair-123456"))
+
+    fresh = ConnectorSessionStore("pair-123456", clock=lambda: now)
+    fresh.pair(SecretStr("pair-123456"))
+    with pytest.raises(PermissionError):
+        fresh.pair(SecretStr("pair-123456"))
+
+
+def test_pairing_code_expires_independently_from_browser_session() -> None:
+    now = 100.0
+    store = ConnectorSessionStore(
+        "pair-123456",
+        pairing_ttl_seconds=600,
+        clock=lambda: now,
+    )
+    now = 701.0
+
+    with pytest.raises(PermissionError):
+        store.pair(SecretStr("pair-123456"))
+
+
+def test_other_loopback_origin_cannot_use_local_settings(tmp_path: Path) -> None:
+    payload = {
+        "profile_id": "blocked",
+        "display_name": "Blocked",
+        "provider_id": "custom-openai",
+        "protocol": "openai_compatible",
+        "api_base_url": "https://provider.example/v1",
+        "model_id": "example-model",
+        "api_key": "must-not-be-stored",
+        "capabilities": ["structured_text"],
+        "request_json_object": False,
+    }
+    with TestClient(
+        create_app(_config(tmp_path)), base_url="http://127.0.0.1:8765"
+    ) as client:
+        response = client.put(
+            "/api/connector/providers/blocked",
+            headers={"Origin": "http://127.0.0.1:9999"},
+            json=payload,
+        )
+
+    assert response.status_code == 403
+    assert "must-not-be-stored" not in response.text

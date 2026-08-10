@@ -81,6 +81,13 @@ Do not publish while any item marked **blocking** is unresolved.
 
 - [x] `videoscope serve` defaults to `127.0.0.1:8765` and prints a fresh pairing
   code; the public-site bridge never requires a central VideoScope server.
+- [x] Windows packaging is current-user only, registers `videoscope://start`,
+  opens no firewall/LAN listener, bundles no FFmpeg/model/key and exposes a
+  visible stop control.
+- [x] Browser launch is gated on confirmed server startup; the native window,
+  not a URL/log/file, presents the one-time ten-minute pairing code.
+- [x] failed pairing attempts are bounded and another loopback origin cannot
+  mutate local provider settings.
 - [x] exact-origin CORS/PNA, failed pairing, expired/missing session and unknown
   origin paths are covered without using `*`.
 - [x] provider keys can be written only from the loopback UI, never appear in
@@ -93,6 +100,10 @@ Do not publish while any item marked **blocking** is unresolved.
   cloud sync and that provider charges belong to the user's account.
 - [ ] Manually test current Firefox and Chromium private-network prompts from
   the deployed HTTPS origin to the loopback connector.
+- [ ] Confirm the Windows installer workflow builds, audits, installs, starts,
+  checks `/api/health`, shuts down and uninstalls the exact release commit.
+- [ ] Code-sign `VideoScope-Setup-x64.exe`, or keep the unknown-publisher and
+  SHA-256 verification warning prominent in both languages.
 - [ ] Manually verify one user-owned provider account with a low spending cap;
   do not put a maintainer key into the public site or release assets.
 

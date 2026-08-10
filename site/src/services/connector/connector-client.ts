@@ -9,6 +9,8 @@ export type ConnectorStatus = {
   pairing_required: boolean;
   credentials_persisted: boolean;
   modes: string[];
+  ffmpeg_available?: boolean;
+  ffprobe_available?: boolean;
 };
 
 export type ConnectorProvider = {
