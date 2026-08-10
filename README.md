@@ -13,7 +13,22 @@ uploads by default, and never overwrites the source.
 **Source, issues and contributions:** https://github.com/what912/VideoScope
 
 The public site provides an immediate browser CPU scan. To unlock every local
-workflow without creating a VideoScope cloud bill, install the connector once:
+workflow without creating a VideoScope cloud bill, install the Windows
+connector once. The release installer includes the application runtime, starts
+a visible local connector, checks FFmpeg/ffprobe and opens the pairing page—no
+Python command is required:
+
+1. Open [`/VideoScope/connect`](https://what912.github.io/VideoScope/connect).
+2. Download `VideoScope-Setup-x64.exe` from the official `what912/VideoScope`
+   Release and verify its SHA-256 file.
+3. Double-click the installer and keep “Launch VideoScope Local Connector”
+   selected.
+4. Copy the one-time code shown in the connector window, pair the browser, then
+   drop in a video.
+
+The installer is attached only after its Windows CI install/start/uninstall
+smoke passes. Until that verified Release asset is present, developers can use
+the source fallback:
 
 ```powershell
 git clone https://github.com/what912/VideoScope.git
@@ -25,9 +40,10 @@ videoscope doctor
 videoscope serve
 ```
 
-Keep that terminal open, then visit
-[`/VideoScope/connect`](https://what912.github.io/VideoScope/connect), enter the
-short pairing code printed by the connector, and open any A/B/C/D workflow.
+Keep that terminal open, then visit the connect page, enter the short pairing
+code printed by the connector, and open any A/B/C/D workflow. The complete
+zero-beginner walkthrough, troubleshooting and uninstall steps are in the
+[Windows installation guide](docs/windows-install.md).
 The connector binds only to `127.0.0.1:8765`; videos and working files remain on
 the user's computer.
 

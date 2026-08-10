@@ -31,6 +31,9 @@ Development and release dependencies
 - setuptools — MIT License
 - wheel — MIT License
 - HTTPX — BSD-3-Clause License
+- PyInstaller — GPL-2.0-or-later with the PyInstaller bootloader exception
+- Inno Setup — custom redistribution terms; generated installer output is
+  distributable subject to the licenses of the packaged application files
 
 Transitive dependencies are resolved by the Python package installer and retain
 their respective licenses. Distributors should review the licenses of the exact

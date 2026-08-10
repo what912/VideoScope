@@ -423,7 +423,10 @@ def test_content_ai_byok_requires_consent_and_injects_memory_only_provider(
         "capabilities": ["structured_text"],
         "request_json_object": True,
     }
-    with TestClient(create_app(config, content_manager=manager)) as client:
+    with TestClient(
+        create_app(config, content_manager=manager),
+        base_url="http://127.0.0.1:8765",
+    ) as client:
         stored = client.put(
             "/api/connector/providers/my-ai",
             headers={"Origin": "http://127.0.0.1:8765"},

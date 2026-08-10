@@ -5,9 +5,11 @@ from __future__ import annotations
 import hmac
 import re
 import threading
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from secrets import token_urlsafe
+from time import monotonic
 from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
@@ -37,6 +39,8 @@ class ConnectorStatus(ConnectorModel):
     version: str
     pairing_required: bool = True
     credentials_persisted: bool = False
+    ffmpeg_available: bool = False
+    ffprobe_available: bool = False
     modes: tuple[str, ...] = (
         "publish_ready",
         "safe_sharing",
@@ -108,23 +112,62 @@ class ProviderProfileSecret:
 
 
 class ConnectorSessionStore:
-    def __init__(self, pairing_code: str, *, ttl_seconds: float = 12 * 3600) -> None:
+    def __init__(
+        self,
+        pairing_code: str,
+        *,
+        ttl_seconds: float = 12 * 3600,
+        pairing_ttl_seconds: float = 10 * 60,
+        max_pairing_attempts: int = 5,
+        attempt_window_seconds: float = 60,
+        clock: Callable[[], float] = monotonic,
+    ) -> None:
         if len(pairing_code.strip()) < 6:
             raise ValueError("pairing code must contain at least six characters")
+        if pairing_ttl_seconds <= 0 or attempt_window_seconds <= 0:
+            raise ValueError("pairing time limits must be positive")
+        if max_pairing_attempts < 1:
+            raise ValueError("max pairing attempts must be positive")
         self._pairing_code = pairing_code
         self._ttl = timedelta(seconds=ttl_seconds)
+        self._clock = clock
+        self._pairing_expires_at = clock() + pairing_ttl_seconds
+        self._attempt_window_seconds = attempt_window_seconds
+        self._max_pairing_attempts = max_pairing_attempts
+        self._failed_pairing_attempts: list[float] = []
+        self._pairing_consumed = False
         self._sessions: dict[str, datetime] = {}
         self._lock = threading.RLock()
 
     def pair(self, pairing_code: SecretStr) -> ConnectorSession:
-        if not hmac.compare_digest(pairing_code.get_secret_value(), self._pairing_code):
-            raise PermissionError("pairing code is invalid")
-        token = token_urlsafe(32)
-        expires_at = datetime.now(UTC) + self._ttl
         with self._lock:
+            now = self._clock()
+            self._prune_pairing_attempts_locked(now)
+            if (
+                self._pairing_consumed
+                or now > self._pairing_expires_at
+                or len(self._failed_pairing_attempts) >= self._max_pairing_attempts
+            ):
+                raise PermissionError("pairing code is invalid")
+            if not hmac.compare_digest(
+                pairing_code.get_secret_value(), self._pairing_code
+            ):
+                self._failed_pairing_attempts.append(now)
+                raise PermissionError("pairing code is invalid")
+            self._pairing_consumed = True
+            token = token_urlsafe(32)
+            expires_at = datetime.now(UTC) + self._ttl
             self._sessions[token] = expires_at
             self._prune_locked()
         return ConnectorSession(session_token=token, expires_at=expires_at)
+
+    def _prune_pairing_attempts_locked(self, now: float) -> None:
+        threshold = now - self._attempt_window_seconds
+        self._failed_pairing_attempts = [
+            attempted_at
+            for attempted_at in self._failed_pairing_attempts
+            if attempted_at > threshold
+        ]
 
     def valid(self, token: str | None) -> bool:
         if not token:
