@@ -6,7 +6,7 @@ import ctypes
 import sys
 import time
 from ctypes import wintypes
-from typing import Protocol
+from typing import Any, Protocol, cast
 
 ERROR_ALREADY_EXISTS = 183
 EVENT_MODIFY_STATE = 0x0002
@@ -15,6 +15,26 @@ WAIT_OBJECT_0 = 0
 
 DEFAULT_MUTEX_NAME = r"Local\VideoScopeConnector-v1"
 DEFAULT_SHUTDOWN_EVENT_NAME = r"Local\VideoScopeConnectorShutdown-v1"
+
+
+def _windows_ctypes_symbol(name: str) -> Any:
+    """Resolve a Windows-only ctypes symbol after the platform guard."""
+    try:
+        return getattr(ctypes, name)
+    except AttributeError as exc:
+        raise OSError("VideoScope Windows launcher requires Windows") from exc
+
+
+def _get_last_error() -> int:
+    return int(_windows_ctypes_symbol("get_last_error")())
+
+
+def _set_last_error(value: int) -> None:
+    _windows_ctypes_symbol("set_last_error")(value)
+
+
+def _windows_error(code: int) -> OSError:
+    return cast(OSError, _windows_ctypes_symbol("WinError")(code))
 
 
 class KernelApi(Protocol):
@@ -39,7 +59,7 @@ class WindowsKernel:
     def __init__(self) -> None:
         if sys.platform != "win32":
             raise OSError("VideoScope Windows launcher requires Windows")
-        kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel: Any = _windows_ctypes_symbol("WinDLL")("kernel32", use_last_error=True)
         kernel.CreateMutexW.argtypes = (
             wintypes.LPVOID,
             wintypes.BOOL,
@@ -61,19 +81,19 @@ class WindowsKernel:
         kernel.SetEvent.restype = wintypes.BOOL
         kernel.CloseHandle.argtypes = (wintypes.HANDLE,)
         kernel.CloseHandle.restype = wintypes.BOOL
-        self._kernel = kernel
+        self._kernel: Any = kernel
 
     def create_mutex(self, name: str) -> tuple[int, bool]:
-        ctypes.set_last_error(0)
+        _set_last_error(0)
         handle = self._kernel.CreateMutexW(None, False, name)
         if not handle:
-            raise ctypes.WinError(ctypes.get_last_error())
-        return int(handle), ctypes.get_last_error() == ERROR_ALREADY_EXISTS
+            raise _windows_error(_get_last_error())
+        return int(handle), _get_last_error() == ERROR_ALREADY_EXISTS
 
     def create_event(self, name: str) -> int:
         handle = self._kernel.CreateEventW(None, True, False, name)
         if not handle:
-            raise ctypes.WinError(ctypes.get_last_error())
+            raise _windows_error(_get_last_error())
         return int(handle)
 
     def open_event(self, name: str) -> int | None:
