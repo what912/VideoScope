@@ -3,6 +3,13 @@ import type { AuthClient, AuthSession, AuthUser } from "../../types/auth";
 const STORAGE_KEY = "videoscope.local-device-account.v1";
 const VERSION = 1;
 const ITERATIONS = 310_000;
+const MIN_PASSPHRASE_LENGTH = 10;
+const MAX_PASSPHRASE_LENGTH = 256;
+const MAX_BACKUP_CHARACTERS = 16 * 1024;
+const SALT_BYTES = 16;
+const IV_BYTES = 12;
+const MIN_CIPHERTEXT_BYTES = 17;
+const MAX_CIPHERTEXT_BYTES = 8 * 1024;
 const ADDITIONAL_DATA = new TextEncoder().encode(
   "VideoScope local device account v1",
 );
@@ -45,6 +52,9 @@ function base64ToBytes(value: string): Uint8Array<ArrayBuffer> {
 
 function parseEnvelope(raw: string): LocalAccountEnvelope {
   try {
+    if (raw.length > MAX_BACKUP_CHARACTERS) {
+      throw new Error("backup is too large");
+    }
     const parsed = JSON.parse(raw) as Partial<LocalAccountEnvelope>;
     if (
       parsed.version !== VERSION ||
@@ -55,9 +65,20 @@ function parseEnvelope(raw: string): LocalAccountEnvelope {
     ) {
       throw new Error("invalid envelope");
     }
-    base64ToBytes(parsed.salt);
-    base64ToBytes(parsed.iv);
-    base64ToBytes(parsed.ciphertext);
+    const salt = base64ToBytes(parsed.salt);
+    const iv = base64ToBytes(parsed.iv);
+    const ciphertext = base64ToBytes(parsed.ciphertext);
+    if (
+      salt.byteLength !== SALT_BYTES ||
+      iv.byteLength !== IV_BYTES ||
+      ciphertext.byteLength < MIN_CIPHERTEXT_BYTES ||
+      ciphertext.byteLength > MAX_CIPHERTEXT_BYTES ||
+      bytesToBase64(salt) !== parsed.salt ||
+      bytesToBase64(iv) !== parsed.iv ||
+      bytesToBase64(ciphertext) !== parsed.ciphertext
+    ) {
+      throw new Error("invalid envelope encoding");
+    }
     return parsed as LocalAccountEnvelope;
   } catch {
     throw new LocalAccountError("The encrypted local account backup is invalid.");
@@ -101,8 +122,13 @@ export class LocalDeviceAuthClient implements AuthClient {
     if (normalizedName.length < 2 || normalizedName.length > 80) {
       throw new LocalAccountError("Display name must contain 2 to 80 characters.");
     }
-    if (passphrase.length < 10) {
-      throw new LocalAccountError("Passphrase must contain at least 10 characters.");
+    if (
+      passphrase.length < MIN_PASSPHRASE_LENGTH ||
+      passphrase.length > MAX_PASSPHRASE_LENGTH
+    ) {
+      throw new LocalAccountError(
+        "Passphrase must contain 10 to 256 characters.",
+      );
     }
     const profile: LocalAccountProfile = {
       id: `local_${bytesToBase64(this.#randomBytes(18)).replaceAll(/[^a-zA-Z0-9]/g, "")}`,
@@ -115,6 +141,14 @@ export class LocalDeviceAuthClient implements AuthClient {
   }
 
   async signIn(passphrase: string): Promise<void> {
+    if (
+      passphrase.length < MIN_PASSPHRASE_LENGTH ||
+      passphrase.length > MAX_PASSPHRASE_LENGTH
+    ) {
+      throw new LocalAccountError(
+        "The passphrase is incorrect or the backup is damaged.",
+      );
+    }
     const raw = this.#storage.getItem(STORAGE_KEY);
     if (!raw) throw new LocalAccountError("No local account exists on this device.");
     const envelope = parseEnvelope(raw);
@@ -187,8 +221,8 @@ export class LocalDeviceAuthClient implements AuthClient {
     profile: LocalAccountProfile,
     passphrase: string,
   ): Promise<LocalAccountEnvelope> {
-    const salt = this.#randomBytes(16);
-    const iv = this.#randomBytes(12);
+    const salt = this.#randomBytes(SALT_BYTES);
+    const iv = this.#randomBytes(IV_BYTES);
     const key = await this.#deriveKey(passphrase, salt, ["encrypt"]);
     const ciphertext = await this.#crypto.subtle.encrypt(
       { name: "AES-GCM", iv, additionalData: ADDITIONAL_DATA },

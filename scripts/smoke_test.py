@@ -14,8 +14,8 @@ import tempfile
 import venv
 from pathlib import Path
 
-EXPECTED_VERSION = "VideoScope 0.8.0.dev0"
-EXPECTED_DISTRIBUTION_PREFIX = "genvideoscope-0.8.0.dev0-"
+EXPECTED_VERSION = "VideoScope 0.8.0"
+EXPECTED_DISTRIBUTION_PREFIX = "genvideoscope-0.8.0-"
 SMOKE_COMMAND_TIMEOUT_SECONDS = 1800.0
 MAX_DIAGNOSTIC_CHARACTERS = 12_000
 PERSONAL_PATH_PATTERNS = (
@@ -815,7 +815,60 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Directory containing ffmpeg and ffprobe when PATH is unavailable.",
     )
+    parser.add_argument(
+        "--offline-installed-dependencies",
+        action="store_true",
+        help=(
+            "Create the temporary environment with already-installed base "
+            "dependencies and install the candidate wheel with --no-index "
+            "--no-deps. This is an offline local smoke, not a clean dependency "
+            "resolution check."
+        ),
+    )
     return parser.parse_args()
+
+
+def wheel_install_command(
+    python: Path, wheel: Path, *, offline_installed_dependencies: bool
+) -> list[str]:
+    """Build the explicit wheel-install command for the chosen smoke mode."""
+    command = [
+        str(python),
+        "-m",
+        "pip",
+        "install",
+        "--disable-pip-version-check",
+    ]
+    if offline_installed_dependencies:
+        command.extend(["--no-index", "--no-deps"])
+    command.append(str(wheel))
+    return command
+
+
+def installed_dependency_path() -> str:
+    """Return only installed package roots for the explicit offline smoke mode."""
+    package_roots: list[str] = []
+    for raw_path in sys.path:
+        if not raw_path:
+            continue
+        path = Path(raw_path)
+        if path.name.casefold() not in {"site-packages", "dist-packages"}:
+            continue
+        resolved = str(path.resolve(strict=True))
+        if resolved not in package_roots:
+            package_roots.append(resolved)
+    if not package_roots:
+        raise SmokeTestError(
+            "Offline smoke mode could not find installed dependency packages."
+        )
+    return os.pathsep.join(package_roots)
+
+
+def isolate_smoke_cache(root: Path) -> None:
+    """Keep smoke-test cache probes inside the disposable test workspace."""
+    os.environ["LOCALAPPDATA"] = str(root / "local-app-data")
+    os.environ["XDG_CACHE_HOME"] = str(root / "cache")
+    os.environ["VIDEOSCOPE_CACHE_DIR"] = str(root / "videoscope-cache")
 
 
 def main() -> int:
@@ -839,8 +892,14 @@ def main() -> int:
             if args.wheel is not None
             else select_wheel(args.dist)
         )
+        offline_installed_dependencies = bool(
+            getattr(args, "offline_installed_dependencies", False)
+        )
+        if offline_installed_dependencies:
+            os.environ["PYTHONPATH"] = installed_dependency_path()
         with tempfile.TemporaryDirectory(prefix="videoscope-smoke-") as temporary:
             root = Path(temporary)
+            isolate_smoke_cache(root)
             environment = root / "venv"
             output = root / "publish-smoke"
             privacy_output = root / "privacy-smoke"
@@ -851,18 +910,18 @@ def main() -> int:
                 root=root,
                 requested_video=args.video,
             )
-            venv.EnvBuilder(with_pip=True, clear=True).create(environment)
+            venv.EnvBuilder(
+                with_pip=True,
+                clear=True,
+            ).create(environment)
             python = environment_python(environment)
 
             run_command(
-                [
-                    str(python),
-                    "-m",
-                    "pip",
-                    "install",
-                    "--disable-pip-version-check",
-                    str(wheel),
-                ],
+                wheel_install_command(
+                    python,
+                    wheel,
+                    offline_installed_dependencies=offline_installed_dependencies,
+                ),
                 cwd=root,
                 label="Install wheel",
             )

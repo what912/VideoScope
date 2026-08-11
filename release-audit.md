@@ -1,11 +1,12 @@
-# GenVideoScope 0.8.0 development release audit
+# GenVideoScope 0.8.0 stable release audit
 
-Audit date: 2026-08-07
+Audit date: 2026-08-11
 
-Candidate: `genvideoscope 0.8.0.dev0`
+Candidate: `genvideoscope 0.8.0`
 
-Public integration: not yet pushed; this audit covers the local candidate branch
-`codex/zero-cost-byok-local-connector` only.
+Public integration: Draft PR [#25](https://github.com/what912/VideoScope/pull/25)
+is based on the exact public `main` tree and its candidate commit passed the
+required GitHub Actions verification.
 
 Scope: the local-first CPU product line—Check, A Publish Ready, D Safe Sharing,
 B Video Rescue, C Long Video to Useful Content—and the optional, review-first
@@ -16,9 +17,18 @@ certification or a real-world semantic-accuracy/usefulness claim.
 
 ### Repository and native media
 
-- `python scripts/validate.py` passed Ruff and formatting for 367 files, strict
-  mypy for 304 source files, and pytest with 1,347 passed and 96 explicit
-  optional/environment skips on Windows/Python 3.12.
+- Exact-commit GitHub Actions run
+  [31464199254](https://github.com/what912/VideoScope/actions/runs/31464199254)
+  passed Ubuntu and Windows on Python 3.11/3.12, public-site generation and
+  audit, native A/B/C/D workflows, repository verification, distribution
+  audit, and a clean wheel install/smoke. Windows installer run
+  [31464199147](https://github.com/what912/VideoScope/actions/runs/31464199147)
+  passed audited build, clean install, loopback startup, smoke analysis,
+  shutdown, uninstall, and artifact upload.
+- `python scripts/validate.py` passed Ruff and formatting for 382 files and
+  strict mypy for 316 source files. With local FFmpeg 9.0, the base pytest
+  process passed 1,434 tests with 17 explicit optional/environment skips, then
+  a fresh process passed all 21 native Rescue fixture tests.
 - `python scripts/generate_test_videos.py --force` generated and decoded 29
   local synthetic videos twice with FFmpeg 9.0. File hashes matched between
   runs. No media was downloaded and generated videos are excluded from the
@@ -47,7 +57,7 @@ certification or a real-world semantic-accuracy/usefulness claim.
 - The Advanced AI API is loopback-only. It has a bounded semaphore, rejects
   stale C revisions and changed inputs, and keeps transcript/evidence/review
   artifacts outside public artifact routes.
-- The GitHub Pages application passed lint, TypeScript, 526 tests across 58
+- The GitHub Pages application passed lint, TypeScript, 530 tests across 58
   files, a production build, and exact allowlist verification for 15
   deterministically generated project-authored media files.
 - React Router was migrated to the patched 8.3.0 package and Vite to 8.2.0;
@@ -57,7 +67,7 @@ certification or a real-world semantic-accuracy/usefulness claim.
 ### Build and distribution
 
 - `python -m build --no-isolation` built
-  `genvideoscope-0.8.0.dev0-py3-none-any.whl` and the matching sdist. The
+  `genvideoscope-0.8.0-py3-none-any.whl` and the matching sdist. The
   standard isolated command could not bootstrap `setuptools` in the restricted
   local environment; the build still rebuilt the wheel from the produced sdist.
 - `scripts/audit_distribution.py` passed both archives and required the
@@ -68,9 +78,16 @@ certification or a real-world semantic-accuracy/usefulness claim.
 - The base distribution declares no AI, ASR, OCR or Web dependency. Faster
   Whisper remains in the separate `asr` extra; Ollama uses only a user-started
   loopback endpoint and never pulls a model implicitly.
-- The exact base wheel passed a clean-environment smoke covering `--version`,
+- The exact base wheel passed an isolated offline smoke covering `--version`,
   `doctor`, CPU Check, A Publish Ready, manual-region D Safe Sharing,
   Conservative and Balanced B Video Rescue, and all three confirmed C goals.
+  The 2026-08-11 local run was explicitly offline (`--no-index --no-deps`) and
+  reused already-verified base dependencies; exact clean dependency resolution
+  remains a GitHub Actions gate.
+- The frozen Windows connector audit passed and the 0.8.0 installer was built
+  without FFmpeg, model weights, credentials or development-only packages.
+  Paid code signing is explicitly deferred; the release must retain the
+  bilingual unknown-publisher warning and SHA-256 asset.
 - Final archive checksums must be generated after this tracked document is
   frozen and stored outside the sdist because an embedded sdist hash would be
   self-referential.
@@ -113,12 +130,14 @@ certification or a real-world semantic-accuracy/usefulness claim.
 - FFmpeg build, codec, VFR, damaged-media and player differences remain
   operational risks. Reports, filenames, hashes, transcripts, prompts,
   thumbnails, previews, video and audio can all contain sensitive information.
-- The first `main` Windows/Python 3.12 run reported one non-reproduced Rescue
-  status mismatch on the intentionally damaged middle-range fixture. The same
-  tree had already passed in the pull request, its exact-job rerun passed, and
-  eight repeated local native runs passed. This candidate keeps the strict
-  gate and makes future failure output list only the non-passing checks; the
-  transient remains a monitored native-media risk rather than a waived test.
+- An earlier `main` Windows/Python 3.12 run and the second Draft PR
+  Windows/Python 3.11 run each reported one Rescue status mismatch on the
+  intentionally damaged middle-range fixture inside the long-lived monolithic
+  pytest process. In the same jobs, the dedicated native Rescue step passed;
+  isolated local runs passed as well. The final candidate therefore keeps every
+  test and every strict threshold but runs the 21 native Rescue fixture tests in
+  a fresh pytest process, with structured non-passing-check diagnostics. The
+  exact final commit passed both Windows versions and both Ubuntu versions.
 - The loopback workbench has no TLS, central billing, quota or multi-tenant
   isolation boundary and must not be exposed as a public server. The device
   account is local UI identity, not a server security boundary.
@@ -139,9 +158,6 @@ certification or a real-world semantic-accuracy/usefulness claim.
 
 ## Externally unverified
 
-- The v0.8 connector/BYOK/device-account changes have not yet been pushed, so
-  GitHub Actions has not run against this candidate on Ubuntu/Windows or Python
-  3.11/3.12. Older public CI results do not count as v0.8 evidence.
 - Native macOS media and player behavior remains unverified. CI verifies native
   FFmpeg workflows on Ubuntu and Windows, but not every codec or target player.
 - No representative private user media, uncommon codec corpus, encrypted
@@ -152,9 +168,10 @@ certification or a real-world semantic-accuracy/usefulness claim.
 ## Release decision
 
 The CPU product, local connector, device account and optional review-first AI
-layer have green local engineering gates and are suitable for review as a
-development prerelease. Publication remains blocked on the exact-commit CI and
-human checks above; a stable release claim is premature.
+layer have green local and exact-commit CI engineering gates and are suitable
+for the stable 0.8.0 release. Unrun representative private-media,
+real-provider, macOS and long-duration checks remain disclosed limitations and
+prohibit accuracy or universal-compatibility claims.
 
 The static public website may run browser-side CPU diagnostics and link to local
 installation. It must not imply that GitHub Pages runs Python, FFmpeg or private

@@ -164,19 +164,21 @@ describe("public static pages", () => {
     ).toBeVisible();
   });
 
-  it("discloses the production account-deletion blocker in both languages", async () => {
+  it("distinguishes deletable device accounts from disabled cloud sign-in", async () => {
     render(<TestApp initialEntries={["/privacy"]} />);
 
     expect(
-      await screen.findByText(/account deletion is not available/i),
+      await screen.findByText(/delete the device account immediately/i),
     ).toBeVisible();
+    expect(screen.getByText(/Supabase cloud sign-in remains disabled/i)).toBeVisible();
     fireEvent.change(screen.getByRole("combobox", { name: "Language" }), {
       target: { value: "zh-CN" },
     });
 
     expect(
-      screen.getByText(/暂不提供账户删除/u),
+      screen.getByText(/立即删除设备账户/u),
     ).toBeVisible();
+    expect(screen.getByText(/Supabase 云登录会继续关闭/u)).toBeVisible();
   });
 
   it("distinguishes browser preview from every desktop-only capability", async () => {

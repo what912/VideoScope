@@ -95,6 +95,10 @@ function originalProvenance(manifest) {
   ].join("\n");
 }
 
+function normalizeTextLineEndings(value) {
+  return value.replace(/\r\n?/gu, "\n");
+}
+
 function assertLocalFilename(filename, extension) {
   if (
     typeof filename !== "string" ||
@@ -269,7 +273,7 @@ export async function verifyOriginalMedia({ manifest, mediaDirectory, runner } =
   const provenance = await readFile(provenancePath, "utf8").catch(() => {
     throw new Error("Required media file is missing: PROVENANCE.md");
   });
-  if (provenance !== originalProvenance(manifest)) {
+  if (normalizeTextLineEndings(provenance) !== originalProvenance(manifest)) {
     throw new Error("PROVENANCE.md does not exactly match the original media manifest");
   }
 

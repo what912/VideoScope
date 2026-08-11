@@ -98,7 +98,7 @@ const en: StaticCopy = {
       "After consent, the browser contacts the exact HTTPS source you enter. That source host can observe your IP address and request metadata. VideoScope does not proxy the request.",
     accountTitle: "Optional account data",
     accountBody:
-      "When Supabase is configured and you choose to sign in, the provider stores the account session and profile fields needed for authentication. Account deletion is not available until a private, verified request channel and deletion process are published and tested, so production sign-in must remain disabled. Local analysis remains available without an account.",
+      "The public site defaults to an encrypted device account stored only in this browser. Its display name is encrypted with your local passphrase; the passphrase is never stored. You can export an encrypted backup or delete the device account immediately. There is no cloud recovery or automatic sync. Optional Supabase cloud sign-in remains disabled until a private, verified cloud-account deletion process is published and tested. Local analysis never requires an account.",
     sharingTitle: "Optional sanitized sharing",
     sharingBody:
       "Sharing is disabled unless configured. A final consent screen lists the sanitized report fields and selected evidence records that will leave the device. The original video and evidence image files are not shared.",
@@ -248,7 +248,7 @@ const zhCN: StaticCopy = {
       "在你同意后，浏览器会联系你输入的 HTTPS 来源。来源主机可以观察你的 IP 地址和请求元数据；VideoScope 不会代理该请求。",
     accountTitle: "可选账户数据",
     accountBody:
-      "配置 Supabase 且你主动登录后，服务商会保存身份验证所需的账户会话与资料字段。在私密且可验证的申请渠道与删除流程发布并测试前，暂不提供账户删除，因此生产登录必须保持关闭；本地分析始终可以不登录使用。",
+      "公开站默认使用只保存在当前浏览器中的加密设备账户。显示名称由本地口令加密，口令本身不会被保存；你可以导出加密备份，也可以立即删除设备账户。它不提供云端找回或自动同步。可选 Supabase 云登录会继续关闭，直到私密且可验证的云账户删除流程完成发布与测试。本地分析始终不要求账户。",
     sharingTitle: "可选脱敏分享",
     sharingBody:
       "分享功能默认关闭。最终确认界面会逐项列出将离开设备的脱敏报告字段和所选证据记录；不会分享原始视频或证据图片文件。",

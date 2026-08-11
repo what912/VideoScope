@@ -73,6 +73,19 @@ def test_cache_directory_supports_spaces_and_chinese(tmp_path: Path) -> None:
     assert not list(cache_dir.iterdir())
 
 
+def test_cache_directory_supports_explicit_environment_override(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    cache_dir = tmp_path / "portable-cache"
+    monkeypatch.setenv(doctor.CACHE_DIRECTORY_ENVIRONMENT_VARIABLE, str(cache_dir))
+
+    result = doctor.check_cache_directory()
+
+    assert result.status is DoctorStatus.PASS
+    assert cache_dir.is_dir()
+
+
 def test_doctor_cli_renders_failure_and_returns_nonzero(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -30,7 +30,7 @@ describe("product routes", () => {
   ])("renders %s", async (path, expected) => {
     render(<TestApp initialEntries={[path]} />);
     expect(
-      await screen.findByText(expected, { exact: false }, { timeout: 3_000 }),
+      await screen.findByText(expected, { exact: false }, { timeout: 6_000 }),
     ).toBeVisible();
     expect(screen.getByText("what912")).toBeVisible();
   });

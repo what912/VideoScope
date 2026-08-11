@@ -1,4 +1,4 @@
-# GenVideoScope v0.8.0 Zero-cost BYOK connector development release checklist
+# GenVideoScope v0.8.0 stable release checklist
 
 Target:
 
@@ -6,8 +6,8 @@ Target:
 - PyPI distribution: `genvideoscope`
 - Python package: `videoscope`
 - CLI: `videoscope`
-- development version: `0.8.0.dev0`
-- candidate tag: `v0.8.0-dev.0` (create only after the final public tree passes)
+- release version: `0.8.0`
+- release tag: `v0.8.0` (create only after the final public tree passes)
 
 Do not publish while any item marked **blocking** is unresolved.
 
@@ -15,7 +15,7 @@ Do not publish while any item marked **blocking** is unresolved.
 
 - [x] `pyproject.toml` name is `genvideoscope`.
 - [x] package import and CLI remain `videoscope`.
-- [x] `videoscope --version` prints `VideoScope 0.8.0.dev0` in the final
+- [x] `videoscope --version` prints `VideoScope 0.8.0` in the final
   clean-wheel run.
 - [x] GitHub repository name and links use `GenVideoScope`.
 - [ ] PyPI name availability and project ownership are checked manually.
@@ -100,10 +100,12 @@ Do not publish while any item marked **blocking** is unresolved.
   cloud sync and that provider charges belong to the user's account.
 - [ ] Manually test current Firefox and Chromium private-network prompts from
   the deployed HTTPS origin to the loopback connector.
-- [ ] Confirm the Windows installer workflow builds, audits, installs, starts,
+- [x] Confirm the Windows installer workflow builds, audits, installs, starts,
   checks `/api/health`, shuts down and uninstalls the exact release commit.
-- [ ] Code-sign `VideoScope-Setup-x64.exe`, or keep the unknown-publisher and
-  SHA-256 verification warning prominent in both languages.
+- [x] The owner explicitly deferred paid Windows code signing for this release.
+  The unsigned installer keeps the bilingual unknown-publisher warning and an
+  independently downloadable SHA-256 checksum; signing remains a future
+  hardening item, not a hidden claim.
 - [ ] Manually verify one user-owned provider account with a low spending cap;
   do not put a maintainer key into the public site or release assets.
 
@@ -260,7 +262,7 @@ python scripts/smoke_test.py --wheel $wheel
 Clean-profile checks:
 
 ```powershell
-python -m pip install dist/genvideoscope-0.8.0.dev0-py3-none-any.whl
+python -m pip install dist/genvideoscope-0.8.0-py3-none-any.whl
 python -m videoscope --version
 python -m videoscope doctor
 python -m videoscope publish tests/fixtures/generated/publish_av.mp4 `
@@ -278,24 +280,31 @@ python -m videoscope rescue tests/fixtures/generated/rescue_dark_noise.mp4 `
 The base-wheel smoke installs no AI, OCR, or Web extra and performs no model
 download. Optional extras require separate, explicitly authorized release checks.
 
-Local candidate evidence on 2026-08-07:
+Local candidate evidence on 2026-08-11:
 
-- unified validation: Ruff and format passed 367 files, mypy passed 304 files,
-  pytest passed 1,347 tests with 96 explicit optional/environment skips;
+- unified validation: Ruff and format passed 382 files, mypy passed 316 source
+  files, base pytest passed 1,434 tests with 17 explicit optional/environment
+  skips, and a fresh process passed all 21 native Rescue fixture tests;
 - local dashboard: 116 tests across 19 files and production build passed;
-- public site: lint, typecheck, 526 tests across 58 files and production build
-  passed;
+- public site: lint, typecheck, 530 tests across 58 files, production build and
+  exact offline verification of 15 project-authored media files passed;
 - no-isolation build produced the v0.8.0 wheel/sdist, the wheel distribution
-  audit passed, and the exact wheel passed clean-install CPU Check, Publish
-  Ready, Safe Sharing, Conservative/Balanced Rescue and all three C goals;
+  audit passed, and the exact wheel passed an explicit offline install smoke
+  using already-verified dependencies plus CPU Check, Publish Ready, Safe
+  Sharing, Conservative/Balanced Rescue and all three C goals;
+- the Windows bundle audit passed and the unsigned 0.8.0 installer was built
+  with no FFmpeg, model, API key or development package in its frozen runtime;
 - an in-process HTTP smoke proved exact public-origin CORS, pairing, zero
   persisted credentials, an empty provider vault and packaged dashboard status
   200.
 
-The isolated local build could not bootstrap setuptools in the restricted
-environment and exposed a Windows output-decoding error in `build`; the
-no-isolation build passed. Exact-commit GitHub Actions for v0.8 remains open and
-must not be inferred from the older public tree.
+The offline smoke deliberately used `--no-index --no-deps`; it proves the exact
+wheel and workflows, not fresh dependency resolution. Exact clean dependency
+installation, installer install/start/uninstall and cross-platform verification
+passed on the candidate commit in GitHub Actions runs
+[31464199254](https://github.com/what912/VideoScope/actions/runs/31464199254)
+and
+[31464199147](https://github.com/what912/VideoScope/actions/runs/31464199147).
 
 ## Manual local Web acceptance
 
@@ -339,10 +348,10 @@ must not be inferred from the older public tree.
 
 ## Human release gate
 
-- [ ] Review [release-audit.md](../release-audit.md).
-- [ ] Confirm no unpublished private media is present in the Git index.
-- [ ] Review the complete staged diff.
-- [ ] Confirm the exact v0.8 candidate CI passes on Windows and Linux, Python
+- [x] Review [release-audit.md](../release-audit.md).
+- [x] Confirm no unpublished private media is present in the Git index.
+- [x] Review the complete staged diff.
+- [x] Confirm the exact v0.8 candidate CI passes on Windows and Linux, Python
   3.11 and 3.12.
 - [ ] Confirm the candidate on a clean macOS environment if macOS is advertised.
 - [x] Enable GitHub private vulnerability reporting.
@@ -353,7 +362,7 @@ Suggested commands, intentionally not executed by the audit:
 ```powershell
 git add .
 git commit -m "release: prepare zero-cost BYOK connector v0.8.0"
-git tag v0.8.0-dev.0
+git tag v0.8.0
 ```
 
 Publishing commands belong to a later, separately authorized release operation.

@@ -90,6 +90,7 @@ describe("media review contact sheet", () => {
     const messages = [];
 
     await createMediaContactSheet({
+      ffmpeg: "ffmpeg",
       runner: async (file, args, options) => {
         calls.push({ file, args, options });
       },

@@ -177,10 +177,11 @@ export function AuthPage() {
             <label htmlFor="local-passphrase">
               {t.auth.localAccount.passphrase}
             </label>
-            <input
-              autoComplete={localClient.hasAccount() ? "current-password" : "new-password"}
-              id="local-passphrase"
-              minLength={10}
+                <input
+                  autoComplete={localClient.hasAccount() ? "current-password" : "new-password"}
+                  id="local-passphrase"
+                  maxLength={256}
+                  minLength={10}
               onChange={(event) => setPassphrase(event.target.value)}
               required
               type="password"
@@ -194,6 +195,7 @@ export function AuthPage() {
                 <input
                   autoComplete="new-password"
                   id="local-passphrase-confirm"
+                  maxLength={256}
                   minLength={10}
                   onChange={(event) => setConfirmPassphrase(event.target.value)}
                   required
