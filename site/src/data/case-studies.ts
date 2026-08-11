@@ -89,7 +89,14 @@ function fail(message: string): never {
 }
 
 function assertRecord(value: unknown, message: string): UnknownRecord {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) fail(message);
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    Array.isArray(value) ||
+    Object.getPrototypeOf(value) !== Object.prototype
+  ) {
+    fail(message);
+  }
   return value as UnknownRecord;
 }
 
@@ -104,7 +111,9 @@ function assertExactKeys(
   if (Object.keys(record).some((key) => !allowed.has(key))) {
     fail("Case study manifest contains unknown keys");
   }
-  if (keys.some((key) => !(key in record))) fail(`${objectName} has missing keys`);
+  if (keys.some((key) => !Object.hasOwn(record, key))) {
+    fail(`${objectName} has missing keys`);
+  }
   return record;
 }
 
@@ -156,8 +165,9 @@ function parseLocalizedCaseText(value: unknown): LocalizedCaseText {
 }
 
 function parseScalarRecord(value: unknown, objectName: string): Readonly<Record<string, ScalarValue>> {
-  const record = assertRecord(value, `${objectName} must be an object`);
-  for (const item of Object.values(record)) {
+  const record = assertRecord(value, `${objectName} must be a plain JSON object`);
+  const entries: [string, ScalarValue][] = [];
+  for (const [key, item] of Object.entries(record)) {
     if (
       item !== null &&
       typeof item !== "string" &&
@@ -166,8 +176,9 @@ function parseScalarRecord(value: unknown, objectName: string): Readonly<Record<
     ) {
       fail(`${objectName} values must be JSON scalars`);
     }
+    entries.push([key, item]);
   }
-  return record as Readonly<Record<string, ScalarValue>>;
+  return Object.fromEntries(entries) as Readonly<Record<string, ScalarValue>>;
 }
 
 function parseAction(value: unknown, copy: LocalizedCaseText[]): CaseAction {
