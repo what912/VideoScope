@@ -40,13 +40,18 @@ def _probe_payload(*, duration: str = "42.000000") -> dict[str, object]:
                 "width": 1280,
                 "height": 720,
                 "avg_frame_rate": "24/1",
+                "r_frame_rate": "24/1",
+                "duration": "42.000000",
+                "nb_frames": "1008",
                 "pix_fmt": "yuv420p",
             },
             {
                 "codec_type": "audio",
                 "codec_name": "aac",
                 "channels": 2,
+                "channel_layout": "stereo",
                 "sample_rate": "48000",
+                "duration": "42.000000",
             },
         ],
     }
@@ -84,7 +89,7 @@ class SuccessfulRunner:
         if len(args) >= 2 and args[1] == "-version":
             return subprocess.CompletedProcess(args, 0, "ffmpeg version 8.1.2\n", "")
         if len(args) >= 2 and args[1] == "--version":
-            return subprocess.CompletedProcess(args, 0, "hyperframes 0.7.106\n", "")
+            return subprocess.CompletedProcess(args, 0, "0.7.106\n", "")
         if "-show_format" in args:
             assert args[-1].endswith(".mp4")
             return subprocess.CompletedProcess(
@@ -109,6 +114,21 @@ class ProbeFailureRunner(SuccessfulRunner):
         if "-show_format" in args:
             self.calls.append(RecordedCall(args, cwd, timeout_seconds))
             raise DemoGenerationError("ffprobe failed: invalid staged media")
+        return super().__call__(args, cwd=cwd, timeout_seconds=timeout_seconds)
+
+
+class WrongHyperframesVersionRunner(SuccessfulRunner):
+    def __call__(
+        self,
+        arguments: Sequence[str],
+        *,
+        cwd: Path,
+        timeout_seconds: float,
+    ) -> subprocess.CompletedProcess[str]:
+        args = list(arguments)
+        if len(args) >= 2 and args[1] == "--version":
+            self.calls.append(RecordedCall(args, cwd, timeout_seconds))
+            return subprocess.CompletedProcess(args, 0, "0.7.105\n", "")
         return super().__call__(args, cwd=cwd, timeout_seconds=timeout_seconds)
 
 
@@ -210,6 +230,7 @@ def test_postprocess_has_exact_bounded_conditions_codecs_and_muxing() -> None:
     ):
         assert expected in args or expected in joined
     assert "scenecut=0" in joined
+    assert args[args.index("-fps_mode") + 1] == "cfr"
     assert "+faststart" not in joined
     assert "VideoScope Full Local Four-Mode Demo" in joined
     assert "demo.user@example.invalid" in joined
@@ -254,10 +275,57 @@ def test_probe_demo_requests_strict_json_and_normalizes_valid_streams(
             "width": 1280,
             "height": 720,
             "frame_rate": "24/1",
+            "real_frame_rate": "24/1",
+            "duration_seconds": 42.0,
+            "frame_count": 1008,
             "pixel_format": "yuv420p",
         },
-        "audio": {"codec": "aac", "channels": 2, "sample_rate_hz": 48000},
+        "audio": {
+            "codec": "aac",
+            "channels": 2,
+            "channel_layout": "stereo",
+            "sample_rate_hz": 48000,
+            "duration_seconds": 42.0,
+        },
     }
+
+
+@pytest.mark.parametrize(  # type: ignore[untyped-decorator]
+    ("stream_index", "field", "replacement"),
+    [
+        (0, "avg_frame_rate", "24000/1001"),
+        (0, "r_frame_rate", "30/1"),
+        (0, "duration", "41.900000"),
+        (0, "nb_frames", "1007"),
+        (1, "duration", "41.900000"),
+        (1, "channels", 6),
+        (1, "channel_layout", "2.0"),
+    ],
+)
+def test_probe_demo_rejects_each_cfr_duration_frame_and_layout_mutation(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    stream_index: int,
+    field: str,
+    replacement: object,
+) -> None:
+    source = tmp_path / "source.mp4"
+    source.write_bytes(b"media")
+    payload = _probe_payload()
+    streams = payload["streams"]
+    assert isinstance(streams, list)
+    stream = streams[stream_index]
+    assert isinstance(stream, dict)
+    stream[field] = replacement
+
+    def fake_run(
+        arguments: Sequence[str], *, cwd: Path, timeout_seconds: float
+    ) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(list(arguments), 0, json.dumps(payload), "")
+
+    monkeypatch.setattr("scripts.generate_full_local_demo.run_command", fake_run)
+    with pytest.raises(DemoGenerationError, match="ffprobe"):
+        probe_demo(source, "ffprobe")
 
 
 @pytest.mark.parametrize(  # type: ignore[untyped-decorator]
@@ -314,6 +382,19 @@ def test_generate_uses_private_staging_and_publishes_only_after_validation(
     assert Path(render.arguments[3]).parent.name.startswith(".staging-")
 
 
+def test_generate_rejects_unpinned_hyperframes_before_render(tmp_path: Path) -> None:
+    output = tmp_path / "out"
+    runner = WrongHyperframesVersionRunner()
+
+    with pytest.raises(DemoGenerationError, match="0.7.106"):
+        generate_demo(ROOT, output, force=True, runner=runner)
+
+    assert not any(call.arguments[1] == "render" for call in runner.calls)
+    assert not (output / SOURCE_NAME).exists()
+    assert not (output / MANIFEST_NAME).exists()
+    assert not list(output.glob(".staging-*"))
+
+
 def test_source_is_immutable_without_force(tmp_path: Path) -> None:
     output = tmp_path / "out"
     generate_demo(ROOT, output, force=True, runner=SuccessfulRunner())
@@ -338,8 +419,36 @@ def test_failed_second_generation_keeps_previous_published_source_and_manifest(
     assert not list(output.glob(".staging-*"))
 
 
-def test_publication_failure_rolls_back_both_previous_artifacts(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+def _replace_step(path: Path, target: Path, output: Path) -> str | None:
+    staging_parent = target.parent.name.startswith(".staging-")
+    source_staging = path.parent.name.startswith(".staging-")
+    if path == output / SOURCE_NAME and target.name == ".previous-source.mp4":
+        return "backup_source"
+    if path == output / MANIFEST_NAME and target.name == ".previous-manifest.json":
+        return "backup_manifest"
+    if source_staging and path.name == SOURCE_NAME and target == output / SOURCE_NAME:
+        return "publish_source"
+    if (
+        source_staging
+        and path.name == MANIFEST_NAME
+        and target == output / MANIFEST_NAME
+    ):
+        return "publish_manifest"
+    if path == output / SOURCE_NAME and staging_parent and target.name == SOURCE_NAME:
+        return "retract_source"
+    if path.name == ".previous-source.mp4" and target == output / SOURCE_NAME:
+        return "restore_source"
+    if path.name == ".previous-manifest.json" and target == output / MANIFEST_NAME:
+        return "restore_manifest"
+    return None
+
+
+@pytest.mark.parametrize(  # type: ignore[untyped-decorator]
+    "failed_step",
+    ["backup_source", "backup_manifest", "publish_source", "publish_manifest"],
+)
+def test_each_publication_failure_rolls_back_both_previous_artifacts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failed_step: str
 ) -> None:
     output = tmp_path / "out"
     first = generate_demo(ROOT, output, force=True, runner=SuccessfulRunner())
@@ -347,12 +456,12 @@ def test_publication_failure_rolls_back_both_previous_artifacts(
     original_manifest = first.manifest_path.read_bytes()
     original_replace = Path.replace
 
-    def fail_moving_previous_manifest(self: Path, target: Path) -> Path:
-        if self == first.manifest_path and target.name == ".previous-manifest.json":
+    def fail_selected_step(self: Path, target: Path) -> Path:
+        if _replace_step(self, target, output) == failed_step:
             raise OSError("injected publication failure")
         return original_replace(self, target)
 
-    monkeypatch.setattr(Path, "replace", fail_moving_previous_manifest)
+    monkeypatch.setattr(Path, "replace", fail_selected_step)
     with pytest.raises(DemoGenerationError, match="atomic publication"):
         generate_demo(
             ROOT,
@@ -364,6 +473,41 @@ def test_publication_failure_rolls_back_both_previous_artifacts(
     assert first.source_path.read_bytes() == original_source
     assert first.manifest_path.read_bytes() == original_manifest
     assert not list(output.glob(".staging-*"))
+
+
+@pytest.mark.parametrize(  # type: ignore[untyped-decorator]
+    "failed_restoration",
+    ["retract_source", "restore_source", "restore_manifest"],
+)
+def test_each_rollback_failure_preserves_private_recovery_staging(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failed_restoration: str,
+) -> None:
+    output = tmp_path / "out"
+    generate_demo(ROOT, output, force=True, runner=SuccessfulRunner())
+    original_replace = Path.replace
+
+    def fail_publication_and_selected_restoration(self: Path, target: Path) -> Path:
+        step = _replace_step(self, target, output)
+        if step in {"publish_manifest", failed_restoration}:
+            raise OSError(f"injected {step} failure")
+        return original_replace(self, target)
+
+    monkeypatch.setattr(Path, "replace", fail_publication_and_selected_restoration)
+    with pytest.raises(DemoGenerationError, match="recovery files preserved") as error:
+        generate_demo(
+            ROOT,
+            output,
+            force=True,
+            runner=SuccessfulRunner(media_bytes=b"replacement-media"),
+        )
+
+    staging_directories = list(output.glob(".staging-*"))
+    assert len(staging_directories) == 1
+    staging = staging_directories[0].resolve()
+    assert str(staging) in str(error.value)
+    assert list(staging.glob(".previous-*"))
 
 
 def test_fake_two_run_outputs_and_canonical_manifests_are_byte_identical(

@@ -29,6 +29,7 @@ MANIFEST_FILENAME = "demo-manifest.json"
 CONTRACT_RELATIVE_PATH = Path("demos", "full-local-four-mode", "demo-contract.json")
 COMPOSITION_RELATIVE_PATH = Path("demos", "full-local-four-mode")
 GENERATOR_VERSION = "1.0"
+PINNED_HYPERFRAMES_VERSION = "0.7.106"
 RENDER_TIMEOUT_SECONDS = 600.0
 POSTPROCESS_TIMEOUT_SECONDS = 180.0
 PROBE_TIMEOUT_SECONDS = 30.0
@@ -38,6 +39,10 @@ DIAGNOSTIC_LIMIT = 2000
 
 class DemoGenerationError(RuntimeError):
     """A safe, path-scrubbed demo generation failure."""
+
+
+class _DemoRecoveryError(DemoGenerationError):
+    """A private recovery failure whose staging directory must be preserved."""
 
 
 class CommandRunner(Protocol):
@@ -141,6 +146,8 @@ def build_postprocess_arguments(
         "42",
         "-r",
         "24",
+        "-fps_mode",
+        "cfr",
         "-c:v",
         "libx264",
         "-preset",
@@ -259,15 +266,21 @@ def generate_demo(
         base_video, staged_source, ffmpeg
     )
     probe_arguments = _probe_arguments(staged_source, ffprobe)
+    preserve_staging = False
 
     try:
+        hyperframes_version = _read_version(
+            runner,
+            [hyperframes, "--version"],
+            cwd=composition_root,
+        )
+        if hyperframes_version != PINNED_HYPERFRAMES_VERSION:
+            raise DemoGenerationError(
+                f"HyperFrames version must be exactly {PINNED_HYPERFRAMES_VERSION}"
+            )
         versions = {
             "generator": GENERATOR_VERSION,
-            "hyperframes": _read_version(
-                runner,
-                [hyperframes, "--version"],
-                cwd=composition_root,
-            ),
+            "hyperframes": hyperframes_version,
             "ffmpeg": _read_version(
                 runner,
                 [ffmpeg, "-version"],
@@ -335,12 +348,16 @@ def generate_demo(
             manifest_sha256=stream_sha256(published_manifest),
             source_size_bytes=source_size,
         )
+    except _DemoRecoveryError:
+        preserve_staging = True
+        raise
     except DemoGenerationError:
         raise
     except (OSError, ValueError, TypeError, KeyError) as error:
         raise DemoGenerationError("demo generation failed") from error
     finally:
-        _remove_exact_staging_directory(staging_root, output_root)
+        if not preserve_staging:
+            _remove_exact_staging_directory(staging_root, output_root)
 
 
 def _probe_arguments(path: Path, ffprobe: str) -> list[str]:
@@ -382,16 +399,30 @@ def _parse_probe_output(stdout: str) -> Mapping[str, object]:
         video = video_streams[0]
         audio = audio_streams[0]
         duration = float(format_value["duration"])
-        if not math.isfinite(duration) or abs(duration - 42.0) > (1.0 / 24.0):
+        video_duration = float(video["duration"])
+        audio_duration = float(audio["duration"])
+        frame_count = int(video["nb_frames"])
+        duration_tolerance = 1.0 / 24.0
+        if (
+            not math.isfinite(duration)
+            or not math.isfinite(video_duration)
+            or not math.isfinite(audio_duration)
+            or abs(duration - 42.0) > duration_tolerance
+            or abs(video_duration - 42.0) > duration_tolerance
+            or abs(audio_duration - 42.0) > duration_tolerance
+            or frame_count != 42 * 24
+        ):
             raise ValueError
         if (
             video.get("codec_name") != "h264"
             or video.get("width") != 1280
             or video.get("height") != 720
             or video.get("avg_frame_rate") != "24/1"
+            or video.get("r_frame_rate") != "24/1"
             or video.get("pix_fmt") != "yuv420p"
             or audio.get("codec_name") != "aac"
             or audio.get("channels") != 2
+            or audio.get("channel_layout") != "stereo"
             or audio.get("sample_rate") != "48000"
         ):
             raise ValueError
@@ -410,9 +441,18 @@ def _parse_probe_output(stdout: str) -> Mapping[str, object]:
             "width": 1280,
             "height": 720,
             "frame_rate": "24/1",
+            "real_frame_rate": "24/1",
+            "duration_seconds": video_duration,
+            "frame_count": frame_count,
             "pixel_format": "yuv420p",
         },
-        "audio": {"codec": "aac", "channels": 2, "sample_rate_hz": 48000},
+        "audio": {
+            "codec": "aac",
+            "channels": 2,
+            "channel_layout": "stereo",
+            "sample_rate_hz": 48000,
+            "duration_seconds": audio_duration,
+        },
     }
 
 
@@ -541,8 +581,9 @@ def _publish_with_rollback(
             if previous_manifest_moved and previous_manifest.exists():
                 previous_manifest.replace(published_manifest)
         except OSError as rollback_error:
-            raise DemoGenerationError(
-                "atomic publication and rollback failed"
+            raise _DemoRecoveryError(
+                "atomic publication rollback failed; recovery files preserved at "
+                f"{staging_root}"
             ) from rollback_error
         raise DemoGenerationError(
             "atomic publication failed; previous files restored"
