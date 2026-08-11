@@ -37,6 +37,34 @@ const ConnectorPage = lazy(async () => {
   const module = await import("../features/connector/ConnectorPage");
   return { default: module.ConnectorPage };
 });
+const RescueLandingPage = lazy(async () => {
+  const module = await import("../features/growth/RescueLandingPage");
+  return { default: module.RescueLandingPage };
+});
+const ExamplesPage = lazy(async () => {
+  const module = await import("../features/growth/ExamplesPage");
+  return { default: module.ExamplesPage };
+});
+const CaseStudyPage = lazy(async () => {
+  const module = await import("../features/growth/CaseStudyPage");
+  return { default: module.CaseStudyPage };
+});
+const DownloadPage = lazy(async () => {
+  const module = await import("../features/growth/DownloadPage");
+  return { default: module.DownloadPage };
+});
+const DevelopersPage = lazy(async () => {
+  const module = await import("../features/growth/DevelopersPage");
+  return { default: module.DevelopersPage };
+});
+const RoadmapPage = lazy(async () => {
+  const module = await import("../features/growth/RoadmapPage");
+  return { default: module.RoadmapPage };
+});
+const CommunityPage = lazy(async () => {
+  const module = await import("../features/growth/CommunityPage");
+  return { default: module.CommunityPage };
+});
 const PrivacyPage = lazy(async () => {
   const module = await import("../features/static/PrivacyPage");
   return { default: module.PrivacyPage };
@@ -70,6 +98,13 @@ const routes: RouteObject[] = [
       { path: "report/:reportId", element: <LazyRoute component={ReportPage} /> },
       { path: "auth", element: <LazyRoute component={AuthPage} /> },
       { path: "connect", element: <LazyRoute component={ConnectorPage} /> },
+      { path: "rescue", element: <LazyRoute component={RescueLandingPage} /> },
+      { path: "examples", element: <LazyRoute component={ExamplesPage} /> },
+      { path: "examples/:slug", element: <LazyRoute component={CaseStudyPage} /> },
+      { path: "download", element: <LazyRoute component={DownloadPage} /> },
+      { path: "developers", element: <LazyRoute component={DevelopersPage} /> },
+      { path: "roadmap", element: <LazyRoute component={RoadmapPage} /> },
+      { path: "community", element: <LazyRoute component={CommunityPage} /> },
       {
         path: "auth/callback",
         element: <LazyRoute component={AuthCallbackPage} />,

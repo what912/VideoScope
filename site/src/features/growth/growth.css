@@ -1,0 +1,63 @@
+.growth-page {
+  width: min(100%, 64rem);
+  margin-inline: auto;
+  display: grid;
+  gap: var(--space-8);
+}
+
+.growth-page__header {
+  max-width: 54rem;
+  padding-block: var(--space-8);
+}
+
+.growth-page__header--signal {
+  padding: var(--space-8);
+  border: 1px solid var(--color-border);
+  background:
+    linear-gradient(135deg, rgb(98 234 216 / 12%), transparent 54%),
+    var(--color-surface-elevated);
+}
+
+.growth-page__header h1 {
+  max-width: 18ch;
+  margin: var(--space-3) 0 var(--space-5);
+  font-size: var(--font-size-2xl);
+  line-height: var(--line-height-tight);
+  letter-spacing: var(--tracking-tight);
+}
+
+.growth-page__header > p:last-child,
+.growth-page__case-list p,
+.growth-page__record p {
+  color: var(--color-text-muted);
+}
+
+.growth-page__boundaries,
+.growth-page__case-list {
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.growth-page__boundaries {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.growth-page__boundaries li,
+.growth-page__record,
+.growth-page__case-list li {
+  padding: var(--space-5);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-elevated);
+}
+
+.growth-page__case-list {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.growth-page__case-list h2,
+.growth-page__record h2 {
+  margin-top: 0;
+}

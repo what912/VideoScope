@@ -61,20 +61,21 @@ describe("application shell", () => {
 
     for (const label of [
       "Product",
-      "Features",
-      "Compare",
-      "Research",
-      "Open Source",
-      "Docs",
+      "Rescue",
+      "Examples",
+      "Download",
+      "Developers",
+      "Roadmap",
+      "Community",
       "GitHub",
     ]) {
       expect(within(navigation).getByRole("link", { name: label })).toBeVisible();
     }
     expect(
-      within(navigation).getByRole("link", { name: "Research" }),
+      within(navigation).getByRole("link", { name: "GitHub" }),
     ).toHaveAttribute(
       "href",
-      "https://github.com/what912/VideoScope/tree/main/docs",
+      "https://github.com/what912/VideoScope",
     );
     const header = screen.getByRole("banner");
     expect(
