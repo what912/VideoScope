@@ -27,6 +27,13 @@
 - The official deployment continues to provide no central video upload,
   storage, inference queue or mandatory subscription.
 
+### Fixed
+
+- Repository validation runs the real native Rescue fixture acceptance in a
+  dedicated pytest process while preserving the complete test set. This keeps
+  long-lived OpenCV/FFmpeg process state out of the strict structural outcome
+  gate and prints the exact non-passing verification checks on failure.
+
 ### Known limitations
 
 - Full Python/FFmpeg workflows require a one-time local connector installation;

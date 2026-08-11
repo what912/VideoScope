@@ -282,9 +282,9 @@ download. Optional extras require separate, explicitly authorized release checks
 
 Local candidate evidence on 2026-08-11:
 
-- unified validation: Ruff and format passed 381 files, mypy passed 315 source
-  files, and pytest passed 1,375 tests with 96 explicit optional/environment
-  skips;
+- unified validation: Ruff and format passed 382 files, mypy passed 316 source
+  files, base pytest passed 1,434 tests with 17 explicit optional/environment
+  skips, and a fresh process passed all 21 native Rescue fixture tests;
 - local dashboard: 116 tests across 19 files and production build passed;
 - public site: lint, typecheck, 530 tests across 58 files, production build and
   exact offline verification of 15 project-authored media files passed;
@@ -302,9 +302,9 @@ The offline smoke deliberately used `--no-index --no-deps`; it proves the exact
 wheel and workflows, not fresh dependency resolution. Exact clean dependency
 installation, installer install/start/uninstall and cross-platform verification
 passed on the candidate commit in GitHub Actions runs
-[31460608033](https://github.com/what912/VideoScope/actions/runs/31460608033)
+[31464199254](https://github.com/what912/VideoScope/actions/runs/31464199254)
 and
-[31460607992](https://github.com/what912/VideoScope/actions/runs/31460607992).
+[31464199147](https://github.com/what912/VideoScope/actions/runs/31464199147).
 
 ## Manual local Web acceptance
 
@@ -348,7 +348,7 @@ and
 
 ## Human release gate
 
-- [ ] Review [release-audit.md](../release-audit.md).
+- [x] Review [release-audit.md](../release-audit.md).
 - [x] Confirm no unpublished private media is present in the Git index.
 - [x] Review the complete staged diff.
 - [x] Confirm the exact v0.8 candidate CI passes on Windows and Linux, Python

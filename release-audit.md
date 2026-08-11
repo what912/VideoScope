@@ -18,16 +18,17 @@ certification or a real-world semantic-accuracy/usefulness claim.
 ### Repository and native media
 
 - Exact-commit GitHub Actions run
-  [31460608033](https://github.com/what912/VideoScope/actions/runs/31460608033)
+  [31464199254](https://github.com/what912/VideoScope/actions/runs/31464199254)
   passed Ubuntu and Windows on Python 3.11/3.12, public-site generation and
   audit, native A/B/C/D workflows, repository verification, distribution
   audit, and a clean wheel install/smoke. Windows installer run
-  [31460607992](https://github.com/what912/VideoScope/actions/runs/31460607992)
+  [31464199147](https://github.com/what912/VideoScope/actions/runs/31464199147)
   passed audited build, clean install, loopback startup, smoke analysis,
   shutdown, uninstall, and artifact upload.
-- `python scripts/validate.py` passed Ruff and formatting for 381 files, strict
-  mypy for 315 source files, and pytest with 1,375 passed and 96 explicit
-  optional/environment skips on Windows/Python 3.12.
+- `python scripts/validate.py` passed Ruff and formatting for 382 files and
+  strict mypy for 316 source files. With local FFmpeg 9.0, the base pytest
+  process passed 1,434 tests with 17 explicit optional/environment skips, then
+  a fresh process passed all 21 native Rescue fixture tests.
 - `python scripts/generate_test_videos.py --force` generated and decoded 29
   local synthetic videos twice with FFmpeg 9.0. File hashes matched between
   runs. No media was downloaded and generated videos are excluded from the
@@ -129,12 +130,14 @@ certification or a real-world semantic-accuracy/usefulness claim.
 - FFmpeg build, codec, VFR, damaged-media and player differences remain
   operational risks. Reports, filenames, hashes, transcripts, prompts,
   thumbnails, previews, video and audio can all contain sensitive information.
-- The first `main` Windows/Python 3.12 run reported one non-reproduced Rescue
-  status mismatch on the intentionally damaged middle-range fixture. The same
-  tree had already passed in the pull request, its exact-job rerun passed, and
-  eight repeated local native runs passed. This candidate keeps the strict
-  gate and makes future failure output list only the non-passing checks; the
-  transient remains a monitored native-media risk rather than a waived test.
+- An earlier `main` Windows/Python 3.12 run and the second Draft PR
+  Windows/Python 3.11 run each reported one Rescue status mismatch on the
+  intentionally damaged middle-range fixture inside the long-lived monolithic
+  pytest process. In the same jobs, the dedicated native Rescue step passed;
+  isolated local runs passed as well. The final candidate therefore keeps every
+  test and every strict threshold but runs the 21 native Rescue fixture tests in
+  a fresh pytest process, with structured non-passing-check diagnostics. The
+  exact final commit passed both Windows versions and both Ubuntu versions.
 - The loopback workbench has no TLS, central billing, quota or multi-tenant
   isolation boundary and must not be exposed as a public server. The device
   account is local UI identity, not a server security boundary.
