@@ -1,0 +1,81 @@
+{
+  "schema_version": "1.0",
+  "duration_seconds": 42.0,
+  "width": 1280,
+  "height": 720,
+  "frame_rate": 24,
+  "video": {
+    "codec": "h264",
+    "pixel_format": "yuv420p"
+  },
+  "audio": {
+    "codec": "aac",
+    "channels": 2,
+    "sample_rate_hz": 48000
+  },
+  "scenes": [
+    {
+      "scene_id": "clean_hook",
+      "start_seconds": 0.0,
+      "end_seconds": 5.0,
+      "purpose": "Clean hook retained by Useful Content."
+    },
+    {
+      "scene_id": "rescue_evidence",
+      "start_seconds": 5.0,
+      "end_seconds": 10.0,
+      "purpose": "Bounded near-dark, luminance, softening, and low-level audio review evidence."
+    },
+    {
+      "scene_id": "useful_tutorial",
+      "start_seconds": 10.0,
+      "end_seconds": 20.0,
+      "purpose": "Three-step local tutorial retained by Useful Content."
+    },
+    {
+      "scene_id": "low_information",
+      "start_seconds": 20.0,
+      "end_seconds": 25.0,
+      "purpose": "Low-information pause and repeated take for reviewable exclusion."
+    },
+    {
+      "scene_id": "privacy_zone",
+      "start_seconds": 25.0,
+      "end_seconds": 32.0,
+      "purpose": "Synthetic privacy review zone with fictional identifiers and local tone."
+    },
+    {
+      "scene_id": "motion_retake",
+      "start_seconds": 32.0,
+      "end_seconds": 36.0,
+      "purpose": "Mild deterministic motion instability and repeated instruction."
+    },
+    {
+      "scene_id": "verified_ending",
+      "start_seconds": 36.0,
+      "end_seconds": 42.0,
+      "purpose": "Clean verified ending retained by Useful Content."
+    }
+  ],
+  "privacy": {
+    "start_seconds": 25.0,
+    "end_seconds": 32.0,
+    "box": [0.58, 0.18, 0.94, 0.78]
+  },
+  "useful_keep_ranges": [
+    [0.0, 5.0],
+    [10.0, 20.0],
+    [36.0, 42.0]
+  ],
+  "fictional_identifiers": [
+    "demo.user@example.invalid",
+    "+1 202-555-0107",
+    "00.0000, 000.0000"
+  ],
+  "source_conditions": [
+    "project-authored HTML/CSS/SVG",
+    "generated tones",
+    "deterministic geometry",
+    "no remote assets or models"
+  ]
+}
