@@ -4,8 +4,9 @@ Audit date: 2026-08-11
 
 Candidate: `genvideoscope 0.8.0`
 
-Public integration: pending Draft PR and GitHub Actions verification; this audit
-covers the local stable candidate branch `codex/v0.8-stable-release`.
+Public integration: Draft PR [#25](https://github.com/what912/VideoScope/pull/25)
+is based on the exact public `main` tree and its candidate commit passed the
+required GitHub Actions verification.
 
 Scope: the local-first CPU product line—Check, A Publish Ready, D Safe Sharing,
 B Video Rescue, C Long Video to Useful Content—and the optional, review-first
@@ -16,6 +17,14 @@ certification or a real-world semantic-accuracy/usefulness claim.
 
 ### Repository and native media
 
+- Exact-commit GitHub Actions run
+  [31460608033](https://github.com/what912/VideoScope/actions/runs/31460608033)
+  passed Ubuntu and Windows on Python 3.11/3.12, public-site generation and
+  audit, native A/B/C/D workflows, repository verification, distribution
+  audit, and a clean wheel install/smoke. Windows installer run
+  [31460607992](https://github.com/what912/VideoScope/actions/runs/31460607992)
+  passed audited build, clean install, loopback startup, smoke analysis,
+  shutdown, uninstall, and artifact upload.
 - `python scripts/validate.py` passed Ruff and formatting for 381 files, strict
   mypy for 315 source files, and pytest with 1,375 passed and 96 explicit
   optional/environment skips on Windows/Python 3.12.
@@ -146,9 +155,6 @@ certification or a real-world semantic-accuracy/usefulness claim.
 
 ## Externally unverified
 
-- The v0.8 connector/BYOK/device-account changes have not yet been pushed, so
-  GitHub Actions has not run against this candidate on Ubuntu/Windows or Python
-  3.11/3.12. Older public CI results do not count as v0.8 evidence.
 - Native macOS media and player behavior remains unverified. CI verifies native
   FFmpeg workflows on Ubuntu and Windows, but not every codec or target player.
 - No representative private user media, uncommon codec corpus, encrypted
@@ -159,10 +165,10 @@ certification or a real-world semantic-accuracy/usefulness claim.
 ## Release decision
 
 The CPU product, local connector, device account and optional review-first AI
-layer have green local engineering gates and are suitable as a stable 0.8.0
-candidate. Publication remains blocked on exact-commit CI. Unrun representative
-private-media, real-provider, macOS and long-duration checks remain disclosed
-limitations and prohibit accuracy or universal-compatibility claims.
+layer have green local and exact-commit CI engineering gates and are suitable
+for the stable 0.8.0 release. Unrun representative private-media,
+real-provider, macOS and long-duration checks remain disclosed limitations and
+prohibit accuracy or universal-compatibility claims.
 
 The static public website may run browser-side CPU diagnostics and link to local
 installation. It must not imply that GitHub Pages runs Python, FFmpeg or private

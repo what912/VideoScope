@@ -100,7 +100,7 @@ Do not publish while any item marked **blocking** is unresolved.
   cloud sync and that provider charges belong to the user's account.
 - [ ] Manually test current Firefox and Chromium private-network prompts from
   the deployed HTTPS origin to the loopback connector.
-- [ ] Confirm the Windows installer workflow builds, audits, installs, starts,
+- [x] Confirm the Windows installer workflow builds, audits, installs, starts,
   checks `/api/health`, shuts down and uninstalls the exact release commit.
 - [x] The owner explicitly deferred paid Windows code signing for this release.
   The unsigned installer keeps the bilingual unknown-publisher warning and an
@@ -301,7 +301,10 @@ Local candidate evidence on 2026-08-11:
 The offline smoke deliberately used `--no-index --no-deps`; it proves the exact
 wheel and workflows, not fresh dependency resolution. Exact clean dependency
 installation, installer install/start/uninstall and cross-platform verification
-remain assigned to GitHub Actions for the candidate commit.
+passed on the candidate commit in GitHub Actions runs
+[31460608033](https://github.com/what912/VideoScope/actions/runs/31460608033)
+and
+[31460607992](https://github.com/what912/VideoScope/actions/runs/31460607992).
 
 ## Manual local Web acceptance
 
@@ -346,9 +349,9 @@ remain assigned to GitHub Actions for the candidate commit.
 ## Human release gate
 
 - [ ] Review [release-audit.md](../release-audit.md).
-- [ ] Confirm no unpublished private media is present in the Git index.
-- [ ] Review the complete staged diff.
-- [ ] Confirm the exact v0.8 candidate CI passes on Windows and Linux, Python
+- [x] Confirm no unpublished private media is present in the Git index.
+- [x] Review the complete staged diff.
+- [x] Confirm the exact v0.8 candidate CI passes on Windows and Linux, Python
   3.11 and 3.12.
 - [ ] Confirm the candidate on a clean macOS environment if macOS is advertised.
 - [x] Enable GitHub private vulnerability reporting.
