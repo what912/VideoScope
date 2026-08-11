@@ -58,6 +58,55 @@
 }
 
 .growth-page__case-list h2,
-.growth-page__record h2 {
+.growth-page__record h2,
+.growth-page__evidence h2 {
   margin-top: 0;
+}
+
+.growth-page__evidence {
+  padding-block: var(--space-6);
+  border-top: 1px solid var(--color-border);
+}
+
+.growth-page__details,
+.growth-page__evidence-list {
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: var(--space-3);
+}
+
+.growth-page__details > div,
+.growth-page__evidence-list li {
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-elevated);
+}
+
+.growth-page__details dt,
+.growth-page__check-status {
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.growth-page__details dd {
+  margin: var(--space-2) 0 0;
+}
+
+.growth-page__evidence-list {
+  list-style-position: inside;
+}
+
+.growth-page__evidence-list li {
+  color: var(--color-text-muted);
+}
+
+.growth-page__evidence-list li:has(.growth-page__check-status) {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
 }

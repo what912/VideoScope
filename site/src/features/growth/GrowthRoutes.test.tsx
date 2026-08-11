@@ -2,6 +2,13 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { TestApp } from "../../app/router";
+import { findCaseStudy } from "../../data/case-studies";
+
+const timelineRescue = findCaseStudy("timeline-rescue");
+
+if (!timelineRescue) {
+  throw new Error("Expected the timeline-rescue case study fixture");
+}
 
 describe("public growth routes", () => {
   beforeEach(() => {
@@ -37,4 +44,34 @@ describe("public growth routes", () => {
 
     expect(screen.getByText("Created by what912")).toBeInTheDocument();
   });
+
+  it.each(["en", "zh-CN"] as const)(
+    "renders localized manifest evidence for timeline-rescue in %s",
+    async (locale) => {
+      render(<TestApp initialEntries={["/examples/timeline-rescue"]} />);
+
+      if (locale === "zh-CN") {
+        fireEvent.change(
+          await screen.findByRole("combobox", { name: "Language" }),
+          { target: { value: locale } },
+        );
+      }
+
+      expect(screen.getByText(timelineRescue.provenance)).toBeVisible();
+      expect(screen.getByText(timelineRescue.authorizationSummary[locale])).toBeVisible();
+      for (const action of timelineRescue.actions) {
+        const expectedCount = timelineRescue.actions.filter(
+          (candidate) => candidate.description[locale] === action.description[locale],
+        ).length;
+        expect(screen.getAllByText(action.description[locale])).toHaveLength(expectedCount);
+      }
+      expect(screen.getByText(timelineRescue.verification.status)).toBeVisible();
+      for (const check of timelineRescue.verification.checks) {
+        expect(screen.getByText(check.summary[locale])).toBeVisible();
+      }
+      for (const limitation of timelineRescue.limitations) {
+        expect(screen.getByText(limitation[locale])).toBeVisible();
+      }
+    },
+  );
 });

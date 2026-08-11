@@ -9,6 +9,14 @@ export interface GrowthCopy {
   readonly positioning: string;
   readonly sourcePreserved: string;
   readonly localBoundary: string;
+  readonly caseEvidence: {
+    readonly provenance: string;
+    readonly source: string;
+    readonly actions: string;
+    readonly verification: string;
+    readonly verificationStatus: string;
+    readonly limitations: string;
+  };
   readonly pages: {
     readonly rescue: PageCopy;
     readonly examples: PageCopy;
@@ -33,6 +41,14 @@ export const growthCopy = {
     positioning: "Rescue a problematic video. Export a verified, publish-ready copy.",
     sourcePreserved: "Your source stays unchanged.",
     localBoundary: "Full processing runs in the paired connector on this computer.",
+    caseEvidence: {
+      provenance: "Source and provenance",
+      source: "Source authorization",
+      actions: "Confirmed actions",
+      verification: "Verification checks",
+      verificationStatus: "Verification status",
+      limitations: "Limitations",
+    },
     pages: {
       rescue: {
         eyebrow: "VIDEO RESCUE",
@@ -88,6 +104,14 @@ export const growthCopy = {
     positioning: "救回存在问题的视频，导出经过验证、可供发布的新副本。",
     sourcePreserved: "源文件始终保持不变。",
     localBoundary: "完整处理在这台电脑已配对的本地连接器中运行。",
+    caseEvidence: {
+      provenance: "来源与出处",
+      source: "来源授权",
+      actions: "已确认的操作",
+      verification: "验证检查",
+      verificationStatus: "验证状态",
+      limitations: "限制",
+    },
     pages: {
       rescue: {
         eyebrow: "视频救援",
