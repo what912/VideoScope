@@ -3,13 +3,87 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 from scripts import smoke_test
+
+
+def test_offline_install_command_denies_index_and_dependency_resolution(
+    tmp_path: Path,
+) -> None:
+    python = tmp_path / "venv" / "python"
+    wheel = tmp_path / "genvideoscope-0.8.0-py3-none-any.whl"
+
+    command = smoke_test.wheel_install_command(
+        python,
+        wheel,
+        offline_installed_dependencies=True,
+    )
+
+    assert command == [
+        str(python),
+        "-m",
+        "pip",
+        "install",
+        "--disable-pip-version-check",
+        "--no-index",
+        "--no-deps",
+        str(wheel),
+    ]
+
+
+def test_clean_install_command_keeps_normal_dependency_resolution(
+    tmp_path: Path,
+) -> None:
+    python = tmp_path / "venv" / "python"
+    wheel = tmp_path / "genvideoscope-0.8.0-py3-none-any.whl"
+
+    command = smoke_test.wheel_install_command(
+        python,
+        wheel,
+        offline_installed_dependencies=False,
+    )
+
+    assert "--no-index" not in command
+    assert "--no-deps" not in command
+    assert command[-1] == str(wheel)
+
+
+def test_offline_dependency_path_exposes_packages_not_workspace_source(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    workspace_source = tmp_path / "src"
+    dependencies = tmp_path / "venv" / "Lib" / "site-packages"
+    workspace_source.mkdir()
+    dependencies.mkdir(parents=True)
+    monkeypatch.setattr(sys, "path", [str(workspace_source), str(dependencies)])
+
+    inherited = smoke_test.installed_dependency_path()
+
+    assert inherited == str(dependencies.resolve())
+    assert str(workspace_source.resolve()) not in inherited
+
+
+def test_smoke_cache_isolated_from_real_user_profile(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.delenv("LOCALAPPDATA", raising=False)
+    monkeypatch.delenv("XDG_CACHE_HOME", raising=False)
+    monkeypatch.delenv("VIDEOSCOPE_CACHE_DIR", raising=False)
+
+    smoke_test.isolate_smoke_cache(tmp_path)
+
+    assert os.environ["LOCALAPPDATA"] == str(tmp_path / "local-app-data")
+    assert os.environ["XDG_CACHE_HOME"] == str(tmp_path / "cache")
+    assert os.environ["VIDEOSCOPE_CACHE_DIR"] == str(tmp_path / "videoscope-cache")
 
 
 def test_smoke_inputs_are_mode_specific_and_offline_generated(

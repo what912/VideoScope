@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 import tempfile
@@ -15,6 +16,7 @@ from rich.console import Console
 from rich.table import Table
 
 MINIMUM_PYTHON = (3, 11)
+CACHE_DIRECTORY_ENVIRONMENT_VARIABLE = "VIDEOSCOPE_CACHE_DIR"
 
 
 class DoctorStatus(StrEnum):
@@ -113,7 +115,12 @@ def check_external_tool(
 
 def check_cache_directory(cache_dir: Path | None = None) -> DoctorCheck:
     """Verify that the platform-appropriate cache directory is writable."""
-    path = cache_dir or Path(user_cache_dir("videoscope", "VideoScope"))
+    configured_cache = os.environ.get(CACHE_DIRECTORY_ENVIRONMENT_VARIABLE)
+    path = cache_dir or (
+        Path(configured_cache)
+        if configured_cache
+        else Path(user_cache_dir("videoscope", "VideoScope"))
+    )
     try:
         path.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryFile(

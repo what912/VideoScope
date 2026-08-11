@@ -54,6 +54,12 @@ describe("encrypted local device account", () => {
     expect(() => client.importEncryptedBackup('{"api_key":"secret"}')).toThrow(
       LocalAccountError,
     );
+    expect(() => client.importEncryptedBackup("x".repeat(16 * 1024 + 1))).toThrow(
+      LocalAccountError,
+    );
+    await expect(
+      client.register("Valid name", "x".repeat(257)),
+    ).rejects.toBeInstanceOf(LocalAccountError);
     expect(localStorage.getItem("videoscope.local-device-account.v1")).toBeNull();
   });
 });

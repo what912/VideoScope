@@ -1,9 +1,11 @@
-# Optional Supabase authentication
+# Optional Supabase cloud authentication
 
 VideoScope's browser analysis is anonymous and local by default. Supabase is
-optional: when either public setting is absent, the site uses an unavailable
-authentication adapter and does not initialize a Supabase client or make an
-authentication request.
+optional. When either public setting is absent, the production site uses its
+encrypted local-device account adapter and does not initialize a Supabase
+client or make an authentication request. The local account supports encrypted
+backup, explicit lock/unlock, and immediate local deletion without a server.
+It does not claim cloud recovery or cross-device synchronization.
 
 ## Browser configuration
 
@@ -96,7 +98,7 @@ After configuring a real project, manually verify:
 Real provider verification requires project credentials and is not part of
 the offline base test suite.
 
-## Account deletion
+## Cloud account deletion
 
 The static browser client cannot safely hold the privileged credentials
 needed to delete an authentication user. There is currently no private,
@@ -105,8 +107,9 @@ Issues are not an acceptable substitute: users must not post email addresses,
 account identifiers, magic links, access tokens, reports, or other private
 account data in an issue.
 
-**Production authentication must remain disabled until the following external
-release blocker is completed:**
+**Production Supabase cloud authentication must remain disabled until the
+following external release blocker is completed. This does not disable the
+encrypted local-device account:**
 
 1. The maintainer selects a private request channel, publishes its exact URL
    in the site Privacy page and this document, and documents who can access

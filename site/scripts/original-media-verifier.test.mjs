@@ -135,6 +135,12 @@ async function writeValidMedia(directory, currentManifest) {
   );
 }
 
+async function useWindowsLineEndings(directory) {
+  const provenancePath = path.join(directory, "PROVENANCE.md");
+  const provenance = await readFile(provenancePath, "utf8");
+  await writeFile(provenancePath, provenance.replace(/\n/gu, "\r\n"), "utf8");
+}
+
 function probeRunner(_file, args) {
   const target = args.at(-1);
   const videoProbe = clone(validVideoProbe);
@@ -286,6 +292,19 @@ describe("original media file and provenance verification", () => {
     const directory = await temporaryDirectory();
     const currentManifest = manifest();
     await writeValidMedia(directory, currentManifest);
+
+    await expect(verifyOriginalMedia({
+      manifest: currentManifest,
+      mediaDirectory: directory,
+      runner: probeRunner,
+    })).resolves.toBeUndefined();
+  });
+
+  it("accepts an otherwise exact provenance file with Windows line endings", async () => {
+    const directory = await temporaryDirectory();
+    const currentManifest = manifest();
+    await writeValidMedia(directory, currentManifest);
+    await useWindowsLineEndings(directory);
 
     await expect(verifyOriginalMedia({
       manifest: currentManifest,
