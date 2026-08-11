@@ -11,12 +11,14 @@
     "preview": "vite preview",
     "media:prepare": "node scripts/prepare-media.mjs",
     "media:verify": "node scripts/verify-media.mjs",
+    "case:generate": "python ../scripts/generate_growth_cases.py --force",
+    "case:verify": "node scripts/case-media-verifier.mjs",
     "media:review": "node scripts/create-media-contact-sheet.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint . --max-warnings=0",
     "typecheck": "tsc --noEmit",
-    "check": "npm run lint && npm run typecheck && npm run test && npm run media:prepare && npm run build && npm run media:verify"
+    "check": "npm run lint && npm run typecheck && npm run test && npm run media:prepare && npm run build && npm run media:verify && npm run case:verify"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.57.4",

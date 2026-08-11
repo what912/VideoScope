@@ -5,13 +5,17 @@ import { defineConfig } from "vite";
 import type { Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 
-const buildOnlyMediaMetadata = ["media-sources.json", "PROVENANCE.md"];
+const buildOnlyPublicMetadata = [
+  ["media", "media-sources.json"],
+  ["media", "PROVENANCE.md"],
+  ["cases", "PROVENANCE.md"],
+];
 
-function removeBuildOnlyMediaMetadata(): Plugin {
+function removeBuildOnlyPublicMetadata(): Plugin {
   let distributionDirectory: string | undefined;
 
   return {
-    name: "videoscope-remove-build-only-media-metadata",
+    name: "videoscope-remove-build-only-public-metadata",
     apply: "build",
     configResolved(config) {
       distributionDirectory = path.resolve(config.root, config.build.outDir);
@@ -22,8 +26,8 @@ function removeBuildOnlyMediaMetadata(): Plugin {
       }
       const resolvedDistributionDirectory = distributionDirectory;
       await Promise.all(
-        buildOnlyMediaMetadata.map((filename) =>
-          rm(path.join(resolvedDistributionDirectory, "media", filename), {
+        buildOnlyPublicMetadata.map((segments) =>
+          rm(path.join(resolvedDistributionDirectory, ...segments), {
             force: true,
           }),
         ),
@@ -34,5 +38,5 @@ function removeBuildOnlyMediaMetadata(): Plugin {
 
 export default defineConfig({
   base: "/VideoScope/",
-  plugins: [react(), removeBuildOnlyMediaMetadata()],
+  plugins: [react(), removeBuildOnlyPublicMetadata()],
 });

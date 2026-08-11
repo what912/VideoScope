@@ -1,12 +1,20 @@
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { access, mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import process from "node:process";
+import { promisify } from "node:util";
+import { fileURLToPath } from "node:url";
 
 import { afterEach, describe, expect, it } from "vitest";
 
 import { auditBuiltRuntimeUrls } from "./build-safety.mjs";
 
 const temporaryDirectories = [];
+const execFileAsync = promisify(execFile);
+const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
+const siteDirectory = path.resolve(scriptDirectory, "..");
+const viteBinary = path.join(siteDirectory, "node_modules", "vite", "bin", "vite.js");
 
 async function temporaryBuild() {
   const directory = await mkdtemp(path.join(os.tmpdir(), "videoscope-build-"));
@@ -68,5 +76,20 @@ describe("built runtime URL audit", () => {
     await expect(auditBuiltRuntimeUrls(directory)).rejects.toThrow(
       /cdn\.example\/diagnostic-poster\.webp/u,
     );
+  });
+
+  it("excludes case provenance from the built public site", async () => {
+    const directory = await mkdtemp(path.join(os.tmpdir(), "videoscope-case-build-"));
+    temporaryDirectories.push(directory);
+
+    await execFileAsync(process.execPath, [viteBinary, "build", "--outDir", directory], {
+      cwd: siteDirectory,
+      windowsHide: true,
+    });
+
+    await expect(access(path.join(directory, "cases", "PROVENANCE.md"))).rejects
+      .toMatchObject({ code: "ENOENT" });
+    await expect(access(path.join(directory, "cases", "timeline-rescue", "before.mp4")))
+      .resolves.toBeUndefined();
   });
 });
