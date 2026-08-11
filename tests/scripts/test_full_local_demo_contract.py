@@ -35,6 +35,10 @@ GSAP_VERSION = "3.15.0"
 GSAP_SHA256 = "92bb9a96476f983d212a2bc4f54c889039c1696dd4461d40a736860938570fbb"
 
 
+def _js_number(value: float) -> str:
+    return f"{value:g}"
+
+
 def test_composition_is_offline_deterministic_and_registered() -> None:
     html = COMPOSITION_PATH.read_text(encoding="utf-8")
     assert 'data-composition-id="videoscope-full-local-demo"' in html
@@ -71,6 +75,73 @@ def test_all_scenes_have_transition_and_content_animation() -> None:
         assert f'animateScene("{scene_id}"' in html
     assert html.count('data-transition-id="') == 6
     assert "transitionBetween(" in html
+
+
+def test_composition_canvas_and_scene_calls_are_bound_to_contract() -> None:
+    contract = load_demo_contract(CONTRACT_PATH)
+    html = COMPOSITION_PATH.read_text(encoding="utf-8")
+
+    assert f'data-duration="{_js_number(contract.duration_seconds)}"' in html
+    assert f'data-fps="{contract.frame_rate}"' in html
+    assert f'data-width="{contract.width}"' in html
+    assert f'data-height="{contract.height}"' in html
+    for scene in contract.scenes:
+        start = _js_number(scene.start_seconds)
+        duration = _js_number(scene.end_seconds - scene.start_seconds)
+        assert f"{scene.scene_id}: [{start}, {duration}]" in html
+        assert f'animateScene("{scene.scene_id}", {start}, {duration})' in html
+
+
+def test_privacy_overlay_is_contract_bound_and_half_open() -> None:
+    contract = load_demo_contract(CONTRACT_PATH)
+    html = COMPOSITION_PATH.read_text(encoding="utf-8")
+    start = _js_number(contract.privacy.start_seconds)
+    end = _js_number(contract.privacy.end_seconds)
+    duration = _js_number(contract.privacy.end_seconds - contract.privacy.start_seconds)
+    left, top, right, bottom = contract.privacy.box
+
+    overlay = re.search(r'<aside id="privacy-overlay"[^>]+></aside>', html)
+    assert overlay is not None
+    assert 'class="clip privacy-panel"' in overlay.group(0)
+    assert f'data-start="{start}"' in overlay.group(0)
+    assert f'data-duration="{duration}"' in overlay.group(0)
+    assert f'data-contract-end="{end}"' in overlay.group(0)
+    assert 'data-end-exclusive="true"' in overlay.group(0)
+    assert "data-layout-allow-occlusion" in overlay.group(0)
+    low_information_scene = re.search(
+        r'<section id="scene-low_information"[^>]+></section>', html
+    )
+    assert low_information_scene is not None
+    assert "data-layout-allow-occlusion" in low_information_scene.group(0)
+    assert html.index(overlay.group(0)) > html.index('id="scene-verified_ending"')
+    assert html.index(overlay.group(0)) < html.index('class="observatory-chrome"')
+
+    css = re.search(r"#privacy-overlay\s*\{(?P<body>[^}]+)\}", html)
+    assert css is not None
+    css_body = css.group("body")
+    assert f"left: {_js_number(left * 100)}%;" in css_body
+    assert f"top: {_js_number(top * 100)}%;" in css_body
+    assert f"width: {_js_number((right - left) * 100)}%;" in css_body
+    assert f"height: {_js_number((bottom - top) * 100)}%;" in css_body
+    assert "opacity: 0;" in css_body
+    assert "visibility: hidden;" in css_body
+
+    assert (
+        f"const PRIVACY_WINDOW = Object.freeze({{ start: {start}, end: {end}, "
+        "endExclusive: true });"
+    ) in html
+    assert (
+        'masterTimeline.set("#privacy-overlay", { autoAlpha: 1 }, '
+        "PRIVACY_WINDOW.start);"
+    ) in html
+    assert (
+        'masterTimeline.set("#privacy-overlay", { autoAlpha: 0 }, PRIVACY_WINDOW.end);'
+    ) in html
+    assert "[25, 32)" in html
+    assert "privacy-panel animate-stage" not in html
+
+    for identifier in contract.fictional_identifiers:
+        assert html.count(identifier) == 1
 
 
 def test_contract_has_exact_timeline_and_privacy_ranges() -> None:

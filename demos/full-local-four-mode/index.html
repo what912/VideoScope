@@ -433,10 +433,6 @@
 
       .privacy-panel {
         position: absolute;
-        left: 58%;
-        top: 18%;
-        width: 36%;
-        height: 60%;
         display: flex;
         flex-direction: column;
         justify-content: center;
@@ -444,6 +440,16 @@
         overflow: hidden;
         border: 2px solid var(--coral);
         background: rgba(21, 26, 29, 0.96);
+      }
+
+      #privacy-overlay {
+        left: 58%;
+        top: 18%;
+        width: 36%;
+        height: 60%;
+        z-index: 20;
+        opacity: 0;
+        visibility: hidden;
       }
 
       .privacy-panel svg {
@@ -648,10 +654,12 @@
       <section id="scene-clean_hook" class="scene is-first" data-scene-id="clean_hook" data-layout-allow-overlap></section>
       <section id="scene-rescue_evidence" class="scene" data-scene-id="rescue_evidence" data-layout-allow-overlap></section>
       <section id="scene-useful_tutorial" class="scene" data-scene-id="useful_tutorial" data-layout-allow-overlap></section>
-      <section id="scene-low_information" class="scene" data-scene-id="low_information" data-layout-allow-overlap></section>
+      <section id="scene-low_information" class="scene" data-scene-id="low_information" data-layout-allow-overlap data-layout-allow-occlusion></section>
       <section id="scene-privacy_zone" class="scene" data-scene-id="privacy_zone" data-layout-allow-overlap></section>
       <section id="scene-motion_retake" class="scene" data-scene-id="motion_retake" data-layout-allow-overlap></section>
       <section id="scene-verified_ending" class="scene" data-scene-id="verified_ending" data-layout-allow-overlap></section>
+
+      <aside id="privacy-overlay" class="clip privacy-panel" data-start="25" data-duration="7" data-contract-end="32" data-end-exclusive="true" data-layout-allow-occlusion aria-label="Fictional privacy review data / 虚构隐私复核数据"></aside>
 
       <div class="observatory-chrome" aria-hidden="true">
         <div class="topbar">
@@ -758,6 +766,8 @@
         motion_retake: [32, 4],
         verified_ending: [36, 6]
       };
+      // The privacy overlay follows the contract's half-open interval [25, 32).
+      const PRIVACY_WINDOW = Object.freeze({ start: 25, end: 32, endExclusive: true });
 
       function gridSvg(extraClass) {
         let lines = "";
@@ -865,12 +875,7 @@
             '<h1 class="title animate-title">' + copy.title + "</h1>" +
             '<div class="title-zh animate-subtitle">' + copy.titleZh + "</div>" +
             '<div class="lead animate-lead">' + copy.lead + "</div>" +
-            "</div>" +
-            '<aside class="privacy-panel animate-stage">' +
-            privacyOutlineSvg() +
-            '<h2>' + copy.panelTitle + "</h2>" +
-            '<ul class="identifier-list"><li>' + copy.identifiers[0] + "</li><li>" + copy.identifiers[1] + "</li><li>" + copy.identifiers[2] + "</li></ul>" +
-            '<div class="tone-label">' + copy.tone + "</div></aside>";
+            "</div>";
         } else if (sceneId === "motion_retake") {
           stage = '<div class="motion-stage">' +
             '<div class="reference-grid animate-stage">' + referenceSvg() + "</div>" +
@@ -892,6 +897,14 @@
         scene.innerHTML = gridSvg(sceneId === "motion_retake" ? "stable-grid" : "") +
           '<div class="scene-content">' + stage + "</div>" +
           progressBar();
+      }
+
+      function renderPrivacyOverlay() {
+        const copy = SCENE_COPY.privacy_zone;
+        document.getElementById("privacy-overlay").innerHTML = privacyOutlineSvg() +
+          '<h2>' + copy.panelTitle + "</h2>" +
+          '<ul class="identifier-list"><li>' + copy.identifiers[0] + "</li><li>" + copy.identifiers[1] + "</li><li>" + copy.identifiers[2] + "</li></ul>" +
+          '<div class="tone-label">' + copy.tone + "</div>";
       }
 
       function timelineSvg() {
@@ -919,6 +932,7 @@
       }
 
       Object.keys(SCENE_TIMINGS).forEach(renderScene);
+      renderPrivacyOverlay();
       document.getElementById("brand-copy").textContent = SCENE_COPY.global.brand;
       document.getElementById("format-copy").textContent = SCENE_COPY.global.format;
       document.getElementById("local-copy").textContent = SCENE_COPY.global.local;
@@ -997,6 +1011,9 @@
       animateScene("motion_retake", 32, 4);
       transitionBetween("motion_retake", "verified_ending", 36);
       animateScene("verified_ending", 36, 6);
+
+      masterTimeline.set("#privacy-overlay", { autoAlpha: 1 }, PRIVACY_WINDOW.start);
+      masterTimeline.set("#privacy-overlay", { autoAlpha: 0 }, PRIVACY_WINDOW.end);
 
       if (!REDUCED_MOTION) {
         masterTimeline.fromTo(
