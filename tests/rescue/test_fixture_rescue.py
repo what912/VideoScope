@@ -575,7 +575,9 @@ def test_every_real_rescue_fixture_matches_manifest_structural_outcome(
     )
 
     assert entry["acceptance"]["outcome_scope"] == "faithful_structural"
-    assert result.status.value == entry["acceptance"]["expected_outcome"]
+    assert result.status.value == entry["acceptance"]["expected_outcome"], (
+        _verification_diagnostics(result)
+    )
     assert result.improved_path is None
     assert sha256_file(source) == source_hash
     _assert_duration_within_manifest(result, filename)
