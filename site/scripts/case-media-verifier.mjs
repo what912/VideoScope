@@ -16,6 +16,7 @@ const SHA256 = /^[a-f0-9]{64}$/u;
 const MAXIMUM_WIDTH = 1280;
 const MAXIMUM_HEIGHT = 720;
 const MAXIMUM_FRAME_RATE = 30;
+const MAXIMUM_DURATION_SECONDS = 25;
 const PROVENANCE_FILE = "PROVENANCE.md";
 // ffprobe reports decimal durations, so preserve an inclusive one-frame bound.
 const DURATION_COMPARISON_EPSILON_SECONDS = 0.000001;
@@ -292,21 +293,24 @@ async function probeMedia(filePath, runner) {
   // multiplexed variants instead of silently validating only their primary stream.
   const inventory = await runProbe(filePath, runner, [
     "-v", "error",
-    "-select_streams", "v",
-    "-show_entries", "stream=codec_type",
+    "-show_entries", "stream=codec_type,codec_name:format=format_name",
     "-of", "json",
     filePath,
   ]);
-  if (!Array.isArray(inventory.streams) || inventory.streams.length !== 1) {
+  const videoStreams = Array.isArray(inventory.streams)
+    ? inventory.streams.filter((stream) => stream?.codec_type === "video")
+    : [];
+  if (videoStreams.length !== 1) {
     fail("Case media asset must contain exactly one video stream.");
   }
-  return runProbe(filePath, runner, [
+  const primaryVideo = await runProbe(filePath, runner, [
     "-v", "error",
     "-select_streams", "v:0",
     "-show_entries", "stream=codec_type,codec_name,pix_fmt,width,height,avg_frame_rate:format=duration",
     "-of", "json",
     filePath,
   ]);
+  return { inventory, primaryVideo };
 }
 
 function parseFrameRate(value) {
@@ -319,11 +323,15 @@ function parseFrameRate(value) {
 }
 
 function videoMetadata(probe) {
-  const streams = Array.isArray(probe?.streams)
-    ? probe.streams.filter((item) => item?.codec_name !== undefined && item.codec_type !== "audio")
+  const streams = Array.isArray(probe?.primaryVideo?.streams)
+    ? probe.primaryVideo.streams.filter((item) => item?.codec_type === "video")
     : [];
+  const inventoryStreams = Array.isArray(probe?.inventory?.streams) ? probe.inventory.streams : [];
+  const audioCodecs = inventoryStreams
+    .filter((item) => item?.codec_type === "audio")
+    .map((item) => item?.codec_name);
   const [stream] = streams;
-  const duration = Number(probe?.format?.duration);
+  const duration = Number(probe?.primaryVideo?.format?.duration);
   if (streams.length !== 1 || !stream || !Number.isFinite(duration) || duration < 0) {
     fail("Case comparison video metadata is invalid.");
   }
@@ -334,12 +342,14 @@ function videoMetadata(probe) {
     height: stream.height,
     frameRate: parseFrameRate(stream.avg_frame_rate),
     duration,
+    audioCodecs,
+    containerFormat: probe?.inventory?.format?.format_name,
   };
 }
 
 function imageMetadata(probe) {
-  const streams = Array.isArray(probe?.streams)
-    ? probe.streams.filter((item) => item?.codec_name !== undefined && item.codec_type !== "audio")
+  const streams = Array.isArray(probe?.primaryVideo?.streams)
+    ? probe.primaryVideo.streams.filter((item) => item?.codec_type === "video")
     : [];
   const [stream] = streams;
   if (
@@ -352,7 +362,14 @@ function imageMetadata(probe) {
 }
 
 function verifyComparisonMetadata(metadata, item, expectedDimensions) {
-  if (metadata.codec !== "h264" || metadata.pixelFormat !== "yuv420p") {
+  const containerFormats = typeof metadata.containerFormat === "string"
+    ? metadata.containerFormat.split(",").map((format) => format.trim().toLowerCase())
+    : [];
+  if (
+    metadata.codec !== "h264" || metadata.pixelFormat !== "yuv420p" ||
+    !containerFormats.includes("mp4") || metadata.audioCodecs.length === 0 ||
+    metadata.audioCodecs.some((codec) => codec !== "aac")
+  ) {
     fail("Case comparison video has an unsupported format.");
   }
   if (
@@ -427,10 +444,17 @@ async function verifySameRangeMedia(item, directory, runner) {
   verifyComparisonMetadata(before, item, item.media);
   verifyComparisonMetadata(after, item, item.afterDimensions);
   const tolerance = 1 / item.media.frameRate;
+  const expectedDuration = item.comparison.endSeconds - item.comparison.startSeconds;
+  if (
+    before.duration > MAXIMUM_DURATION_SECONDS + DURATION_COMPARISON_EPSILON_SECONDS ||
+    after.duration > MAXIMUM_DURATION_SECONDS + DURATION_COMPARISON_EPSILON_SECONDS ||
+    expectedDuration > MAXIMUM_DURATION_SECONDS + DURATION_COMPARISON_EPSILON_SECONDS
+  ) {
+    fail("Case comparison video exceeds the public media limits.");
+  }
   if (Math.abs(before.duration - after.duration) > tolerance + DURATION_COMPARISON_EPSILON_SECONDS) {
     fail("Case comparison media must cover the same duration.");
   }
-  const expectedDuration = item.comparison.endSeconds - item.comparison.startSeconds;
   if (
     Math.abs(before.duration - expectedDuration) > tolerance + DURATION_COMPARISON_EPSILON_SECONDS ||
     Math.abs(after.duration - expectedDuration) > tolerance + DURATION_COMPARISON_EPSILON_SECONDS

@@ -16,6 +16,7 @@ const CASE_SLUG = "demonstration-case";
 const CASE_ROOT = `/VideoScope/cases/${CASE_SLUG}`;
 const comparison = { startSeconds: 2, endSeconds: 8 };
 const media = { durationSeconds: 12, width: 640, height: 360, frameRate: 24 };
+const MP4_FORMAT_NAME = "mov,mp4,m4a,3gp,3g2,mj2";
 
 function sha256(contents) {
   return createHash("sha256").update(contents).digest("hex");
@@ -85,11 +86,39 @@ async function temporaryBuiltCaseDirectory({ unexpected = false } = {}) {
   return directory;
 }
 
-function mediaProbe({ duration = 6, width = 640, height = 360, frameRate = "24/1" } = {}) {
+function mediaProbe({
+  duration = 6,
+  width = 640,
+  height = 360,
+  frameRate = "24/1",
+  includeAudio = true,
+  audioCodec = "aac",
+  formatName = MP4_FORMAT_NAME,
+} = {}) {
   return {
-    streams: [{ codec_name: "h264", pix_fmt: "yuv420p", width, height, avg_frame_rate: frameRate }],
-    format: { duration: String(duration) },
+    streams: [
+      {
+        codec_type: "video",
+        codec_name: "h264",
+        pix_fmt: "yuv420p",
+        width,
+        height,
+        avg_frame_rate: frameRate,
+      },
+      ...(includeAudio ? [{ codec_type: "audio", codec_name: audioCodec }] : []),
+    ],
+    format: { duration: String(duration), format_name: formatName },
   };
+}
+
+function mediaProbeForArgs(args, overrides = {}) {
+  const probe = mediaProbe(overrides);
+  const selectorIndex = args.indexOf("-select_streams");
+  const selector = selectorIndex === -1 ? undefined : args[selectorIndex + 1];
+  if (selector === "v" || selector === "v:0") {
+    return { ...probe, streams: probe.streams.filter((stream) => stream.codec_type === "video") };
+  }
+  return probe;
 }
 
 async function fakeProbe(_executable, args) {
@@ -101,12 +130,12 @@ async function fakeProbe(_executable, args) {
   if (String(args.at(-1)).endsWith("poster.webp")) {
     return {
       stdout: JSON.stringify({
-        streams: [{ codec_name: "webp", width: 640, height: 360, avg_frame_rate: "0/1" }],
-        format: { duration: "0" },
+        streams: [{ codec_type: "video", codec_name: "webp", width: 640, height: 360, avg_frame_rate: "0/1" }],
+        format: { duration: "0", format_name: "webp_pipe" },
       }),
     };
   }
-  return { stdout: JSON.stringify(mediaProbe()) };
+  return { stdout: JSON.stringify(mediaProbeForArgs(args)) };
 }
 
 afterEach(async () => {
@@ -172,7 +201,7 @@ describe("case media verification", () => {
     const mismatchedDurationProbe = async (_executable, args) => {
       if (args.includes("-show_frames")) return fakeProbe(_executable, args);
       const isAfter = String(args.at(-1)).endsWith("after.mp4");
-      return { stdout: JSON.stringify(mediaProbe({ duration: isAfter ? 5 : 6 })) };
+      return { stdout: JSON.stringify(mediaProbeForArgs(args, { duration: isAfter ? 5 : 6 })) };
     };
 
     await expect(verifyCaseMedia({
@@ -194,7 +223,7 @@ describe("case media verification", () => {
       }
       if (String(args.at(-1)).endsWith("poster.webp")) return fakeProbe(_executable, args);
       const isAfter = String(args.at(-1)).endsWith("after.mp4");
-      return { stdout: JSON.stringify(mediaProbe({ duration: isAfter ? 6.041667 : 6 })) };
+      return { stdout: JSON.stringify(mediaProbeForArgs(args, { duration: isAfter ? 6.041667 : 6 })) };
     };
 
     await expect(verifyCaseMedia({
@@ -217,13 +246,18 @@ describe("case media verification", () => {
       if (String(args.at(-1)).endsWith("poster.webp")) {
         return {
           stdout: JSON.stringify({
-            streams: [{ codec_name: "webp", width: 406, height: 720, avg_frame_rate: "0/0" }],
-            format: { duration: "0" },
+            streams: [{ codec_type: "video", codec_name: "webp", width: 406, height: 720, avg_frame_rate: "0/0" }],
+            format: { duration: "0", format_name: "webp_pipe" },
           }),
         };
       }
       const isAfter = String(args.at(-1)).endsWith("after.mp4");
-      return { stdout: JSON.stringify(mediaProbe({ width: isAfter ? 406 : 640, height: isAfter ? 720 : 360 })) };
+      return {
+        stdout: JSON.stringify(mediaProbeForArgs(args, {
+          width: isAfter ? 406 : 640,
+          height: isAfter ? 720 : 360,
+        })),
+      };
     };
 
     await expect(verifyCaseMedia({ manifest, directory, runner: verticalAfterProbe }))
@@ -245,14 +279,14 @@ describe("case media verification", () => {
       if (String(args.at(-1)).endsWith("poster.webp")) {
         return {
           stdout: JSON.stringify({
-            streams: [{ codec_name: "webp", width: 406, height: 720, avg_frame_rate: "0/0" }],
-            format: { duration: "0" },
+            streams: [{ codec_type: "video", codec_name: "webp", width: 406, height: 720, avg_frame_rate: "0/0" }],
+            format: { duration: "0", format_name: "webp_pipe" },
           }),
         };
       }
       const isAfter = String(args.at(-1)).endsWith("after.mp4");
       return {
-        stdout: JSON.stringify(mediaProbe({
+        stdout: JSON.stringify(mediaProbeForArgs(args, {
           width: isAfter ? 406 : 640,
           height: isAfter ? 720 : 360,
         })),
@@ -275,10 +309,81 @@ describe("case media verification", () => {
     const directory = await temporaryCaseDirectory();
     const unsupportedProbe = async (_executable, args) => {
       if (args.includes("-show_frames")) return fakeProbe(_executable, args);
-      return { stdout: JSON.stringify(mediaProbe({ width: 1281, frameRate: "31/1" })) };
+      return {
+        stdout: JSON.stringify(mediaProbeForArgs(args, { width: 1281, frameRate: "31/1" })),
+      };
     };
 
     await expect(verifyCaseMedia({ manifest: validManifest(), directory, runner: unsupportedProbe }))
+      .rejects.toThrow("Case comparison video exceeds the public media limits.");
+  });
+
+  it("rejects comparison media without an audio stream", async () => {
+    const directory = await temporaryCaseDirectory();
+    const missingAudioProbe = async (_executable, args) => {
+      if (args.includes("-show_frames") || String(args.at(-1)).endsWith("poster.webp")) {
+        return fakeProbe(_executable, args);
+      }
+      return { stdout: JSON.stringify(mediaProbeForArgs(args, { includeAudio: false })) };
+    };
+
+    await expect(verifyCaseMedia({ manifest: validManifest(), directory, runner: missingAudioProbe }))
+      .rejects.toThrow("Case comparison video has an unsupported format.");
+  });
+
+  it("rejects comparison media with a non-AAC audio stream", async () => {
+    const directory = await temporaryCaseDirectory();
+    const nonAacProbe = async (_executable, args) => {
+      if (args.includes("-show_frames") || String(args.at(-1)).endsWith("poster.webp")) {
+        return fakeProbe(_executable, args);
+      }
+      return { stdout: JSON.stringify(mediaProbeForArgs(args, { audioCodec: "opus" })) };
+    };
+
+    await expect(verifyCaseMedia({ manifest: validManifest(), directory, runner: nonAacProbe }))
+      .rejects.toThrow("Case comparison video has an unsupported format.");
+  });
+
+  it("rejects comparison media in a non-MP4 container and requests the container inventory", async () => {
+    const directory = await temporaryCaseDirectory();
+    const calls = [];
+    const nonMp4Probe = async (_executable, args) => {
+      calls.push(args);
+      if (args.includes("-show_frames") || String(args.at(-1)).endsWith("poster.webp")) {
+        return fakeProbe(_executable, args);
+      }
+      return { stdout: JSON.stringify(mediaProbeForArgs(args, { formatName: "matroska,webm" })) };
+    };
+
+    await expect(verifyCaseMedia({ manifest: validManifest(), directory, runner: nonMp4Probe }))
+      .rejects.toThrow("Case comparison video has an unsupported format.");
+    expect(calls.some((args) => {
+      const entries = args[args.indexOf("-show_entries") + 1];
+      return typeof entries === "string" && entries.includes("format=format_name") &&
+        !args.includes("-select_streams");
+    })).toBe(true);
+  });
+
+  it("rejects comparison media and its declared range when they exceed 25 seconds", async () => {
+    const directory = await temporaryCaseDirectory();
+    const manifest = validManifest({
+      comparison: { startSeconds: 1, endSeconds: 27 },
+      media: { ...media, durationSeconds: 30 },
+    });
+    const longDurationProbe = async (_executable, args) => {
+      if (args.includes("-show_frames")) {
+        const interval = args[args.indexOf("-read_intervals") + 1];
+        return {
+          stdout: JSON.stringify({
+            frames: [{ best_effort_timestamp_time: interval === "0%+#1" ? "0" : String(26 - 1 / 24) }],
+          }),
+        };
+      }
+      if (String(args.at(-1)).endsWith("poster.webp")) return fakeProbe(_executable, args);
+      return { stdout: JSON.stringify(mediaProbeForArgs(args, { duration: 26 })) };
+    };
+
+    await expect(verifyCaseMedia({ manifest, directory, runner: longDurationProbe }))
       .rejects.toThrow("Case comparison video exceeds the public media limits.");
   });
 
@@ -289,12 +394,12 @@ describe("case media verification", () => {
       if (String(args.at(-1)).endsWith("poster.webp")) {
         return {
           stdout: JSON.stringify({
-            streams: [{ codec_name: "webp", width: 640, height: 360, avg_frame_rate: "0/0" }],
-            format: { duration: "0" },
+            streams: [{ codec_type: "video", codec_name: "webp", width: 640, height: 360, avg_frame_rate: "0/0" }],
+            format: { duration: "0", format_name: "webp_pipe" },
           }),
         };
       }
-      return { stdout: JSON.stringify(mediaProbe()) };
+      return { stdout: JSON.stringify(mediaProbeForArgs(args)) };
     };
 
     await expect(verifyCaseMedia({ manifest: validManifest(), directory, runner: imageProbe }))
@@ -323,7 +428,7 @@ describe("case media verification", () => {
     const directory = await temporaryCaseDirectory();
     const missingLastFrameProbe = async (_executable, args) => {
       if (args.includes("-show_frames")) return { stdout: JSON.stringify({ frames: [] }) };
-      return { stdout: JSON.stringify(mediaProbe()) };
+      return { stdout: JSON.stringify(mediaProbeForArgs(args)) };
     };
 
     await expect(verifyCaseMedia({ manifest: validManifest(), directory, runner: missingLastFrameProbe }))
@@ -381,8 +486,15 @@ describe("case media verification", () => {
       calls.push(args);
       if (args.includes("-show_frames")) return fakeProbe(_executable, args);
       if (String(args.at(-1)).endsWith("poster.webp")) return fakeProbe(_executable, args);
-      if (args[args.indexOf("-select_streams") + 1] === "v") {
-        return { stdout: JSON.stringify({ streams: [mediaProbe().streams[0]] }) };
+      const selectorIndex = args.indexOf("-select_streams");
+      const selector = selectorIndex === -1 ? undefined : args[selectorIndex + 1];
+      if (selector === "v" || selector === "v:0") {
+        return {
+          stdout: JSON.stringify({
+            streams: [mediaProbe().streams[0]],
+            format: { duration: "6", format_name: MP4_FORMAT_NAME },
+          }),
+        };
       }
       return {
         stdout: JSON.stringify({
@@ -390,7 +502,7 @@ describe("case media verification", () => {
             { codec_type: "audio", codec_name: "aac" },
             mediaProbe().streams[0],
           ],
-          format: { duration: "6" },
+          format: { duration: "6", format_name: MP4_FORMAT_NAME },
         }),
       };
     };
@@ -413,17 +525,28 @@ describe("case media verification", () => {
       if (args.includes("-show_frames") || String(args.at(-1)).endsWith("poster.webp")) {
         return fakeProbe(_executable, args);
       }
-      if (args[args.indexOf("-select_streams") + 1] === "v") {
+      const selectorIndex = args.indexOf("-select_streams");
+      const selector = selectorIndex === -1 ? undefined : args[selectorIndex + 1];
+      if (selector !== "v:0") {
         return {
           stdout: JSON.stringify({
             streams: [
               mediaProbe().streams[0],
-              { codec_name: "vp9", pix_fmt: "yuv444p", width: 1920, height: 1080, avg_frame_rate: "60/1" },
+              {
+                codec_type: "video",
+                codec_name: "vp9",
+                pix_fmt: "yuv444p",
+                width: 1920,
+                height: 1080,
+                avg_frame_rate: "60/1",
+              },
+              { codec_type: "audio", codec_name: "aac" },
             ],
+            format: { duration: "6", format_name: MP4_FORMAT_NAME },
           }),
         };
       }
-      return { stdout: JSON.stringify(mediaProbe()) };
+      return { stdout: JSON.stringify(mediaProbeForArgs(args)) };
     };
 
     await expect(verifyCaseMedia({ manifest: validManifest(), directory, runner: multiVideoProbe }))
