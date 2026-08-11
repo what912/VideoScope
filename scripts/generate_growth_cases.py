@@ -70,6 +70,7 @@ _ASSET_NAMES = {
     "poster": "poster.webp",
     "publicReport": "public-report.json",
 }
+_PROVENANCE_FILENAME = "PROVENANCE.md"
 _CASE_ORDER = {
     "timeline-rescue": 0,
     "measured-improvement": 1,
@@ -1105,9 +1106,14 @@ def generate_cases(
         final_manifest = json.loads(staging_manifest.read_text(encoding="utf-8"))
         if len(final_manifest["cases"]) != len(CASE_SPECS):
             raise CaseGenerationError("Generated manifest does not contain three cases")
+        provenance = target / _PROVENANCE_FILENAME
+        if provenance.is_file():
+            shutil.copy2(provenance, staging / _PROVENANCE_FILENAME)
         shutil.rmtree(private_root)
         shutil.rmtree(staging_manifest.parent)
         allowed_names = {spec.slug for spec in CASE_SPECS}
+        if (staging / _PROVENANCE_FILENAME).is_file():
+            allowed_names.add(_PROVENANCE_FILENAME)
         if {item.name for item in staging.iterdir()} != allowed_names:
             raise CaseGenerationError("Staging contained an unexpected public artifact")
         old_manifest = manifest_path.read_bytes() if manifest_path.is_file() else None

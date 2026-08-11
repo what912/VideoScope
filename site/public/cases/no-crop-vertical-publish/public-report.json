@@ -83,8 +83,8 @@
     }
   ],
   "output_sha256": {
-    "afterVideo": "92b4d9e3c11e29ab213d370b4d697799d0fbe9b5a4de92787dbb45ff7ee8eeb6",
-    "beforeVideo": "e3cad7f1c6c69047fb702bb38bb4b1a1be4729e4966646df727196475d52c4cc",
+    "afterVideo": "2804883f2288b8c46ba07eefc1b189f1aedcc58db447e4c6ab7dd31fa9b81188",
+    "beforeVideo": "a3d43cd46b492b2d42c77908afa83343e9e3b299e341e10c369e4f6659699bf3",
     "poster": "0985cad5ef9d6b352402e372a262165662a703305582bc4e25701de5eda4020a"
   },
   "schema_version": "1.0",
@@ -286,7 +286,7 @@
   },
   "versions": {
     "configuration": "growth-case-generator-v1",
-    "ffmpeg": "ffmpeg version 9.0-full_build-www.gyan.dev Copyright (c) 2000-2026 the FFmpeg developers",
+    "ffmpeg": "ffmpeg version 8.1.2-essentials_build-www.gyan.dev Copyright (c) 2000-2026 the FFmpeg developers",
     "platform": "Windows-AMD64",
     "videoscope": "0.8.0"
   }

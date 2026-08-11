@@ -14,7 +14,7 @@
       "workflow": "video-rescue"
     },
     {
-      "actionId": "rescue_action_c7491664e311c957953e9eb97a1720301e3afc5b2864fc149a9c7b532b811807",
+      "actionId": "rescue_action_119c9371128256b5c72a02329b34320377b75200ba48494f527bfe0c557639c2",
       "description": {
         "en": "Rebuild timeline timestamps around observed discontinuities.",
         "zh-CN": "执行已确认的 rebuild_timestamps 本地处理。"
@@ -110,9 +110,9 @@
     }
   ],
   "output_sha256": {
-    "afterVideo": "d90f7dd969e139834a73bd324eeb58e7207367206701d892545821b7fb97bcad",
-    "beforeVideo": "37b08531889bd657141fbf6b3a66a3da9b1e14fdffd217b64c67f4675586342c",
-    "poster": "05bbf2b1e2b2efd9b2e4b95317215085a7ca049b1c778e666c6bcab164af7698"
+    "afterVideo": "286019456f7afa6ee02a1a0a8b3c7da68eee9c79fa3fc5857f926a435a12390a",
+    "beforeVideo": "49273bb307354551669ec4e40ab45509b1c2dcf206f3b19bacb11ef7887b05c7",
+    "poster": "36526ecbf63307142f60ecfa73f3c9bb7517abc62cdce6a97b856397c5b10936"
   },
   "schema_version": "1.0",
   "verification": {
@@ -183,7 +183,7 @@
         "checkId": "rescue:faithful:audio_loudness",
         "measured": {
           "applicable": false,
-          "observed_lufs": -21.83,
+          "observed_lufs": -21.84,
           "target_lufs": null,
           "tolerance_lu": 1.0
         },
@@ -225,11 +225,11 @@
         "measured": {
           "applicable": false,
           "measurement_method": "first_usable_packet_timestamp",
-          "observed_residual_seconds": -0.021333000000000005,
+          "observed_residual_seconds": -0.021008,
           "planned_offset_seconds": null,
           "planned_shift_seconds": null,
           "tolerance_seconds": 0.04,
-          "tool_version": "ffprobe version 9.0-full_build-www.gyan.dev Copyright (c) 2007-2026 the FFmpeg developers"
+          "tool_version": "ffprobe version 8.1.2-essentials_build-www.gyan.dev Copyright (c) 2007-2026 the FFmpeg developers"
         },
         "status": "passed",
         "summary": {
@@ -494,7 +494,7 @@
       {
         "checkId": "public-media-decode",
         "measured": {
-          "afterVideoDurationSeconds": 6.041667,
+          "afterVideoDurationSeconds": 6.0,
           "afterVideoHeight": 360,
           "afterVideoWidth": 640,
           "beforeVideoDurationSeconds": 6.0,
@@ -512,7 +512,7 @@
   },
   "versions": {
     "configuration": "growth-case-generator-v1",
-    "ffmpeg": "ffmpeg version 9.0-full_build-www.gyan.dev Copyright (c) 2000-2026 the FFmpeg developers",
+    "ffmpeg": "ffmpeg version 8.1.2-essentials_build-www.gyan.dev Copyright (c) 2000-2026 the FFmpeg developers",
     "platform": "Windows-AMD64",
     "videoscope": "0.8.0"
   }

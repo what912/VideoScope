@@ -16,7 +16,7 @@
           "workflow": "video-rescue"
         },
         {
-          "actionId": "rescue_action_c7491664e311c957953e9eb97a1720301e3afc5b2864fc149a9c7b532b811807",
+          "actionId": "rescue_action_119c9371128256b5c72a02329b34320377b75200ba48494f527bfe0c557639c2",
           "description": {
             "en": "Rebuild timeline timestamps around observed discontinuities.",
             "zh-CN": "执行已确认的 rebuild_timestamps 本地处理。"
@@ -137,10 +137,10 @@
         "python scripts/generate_growth_cases.py --force"
       ],
       "sha256": {
-        "afterVideo": "d90f7dd969e139834a73bd324eeb58e7207367206701d892545821b7fb97bcad",
-        "beforeVideo": "37b08531889bd657141fbf6b3a66a3da9b1e14fdffd217b64c67f4675586342c",
-        "poster": "05bbf2b1e2b2efd9b2e4b95317215085a7ca049b1c778e666c6bcab164af7698",
-        "publicReport": "869a2954e97076c943de07ede63d09eb6b55959ea6676b8393c753237ccf6ea5"
+        "afterVideo": "286019456f7afa6ee02a1a0a8b3c7da68eee9c79fa3fc5857f926a435a12390a",
+        "beforeVideo": "49273bb307354551669ec4e40ab45509b1c2dcf206f3b19bacb11ef7887b05c7",
+        "poster": "36526ecbf63307142f60ecfa73f3c9bb7517abc62cdce6a97b856397c5b10936",
+        "publicReport": "f907f930f4ac29edcd1c7c020b95e69f9357b0fb26aec768ac56f1f2b613e890"
       },
       "slug": "timeline-rescue",
       "summary": {
@@ -225,7 +225,7 @@
             "checkId": "rescue:faithful:audio_loudness",
             "measured": {
               "applicable": false,
-              "observed_lufs": -21.83,
+              "observed_lufs": -21.84,
               "target_lufs": null,
               "tolerance_lu": 1.0
             },
@@ -267,11 +267,11 @@
             "measured": {
               "applicable": false,
               "measurement_method": "first_usable_packet_timestamp",
-              "observed_residual_seconds": -0.021333000000000005,
+              "observed_residual_seconds": -0.021008,
               "planned_offset_seconds": null,
               "planned_shift_seconds": null,
               "tolerance_seconds": 0.04,
-              "tool_version": "ffprobe version 9.0-full_build-www.gyan.dev Copyright (c) 2007-2026 the FFmpeg developers"
+              "tool_version": "ffprobe version 8.1.2-essentials_build-www.gyan.dev Copyright (c) 2007-2026 the FFmpeg developers"
             },
             "status": "passed",
             "summary": {
@@ -536,7 +536,7 @@
           {
             "checkId": "public-media-decode",
             "measured": {
-              "afterVideoDurationSeconds": 6.041667,
+              "afterVideoDurationSeconds": 6.0,
               "afterVideoHeight": 360,
               "afterVideoWidth": 640,
               "beforeVideoDurationSeconds": 6.0,
@@ -554,7 +554,7 @@
       },
       "versions": {
         "configuration": "growth-case-generator-v1",
-        "ffmpeg": "ffmpeg version 9.0-full_build-www.gyan.dev Copyright (c) 2000-2026 the FFmpeg developers",
+        "ffmpeg": "ffmpeg version 8.1.2-essentials_build-www.gyan.dev Copyright (c) 2000-2026 the FFmpeg developers",
         "platform": "Windows-AMD64",
         "videoscope": "0.8.0"
       }
@@ -575,7 +575,7 @@
           "workflow": "video-rescue"
         },
         {
-          "actionId": "rescue_action_7f0cb35d9e9ddcb99a63f8fbd7e2746e7a1a72c49d9f579c20b5941eb4d71a4d",
+          "actionId": "rescue_action_8e75fb9977a1b65b4a20bb213fe305899e1e28a134e69f08979f2f10f76322b9",
           "description": {
             "en": "Apply the bounded audio adjustment supported by measured values.",
             "zh-CN": "执行已确认的 normalize_audio 本地处理。"
@@ -584,11 +584,11 @@
           "parameters": {
             "clipping_peak_threshold_dbtp": -0.1,
             "clipping_ratio_threshold": 0.001,
-            "loudness_deviation_lu": -4.100000000000001,
-            "measured_I": -20.1,
+            "loudness_deviation_lu": -4.109999999999999,
+            "measured_I": -20.11,
             "measured_LRA": 3.7,
             "measured_TP": -9.35,
-            "measured_thresh": -30.1,
+            "measured_thresh": -30.11,
             "minimum_loudness_deviation_lu": 1.0,
             "minimum_noise_confidence": 0.8,
             "minimum_noise_event_count": 3,
@@ -709,10 +709,10 @@
         "python scripts/generate_growth_cases.py --force"
       ],
       "sha256": {
-        "afterVideo": "ef97afc1fb08a8b96b2ce3316c0263e6eb3b5671a635f2be449b4afe72dcc37d",
-        "beforeVideo": "8c4a085fe1703c80230f1b4099dcb65cba32a4d3207dc47ebcc19d67bff96148",
-        "poster": "780709c403fda7e58730db980caa8b20f36e1e96e08cf23463db1b5eda7a40ed",
-        "publicReport": "84ff605adbceaad670787815c6cb875c1fd0248d6ca07a40ffeb41293e1adbfc"
+        "afterVideo": "6b2bb6198d66bc3f0fb4b1c2f597c06bd97d17754eaf45c0992d12c9f1df10a6",
+        "beforeVideo": "9c9df8cb663e346a1555992e1b9eb233d886ddde92641072c47f3a4b9dd3d3ff",
+        "poster": "8874f3558739f7fd7468d057ee92b8e35a23e969669756e307e3439a48db0d68",
+        "publicReport": "cd8d77d19918a225d6a8f1a92b933ae6aec9754c951d33baa2bd56c57ed6d329"
       },
       "slug": "measured-improvement",
       "summary": {
@@ -797,7 +797,7 @@
             "checkId": "rescue:faithful:audio_loudness",
             "measured": {
               "applicable": false,
-              "observed_lufs": -20.37,
+              "observed_lufs": -20.32,
               "target_lufs": null,
               "tolerance_lu": 1.0
             },
@@ -812,7 +812,7 @@
             "measured": {
               "applicable": false,
               "limit_dbtp": -1.5,
-              "observed_dbtp": -8.77
+              "observed_dbtp": -9.1
             },
             "status": "passed",
             "summary": {
@@ -839,11 +839,11 @@
             "measured": {
               "applicable": false,
               "measurement_method": "first_usable_packet_timestamp",
-              "observed_residual_seconds": -0.021333000000000005,
+              "observed_residual_seconds": -0.021008,
               "planned_offset_seconds": null,
               "planned_shift_seconds": null,
               "tolerance_seconds": 0.04,
-              "tool_version": "ffprobe version 9.0-full_build-www.gyan.dev Copyright (c) 2007-2026 the FFmpeg developers"
+              "tool_version": "ffprobe version 8.1.2-essentials_build-www.gyan.dev Copyright (c) 2007-2026 the FFmpeg developers"
             },
             "status": "passed",
             "summary": {
@@ -1014,7 +1014,7 @@
             "checkId": "rescue:improved:audio_loudness",
             "measured": {
               "applicable": true,
-              "observed_lufs": -15.73,
+              "observed_lufs": -15.82,
               "target_lufs": -16.0,
               "tolerance_lu": 1.0
             },
@@ -1029,7 +1029,7 @@
             "measured": {
               "applicable": true,
               "limit_dbtp": -1.5,
-              "observed_dbtp": -3.31
+              "observed_dbtp": -3.21
             },
             "status": "passed",
             "summary": {
@@ -1056,11 +1056,11 @@
             "measured": {
               "applicable": false,
               "measurement_method": "first_usable_packet_timestamp",
-              "observed_residual_seconds": -0.02132166666666667,
+              "observed_residual_seconds": -0.020019666666666668,
               "planned_offset_seconds": null,
               "planned_shift_seconds": null,
               "tolerance_seconds": 0.04,
-              "tool_version": "ffprobe version 9.0-full_build-www.gyan.dev Copyright (c) 2007-2026 the FFmpeg developers"
+              "tool_version": "ffprobe version 8.1.2-essentials_build-www.gyan.dev Copyright (c) 2007-2026 the FFmpeg developers"
             },
             "status": "passed",
             "summary": {
@@ -1325,7 +1325,7 @@
           {
             "checkId": "public-media-decode",
             "measured": {
-              "afterVideoDurationSeconds": 5.041667,
+              "afterVideoDurationSeconds": 5.0,
               "afterVideoHeight": 360,
               "afterVideoWidth": 640,
               "beforeVideoDurationSeconds": 5.0,
@@ -1343,7 +1343,7 @@
       },
       "versions": {
         "configuration": "growth-case-generator-v1",
-        "ffmpeg": "ffmpeg version 9.0-full_build-www.gyan.dev Copyright (c) 2000-2026 the FFmpeg developers",
+        "ffmpeg": "ffmpeg version 8.1.2-essentials_build-www.gyan.dev Copyright (c) 2000-2026 the FFmpeg developers",
         "platform": "Windows-AMD64",
         "videoscope": "0.8.0"
       }
@@ -1458,10 +1458,10 @@
         "python scripts/generate_growth_cases.py --force"
       ],
       "sha256": {
-        "afterVideo": "92b4d9e3c11e29ab213d370b4d697799d0fbe9b5a4de92787dbb45ff7ee8eeb6",
-        "beforeVideo": "e3cad7f1c6c69047fb702bb38bb4b1a1be4729e4966646df727196475d52c4cc",
+        "afterVideo": "2804883f2288b8c46ba07eefc1b189f1aedcc58db447e4c6ab7dd31fa9b81188",
+        "beforeVideo": "a3d43cd46b492b2d42c77908afa83343e9e3b299e341e10c369e4f6659699bf3",
         "poster": "0985cad5ef9d6b352402e372a262165662a703305582bc4e25701de5eda4020a",
-        "publicReport": "dd0e618a08997322589eccfef350e6964e3b3623ae6384ed2f78c049a3cabb00"
+        "publicReport": "27657cb943b218eb092ec8f45a0aeec61a46e41cabddb198cea65b97164f0137"
       },
       "slug": "no-crop-vertical-publish",
       "summary": {
@@ -1676,7 +1676,7 @@
       },
       "versions": {
         "configuration": "growth-case-generator-v1",
-        "ffmpeg": "ffmpeg version 9.0-full_build-www.gyan.dev Copyright (c) 2000-2026 the FFmpeg developers",
+        "ffmpeg": "ffmpeg version 8.1.2-essentials_build-www.gyan.dev Copyright (c) 2000-2026 the FFmpeg developers",
         "platform": "Windows-AMD64",
         "videoscope": "0.8.0"
       }

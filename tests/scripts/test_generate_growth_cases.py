@@ -3,10 +3,12 @@ from __future__ import annotations
 import hashlib
 import inspect
 import json
+import shutil
 import subprocess
 import sys
 from collections.abc import Sequence
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -17,6 +19,8 @@ from scripts.generate_growth_cases import (
     CASE_SPECS,
     PUBLIC_REPORT_KEYS,
     CaseGenerationError,
+    CaseGenerationSummary,
+    CaseRecordSummary,
     CommandResult,
     CompletedCase,
     extract_comparison_assets,
@@ -413,3 +417,88 @@ def test_script_execution_imports_videoscope_from_the_current_checkout() -> None
             """
         )
     )
+
+
+def test_forced_generation_preserves_the_public_provenance_record(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Replacing generated case media must not delete its audited provenance."""
+    destination = tmp_path / "site" / "public" / "cases"
+    destination.mkdir(parents=True)
+    provenance = destination / "PROVENANCE.md"
+    provenance.write_text("audited local provenance\n", encoding="utf-8")
+    manifest_path = tmp_path / "site" / "src" / "data" / "case-studies.json"
+    manifest_path.parent.mkdir(parents=True)
+    manifest_path.write_text(
+        '{"schemaVersion":1,"generatedBy":"scripts/generate_growth_cases.py","cases":[]}\n',
+        encoding="utf-8",
+    )
+
+    sources = {spec.slug: tmp_path / f"{spec.slug}-source.mp4" for spec in CASE_SPECS}
+    for source in sources.values():
+        source.write_bytes(b"source")
+
+    monkeypatch.setattr(shutil, "which", lambda _name: "ffmpeg")
+
+    def fake_sources(staging_directory: Path, **_kwargs: Any) -> dict[str, Path]:
+        staging_directory.mkdir(parents=True, exist_ok=True)
+        return sources
+
+    monkeypatch.setattr(growth_case_generator, "generate_case_sources", fake_sources)
+    monkeypatch.setattr(
+        growth_case_generator,
+        "probe_video",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            duration_seconds=12.0,
+            average_frame_rate=24.0,
+            has_audio=True,
+            width=640,
+            height=360,
+        ),
+    )
+    monkeypatch.setattr(
+        growth_case_generator,
+        "_run_checked",
+        lambda *_args, **_kwargs: CommandResult(0, "", "ffmpeg version fixture\n"),
+    )
+    monkeypatch.setattr(
+        growth_case_generator,
+        "_run_workflows",
+        lambda _spec, source, _root: growth_case_generator.WorkflowResult(
+            source, (), (), ()
+        ),
+    )
+
+    def fake_assets(*_args: Any, destination: Path, **_kwargs: Any) -> dict[str, Path]:
+        destination.mkdir(parents=True, exist_ok=True)
+        assets = {
+            "beforeVideo": destination / "before.mp4",
+            "afterVideo": destination / "after.mp4",
+            "poster": destination / "poster.webp",
+        }
+        for asset in assets.values():
+            asset.write_bytes(asset.name.encode("utf-8"))
+        return assets
+
+    monkeypatch.setattr(growth_case_generator, "extract_comparison_assets", fake_assets)
+    monkeypatch.setattr(
+        growth_case_generator, "_validate_public_assets", lambda *_args, **_kwargs: ()
+    )
+
+    def fake_write(completed: CompletedCase) -> CaseGenerationSummary:
+        manifest = json.loads(completed.manifest_path.read_text(encoding="utf-8"))
+        manifest["cases"].append({"slug": completed.slug})
+        completed.manifest_path.write_text(
+            json.dumps(manifest),
+            encoding="utf-8",
+        )
+        return CaseGenerationSummary(
+            status="completed",
+            cases=(CaseRecordSummary(completed.slug, "completed", {}),),
+        )
+
+    monkeypatch.setattr(growth_case_generator, "write_public_case_record", fake_write)
+
+    growth_case_generator.generate_cases(destination, force=True, runner=FakeRunner([]))
+
+    assert provenance.read_text(encoding="utf-8") == "audited local provenance\n"
