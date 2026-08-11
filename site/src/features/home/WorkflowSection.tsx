@@ -1,15 +1,17 @@
 import { useI18n } from "../../i18n/I18nProvider";
+import { legacyHomeCopy } from "./legacy-home-copy";
 
 export function WorkflowSection() {
-  const { t } = useI18n();
+  const { locale } = useI18n();
+  const copy = legacyHomeCopy[locale];
   return (
     <section className="home-section workflow-section">
       <div className="home-section__heading">
-        <p className="eyebrow">{t.home.workflow.eyebrow}</p>
-        <h2>{t.home.workflow.title}</h2>
+        <p className="eyebrow">{copy.workflow.eyebrow}</p>
+        <h2>{copy.workflow.title}</h2>
       </div>
       <ol>
-        {t.home.workflow.steps.map((step, index) => (
+        {copy.workflow.steps.map((step, index) => (
           <li key={step.title}>
             <span className="numeric">0{index + 1}</span>
             <h3>{step.title}</h3>

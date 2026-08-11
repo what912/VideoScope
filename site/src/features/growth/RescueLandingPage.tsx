@@ -1,12 +1,19 @@
 import { Link } from "react-router";
 
 import { useI18n } from "../../i18n/I18nProvider";
-import { growthCopy } from "./growth-copy";
+import { PublicFunnelCopyState } from "./PublicFunnelCopyState";
+import { usePublicFunnelCopy } from "./use-public-funnel-copy";
 import "./growth.css";
 
 export function RescueLandingPage() {
   const { locale } = useI18n();
-  const copy = growthCopy[locale];
+  const copyState = usePublicFunnelCopy();
+
+  if (copyState.status !== "ready") {
+    return <PublicFunnelCopyState state={copyState} />;
+  }
+
+  const copy = copyState.copy[locale];
 
   return (
     <article className="growth-page" aria-labelledby="rescue-title">

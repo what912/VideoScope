@@ -1,8 +1,10 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { TestApp } from "../../app/router";
 import { findCaseStudy } from "../../data/case-studies";
+import manifest from "../../data/case-studies.json";
+import publicFunnelCopy from "../../../public/growth-home-copy.json";
 
 const timelineRescue = findCaseStudy("timeline-rescue");
 
@@ -13,6 +15,10 @@ if (!timelineRescue) {
 describe("public growth routes", () => {
   beforeEach(() => {
     window.localStorage.clear();
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => ({
+      ok: true,
+      json: async () => url.endsWith("growth-home-copy.json") ? publicFunnelCopy : manifest,
+    })));
   });
 
   it.each([
@@ -57,7 +63,7 @@ describe("public growth routes", () => {
         );
       }
 
-      expect(screen.getByText(timelineRescue.provenance)).toBeVisible();
+      expect(await screen.findByText(timelineRescue.provenance)).toBeVisible();
       expect(screen.getByText(timelineRescue.authorizationSummary[locale])).toBeVisible();
       for (const action of timelineRescue.actions) {
         const expectedCount = timelineRescue.actions.filter(

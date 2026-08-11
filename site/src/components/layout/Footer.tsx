@@ -4,7 +4,7 @@ import {
   CREATOR_ATTRIBUTION,
   CREATOR_URL,
   REPOSITORY_URL,
-} from "../../features/growth/growth-copy";
+} from "../../features/growth/growth-constants";
 import { useI18n } from "../../i18n/I18nProvider";
 import { ScopeMark } from "../brand/ScopeMark";
 

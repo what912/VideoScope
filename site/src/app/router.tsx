@@ -49,21 +49,9 @@ const CaseStudyPage = lazy(async () => {
   const module = await import("../features/growth/CaseStudyPage");
   return { default: module.CaseStudyPage };
 });
-const DownloadPage = lazy(async () => {
-  const module = await import("../features/growth/DownloadPage");
-  return { default: module.DownloadPage };
-});
-const DevelopersPage = lazy(async () => {
-  const module = await import("../features/growth/DevelopersPage");
-  return { default: module.DevelopersPage };
-});
-const RoadmapPage = lazy(async () => {
-  const module = await import("../features/growth/RoadmapPage");
-  return { default: module.RoadmapPage };
-});
-const CommunityPage = lazy(async () => {
-  const module = await import("../features/growth/CommunityPage");
-  return { default: module.CommunityPage };
+const GrowthPage = lazy(async () => {
+  const module = await import("../features/growth/GrowthPage");
+  return { default: module.GrowthPage };
 });
 const PrivacyPage = lazy(async () => {
   const module = await import("../features/static/PrivacyPage");
@@ -86,6 +74,10 @@ function LazyRoute({ component: Component }: { component: React.LazyExoticCompon
   );
 }
 
+function LazyGrowthRoute({ actionHref, page }: { actionHref: string; page: "download" | "developers" | "roadmap" | "community" }) {
+  return <Suspense fallback={<LoadingState />}><GrowthPage actionHref={actionHref} page={page} /></Suspense>;
+}
+
 const routes: RouteObject[] = [
   {
     path: "/",
@@ -101,10 +93,10 @@ const routes: RouteObject[] = [
       { path: "rescue", element: <LazyRoute component={RescueLandingPage} /> },
       { path: "examples", element: <LazyRoute component={ExamplesPage} /> },
       { path: "examples/:slug", element: <LazyRoute component={CaseStudyPage} /> },
-      { path: "download", element: <LazyRoute component={DownloadPage} /> },
-      { path: "developers", element: <LazyRoute component={DevelopersPage} /> },
-      { path: "roadmap", element: <LazyRoute component={RoadmapPage} /> },
-      { path: "community", element: <LazyRoute component={CommunityPage} /> },
+      { path: "download", element: <LazyGrowthRoute actionHref="/connect" page="download" /> },
+      { path: "developers", element: <LazyGrowthRoute actionHref="https://github.com/what912/VideoScope" page="developers" /> },
+      { path: "roadmap", element: <LazyGrowthRoute actionHref="https://github.com/what912/VideoScope/blob/main/docs/roadmap.md" page="roadmap" /> },
+      { path: "community", element: <LazyGrowthRoute actionHref="https://github.com/what912/VideoScope" page="community" /> },
       {
         path: "auth/callback",
         element: <LazyRoute component={AuthCallbackPage} />,

@@ -10,6 +10,7 @@ import { useI18n } from "../../i18n/I18nProvider";
 import type { Finding } from "../../types/analysis";
 import type { DemoBrowserReport } from "../../types/report";
 import { HomeMedia } from "./HomeMedia";
+import { legacyHomeCopy } from "./legacy-home-copy";
 
 interface InteractiveDiagnosisDemoProps {
   currentTime: number;
@@ -26,7 +27,8 @@ export function InteractiveDiagnosisDemo({
   onSelectFinding,
   onSeek,
 }: InteractiveDiagnosisDemoProps) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
+  const copy = legacyHomeCopy[locale];
   const stepRefs = useRef<(HTMLElement | null)[]>([]);
 
   useEffect(() => {
@@ -53,17 +55,17 @@ export function InteractiveDiagnosisDemo({
   return (
     <section className="home-section home-narrative" id="features">
       <div className="home-section__heading">
-        <p className="eyebrow">{t.home.narrative.eyebrow}</p>
-        <h2>{t.home.narrative.title}</h2>
-        <p>{t.home.narrative.description}</p>
+        <p className="eyebrow">{copy.narrative.eyebrow}</p>
+        <h2>{copy.narrative.title}</h2>
+        <p>{copy.narrative.description}</p>
       </div>
       <div className="home-narrative__layout">
         <div className="home-narrative__sticky">
-          <span className="demo-label">{t.home.demoLabel}</span>
+          <span className="demo-label">{copy.demoLabel}</span>
           <div className="home-narrative__stage">
             <HomeMedia
               className="home-narrative__video"
-              label={t.home.narrative.mediaLabel}
+              label={copy.narrative.mediaLabel}
               role="diagnosis"
             />
             <DiagnosticOverlay finding={selectedFinding} />
@@ -93,8 +95,8 @@ export function InteractiveDiagnosisDemo({
             >
               <span className="signal-kind">
                 {finding.signal_kind === "browser_cpu"
-                  ? t.home.narrative.browserCpu
-                  : t.home.narrative.optional}
+                  ? copy.narrative.browserCpu
+                  : copy.narrative.optional}
               </span>
               <h3>{finding.title}</h3>
               <p>{finding.description}</p>

@@ -23,12 +23,14 @@ const defaultReportStore = createReportStore();
 const resolveDefaultReportStore = () => defaultReportStore;
 
 interface HomeUploadLabProps {
+  atmosphereLabel: string;
   resolveReportStore?(): Promise<ReportStoreResolution>;
 }
 
 export function HomeUploadLab({
+  atmosphereLabel,
   resolveReportStore = resolveDefaultReportStore,
-}: HomeUploadLabProps = {}) {
+}: HomeUploadLabProps) {
   const { t } = useI18n();
   const navigate = useNavigate();
   const [storeResolution, setStoreResolution] =
@@ -45,10 +47,14 @@ export function HomeUploadLab({
   }, [resolveReportStore]);
 
   return (
-    <section className="home-upload">
+    <section
+      aria-label={t.upload.title}
+      className="home-upload"
+      id="browser-check"
+    >
       <HomeMedia
         className="home-upload__atmosphere"
-        label={t.home.uploadAtmosphere}
+        label={atmosphereLabel}
         role="upload-lab"
       />
       <div className="home-upload__lab">

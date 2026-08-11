@@ -2,7 +2,7 @@ import { useCallback, useRef, useState } from "react";
 import { Link } from "react-router";
 
 import { useAuth } from "../../features/auth/AuthProvider";
-import { REPOSITORY_URL } from "../../features/growth/growth-copy";
+import { REPOSITORY_URL } from "../../features/growth/growth-constants";
 import { useI18n } from "../../i18n/I18nProvider";
 import type { Locale } from "../../i18n/types";
 import { CreatorBadge } from "../brand/CreatorBadge";

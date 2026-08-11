@@ -1,16 +1,52 @@
+import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
 
-import { findCaseStudy } from "../../data/case-studies";
+import { loadCaseStudyManifest } from "../../data/case-studies-runtime";
+import type { CaseStudy } from "../../data/case-studies";
 import { useI18n } from "../../i18n/I18nProvider";
-import { growthCopy } from "./growth-copy";
+import { PublicFunnelCopyState } from "./PublicFunnelCopyState";
+import { usePublicFunnelCopy } from "./use-public-funnel-copy";
 import "./growth.css";
 
 export function CaseStudyPage() {
   const { locale } = useI18n();
   const { slug } = useParams();
-  const caseStudy = slug ? findCaseStudy(slug) : undefined;
-  const copy = growthCopy[locale].pages;
-  const evidenceCopy = growthCopy[locale].caseEvidence;
+  const copyState = usePublicFunnelCopy();
+  const [cases, setCases] = useState<readonly CaseStudy[] | null>(null);
+  const [unavailable, setUnavailable] = useState(false);
+
+  useEffect(() => {
+    if (copyState.status !== "ready") return undefined;
+    let active = true;
+    setUnavailable(false);
+    void loadCaseStudyManifest()
+      .then((manifest) => {
+        if (active) setCases(manifest.cases);
+      })
+      .catch(() => {
+        if (active) setUnavailable(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, [copyState.status]);
+
+  if (copyState.status !== "ready") {
+    return <PublicFunnelCopyState state={copyState} />;
+  }
+
+  const copy = copyState.copy[locale].pages;
+  const evidenceCopy = copyState.copy[locale].caseEvidence;
+
+  if (unavailable) {
+    return <article className="growth-page" role="alert">{copyState.copy[locale].home.cases.unavailable}</article>;
+  }
+
+  if (cases === null) {
+    return <article className="growth-page" role="status" aria-live="polite">{copyState.copy[locale].home.cases.loading}</article>;
+  }
+
+  const caseStudy = slug ? cases.find((item) => item.slug === slug) : undefined;
 
   if (!caseStudy) {
     return (

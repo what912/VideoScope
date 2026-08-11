@@ -1,10 +1,11 @@
 import { Link } from "react-router";
 
 import { useI18n } from "../../i18n/I18nProvider";
-import { growthCopy } from "./growth-copy";
+import { PublicFunnelCopyState } from "./PublicFunnelCopyState";
+import { usePublicFunnelCopy } from "./use-public-funnel-copy";
 import "./growth.css";
 
-type GrowthPageName = keyof typeof growthCopy.en.pages;
+type GrowthPageName = "download" | "developers" | "roadmap" | "community";
 
 type GrowthPageProps = {
   actionHref: string;
@@ -13,7 +14,13 @@ type GrowthPageProps = {
 
 export function GrowthPage({ actionHref, page }: GrowthPageProps) {
   const { locale } = useI18n();
-  const copy = growthCopy[locale].pages[page];
+  const copyState = usePublicFunnelCopy();
+
+  if (copyState.status !== "ready") {
+    return <PublicFunnelCopyState state={copyState} />;
+  }
+
+  const copy = copyState.copy[locale].pages[page];
 
   return (
     <article className="growth-page" aria-labelledby={`${page}-title`}>

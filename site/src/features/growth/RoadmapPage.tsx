@@ -1,4 +1,4 @@
-import { REPOSITORY_URL } from "./growth-copy";
+import { REPOSITORY_URL } from "./growth-constants";
 import { GrowthPage } from "./GrowthPage";
 
 export function RoadmapPage() {

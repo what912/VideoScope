@@ -1,94 +1,84 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useRef } from "react";
+import { Link } from "react-router";
 
-import { createDemoReport } from "../../data/demo-report";
 import { useI18n } from "../../i18n/I18nProvider";
-import type { Finding } from "../../types/analysis";
-import { ComparePreview } from "./ComparePreview";
+import { CREATOR_ATTRIBUTION, REPOSITORY_URL } from "../growth/growth-constants";
+import { PublicFunnelCopyState } from "../growth/PublicFunnelCopyState";
+import { usePublicFunnelCopy } from "../growth/use-public-funnel-copy";
 import { FinalCta } from "./FinalCta";
 import { Hero } from "./Hero";
 import { HomeUploadLab } from "./HomeUploadLab";
-import { InteractiveDiagnosisDemo } from "./InteractiveDiagnosisDemo";
-import { MetricsSpectrum } from "./MetricsSpectrum";
-import { OpenSourceSection } from "./OpenSourceSection";
-import { ProductProofWindow } from "./ProductProofWindow";
-import { WorkflowSection } from "./WorkflowSection";
 import "./home.css";
+
+const HomeCaseEvidence = lazy(async () => {
+  const module = await import("./HomeCaseEvidence");
+  return { default: module.HomeCaseEvidence };
+});
 
 export function HomePage() {
   const { locale } = useI18n();
-  const report = useMemo(() => createDemoReport(locale), [locale]);
+  const copyState = usePublicFunnelCopy();
   const uploadRef = useRef<HTMLElement>(null);
-  const demoRef = useRef<HTMLDivElement>(null);
-  const [selectedFindingId, setSelectedFindingId] = useState(
-    report.findings[0].id,
-  );
-  const selectedFinding =
-    report.findings.find((finding) => finding.id === selectedFindingId) ??
-    report.findings[0];
-  const [currentTime, setCurrentTime] = useState(
-    report.findings[0].time_range.start_seconds,
-  );
 
-  const selectFinding = useCallback((finding: Finding) => {
-    setSelectedFindingId(finding.id);
-    setCurrentTime(finding.time_range.start_seconds);
-  }, []);
-
-  const focusSection = (element: HTMLElement | null) => {
+  const focusUploadLab = () => {
     const reducedMotion =
       typeof window.matchMedia === "function" &&
       window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    element?.scrollIntoView({
+    uploadRef.current?.scrollIntoView({
       behavior: reducedMotion ? "auto" : "smooth",
       block: "start",
     });
-    element?.focus({ preventScroll: true });
+    uploadRef.current?.focus({ preventScroll: true });
   };
 
-  const openDemo = () => {
-    selectFinding(report.findings[0]);
-    focusSection(demoRef.current);
-  };
+  if (copyState.status !== "ready") {
+    return <div className="home-page"><PublicFunnelCopyState state={copyState} /></div>;
+  }
+
+  const copy = copyState.copy[locale];
 
   return (
     <div className="home-page">
-      <Hero
-        intervalCount={report.summary.review_interval_count}
-        onAnalyze={() => focusSection(uploadRef.current)}
-        onDemo={openDemo}
-      />
-      <ProductProofWindow
-        currentTime={currentTime}
-        onSeek={setCurrentTime}
-        onSelectFinding={selectFinding}
-        report={report}
-        selectedFinding={selectedFinding}
-      />
+      <Hero copy={copy} onQuickCheck={focusUploadLab} />
+      <Suspense fallback={<section className="home-section funnel-case-loading" role="status" aria-live="polite"><p>{copy.home.cases.loading}</p></section>}>
+        <HomeCaseEvidence copy={copy.home} />
+      </Suspense>
+      <section className="home-section funnel-journey" aria-labelledby="creator-journey-title">
+        <p className="eyebrow">{copy.home.funnel.journeyEyebrow}</p>
+        <h2 id="creator-journey-title">{copy.home.funnel.journeyTitle}</h2>
+        <ol>
+          {copy.home.funnel.journey.map((step, index) => (
+            <li key={step.title}>
+              <span className="numeric">0{index + 1}</span>
+              <h3>{step.title}</h3>
+              <p>{step.description}</p>
+            </li>
+          ))}
+        </ol>
+      </section>
+      <section className="home-section funnel-boundary" aria-labelledby="funnel-boundary-title">
+        <h2 id="funnel-boundary-title">{copy.home.funnel.boundaryTitle}</h2>
+        <p>{copy.home.funnel.boundaryDescription}</p>
+        <p>{copy.sourcePreserved}</p>
+      </section>
       <section
         className="home-anchor"
         data-testid="home-upload-lab"
         ref={uploadRef}
         tabIndex={-1}
       >
-        <HomeUploadLab />
+        <HomeUploadLab atmosphereLabel={copy.home.uploadAtmosphere} />
       </section>
-      <div className="home-anchor" ref={demoRef} tabIndex={-1}>
-        <InteractiveDiagnosisDemo
-          currentTime={currentTime}
-          onSeek={setCurrentTime}
-          onSelectFinding={selectFinding}
-          report={report}
-          selectedFinding={selectedFinding}
-        />
-      </div>
-      <MetricsSpectrum metrics={report.metrics} />
-      <ComparePreview />
-      <WorkflowSection />
-      <OpenSourceSection />
-      <FinalCta
-        onAnalyze={() => focusSection(uploadRef.current)}
-        onDemo={openDemo}
-      />
+      <FinalCta copy={copy.home.finalCta} />
+      <section className="home-section funnel-developer" aria-labelledby="funnel-developer-title">
+        <h2 id="funnel-developer-title">{copy.home.funnel.developerTitle}</h2>
+        <p>{copy.home.funnel.developerDescription}</p>
+        <Link className="text-link" to="/developers">{copy.home.funnel.developerAction}</Link>
+      </section>
+      <section aria-label={CREATOR_ATTRIBUTION} className="funnel-attribution">
+        <p>{CREATOR_ATTRIBUTION}</p>
+        <a className="text-link" href={REPOSITORY_URL}>{copy.home.funnel.star}</a>
+      </section>
     </div>
   );
 }
