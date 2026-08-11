@@ -1,11 +1,11 @@
-# GenVideoScope 0.8.0 development release audit
+# GenVideoScope 0.8.0 stable release audit
 
-Audit date: 2026-08-07
+Audit date: 2026-08-11
 
-Candidate: `genvideoscope 0.8.0.dev0`
+Candidate: `genvideoscope 0.8.0`
 
-Public integration: not yet pushed; this audit covers the local candidate branch
-`codex/zero-cost-byok-local-connector` only.
+Public integration: pending Draft PR and GitHub Actions verification; this audit
+covers the local stable candidate branch `codex/v0.8-stable-release`.
 
 Scope: the local-first CPU product line—Check, A Publish Ready, D Safe Sharing,
 B Video Rescue, C Long Video to Useful Content—and the optional, review-first
@@ -16,8 +16,8 @@ certification or a real-world semantic-accuracy/usefulness claim.
 
 ### Repository and native media
 
-- `python scripts/validate.py` passed Ruff and formatting for 367 files, strict
-  mypy for 304 source files, and pytest with 1,347 passed and 96 explicit
+- `python scripts/validate.py` passed Ruff and formatting for 381 files, strict
+  mypy for 315 source files, and pytest with 1,375 passed and 96 explicit
   optional/environment skips on Windows/Python 3.12.
 - `python scripts/generate_test_videos.py --force` generated and decoded 29
   local synthetic videos twice with FFmpeg 9.0. File hashes matched between
@@ -47,7 +47,7 @@ certification or a real-world semantic-accuracy/usefulness claim.
 - The Advanced AI API is loopback-only. It has a bounded semaphore, rejects
   stale C revisions and changed inputs, and keeps transcript/evidence/review
   artifacts outside public artifact routes.
-- The GitHub Pages application passed lint, TypeScript, 526 tests across 58
+- The GitHub Pages application passed lint, TypeScript, 530 tests across 58
   files, a production build, and exact allowlist verification for 15
   deterministically generated project-authored media files.
 - React Router was migrated to the patched 8.3.0 package and Vite to 8.2.0;
@@ -57,7 +57,7 @@ certification or a real-world semantic-accuracy/usefulness claim.
 ### Build and distribution
 
 - `python -m build --no-isolation` built
-  `genvideoscope-0.8.0.dev0-py3-none-any.whl` and the matching sdist. The
+  `genvideoscope-0.8.0-py3-none-any.whl` and the matching sdist. The
   standard isolated command could not bootstrap `setuptools` in the restricted
   local environment; the build still rebuilt the wheel from the produced sdist.
 - `scripts/audit_distribution.py` passed both archives and required the
@@ -68,9 +68,16 @@ certification or a real-world semantic-accuracy/usefulness claim.
 - The base distribution declares no AI, ASR, OCR or Web dependency. Faster
   Whisper remains in the separate `asr` extra; Ollama uses only a user-started
   loopback endpoint and never pulls a model implicitly.
-- The exact base wheel passed a clean-environment smoke covering `--version`,
+- The exact base wheel passed an isolated offline smoke covering `--version`,
   `doctor`, CPU Check, A Publish Ready, manual-region D Safe Sharing,
   Conservative and Balanced B Video Rescue, and all three confirmed C goals.
+  The 2026-08-11 local run was explicitly offline (`--no-index --no-deps`) and
+  reused already-verified base dependencies; exact clean dependency resolution
+  remains a GitHub Actions gate.
+- The frozen Windows connector audit passed and the 0.8.0 installer was built
+  without FFmpeg, model weights, credentials or development-only packages.
+  Paid code signing is explicitly deferred; the release must retain the
+  bilingual unknown-publisher warning and SHA-256 asset.
 - Final archive checksums must be generated after this tracked document is
   frozen and stored outside the sdist because an embedded sdist hash would be
   self-referential.
@@ -152,9 +159,10 @@ certification or a real-world semantic-accuracy/usefulness claim.
 ## Release decision
 
 The CPU product, local connector, device account and optional review-first AI
-layer have green local engineering gates and are suitable for review as a
-development prerelease. Publication remains blocked on the exact-commit CI and
-human checks above; a stable release claim is premature.
+layer have green local engineering gates and are suitable as a stable 0.8.0
+candidate. Publication remains blocked on exact-commit CI. Unrun representative
+private-media, real-provider, macOS and long-duration checks remain disclosed
+limitations and prohibit accuracy or universal-compatibility claims.
 
 The static public website may run browser-side CPU diagnostics and link to local
 installation. It must not imply that GitHub Pages runs Python, FFmpeg or private

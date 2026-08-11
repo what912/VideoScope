@@ -6,7 +6,7 @@
 
 ## [Unreleased]
 
-### 0.8.0 development line
+## [0.8.0] - 2026-08-11
 
 ### Added
 

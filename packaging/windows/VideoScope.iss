@@ -1,5 +1,5 @@
 #ifndef MyAppVersion
-  #define MyAppVersion "0.8.0.dev0"
+  #define MyAppVersion "0.8.0"
 #endif
 #ifndef MyVersionInfoVersion
   #define MyVersionInfoVersion "0.8.0.0"
