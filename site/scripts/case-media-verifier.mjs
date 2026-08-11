@@ -19,6 +19,7 @@ const MAXIMUM_FRAME_RATE = 30;
 const PROVENANCE_FILE = "PROVENANCE.md";
 // ffprobe reports decimal durations, so preserve an inclusive one-frame bound.
 const DURATION_COMPARISON_EPSILON_SECONDS = 0.000001;
+const FRAME_TIMESTAMP_EPSILON_SECONDS = 0.000001;
 const PROBE_OPTIONS = Object.freeze({
   shell: false,
   windowsHide: true,
@@ -287,9 +288,22 @@ async function runProbe(filePath, runner, args) {
 }
 
 async function probeMedia(filePath, runner) {
+  // Public cases intentionally carry exactly one video stream; reject alternate
+  // multiplexed variants instead of silently validating only their primary stream.
+  const inventory = await runProbe(filePath, runner, [
+    "-v", "error",
+    "-select_streams", "v",
+    "-show_entries", "stream=codec_type",
+    "-of", "json",
+    filePath,
+  ]);
+  if (!Array.isArray(inventory.streams) || inventory.streams.length !== 1) {
+    fail("Case media asset must contain exactly one video stream.");
+  }
   return runProbe(filePath, runner, [
     "-v", "error",
-    "-show_entries", "stream=codec_name,pix_fmt,width,height,avg_frame_rate:format=duration",
+    "-select_streams", "v:0",
+    "-show_entries", "stream=codec_type,codec_name,pix_fmt,width,height,avg_frame_rate:format=duration",
     "-of", "json",
     filePath,
   ]);
@@ -305,11 +319,12 @@ function parseFrameRate(value) {
 }
 
 function videoMetadata(probe) {
-  const stream = Array.isArray(probe?.streams)
-    ? probe.streams.find((item) => item?.codec_name !== undefined)
-    : undefined;
+  const streams = Array.isArray(probe?.streams)
+    ? probe.streams.filter((item) => item?.codec_name !== undefined && item.codec_type !== "audio")
+    : [];
+  const [stream] = streams;
   const duration = Number(probe?.format?.duration);
-  if (!stream || !Number.isFinite(duration) || duration < 0) {
+  if (streams.length !== 1 || !stream || !Number.isFinite(duration) || duration < 0) {
     fail("Case comparison video metadata is invalid.");
   }
   return {
@@ -323,10 +338,14 @@ function videoMetadata(probe) {
 }
 
 function imageMetadata(probe) {
-  const stream = Array.isArray(probe?.streams)
-    ? probe.streams.find((item) => item?.codec_name !== undefined)
-    : undefined;
-  if (!stream || !Number.isInteger(stream.width) || !Number.isInteger(stream.height)) {
+  const streams = Array.isArray(probe?.streams)
+    ? probe.streams.filter((item) => item?.codec_name !== undefined && item.codec_type !== "audio")
+    : [];
+  const [stream] = streams;
+  if (
+    streams.length !== 1 || !stream || !Number.isInteger(stream.width) ||
+    !Number.isInteger(stream.height)
+  ) {
     fail("Case poster metadata is invalid.");
   }
   return { codec: stream.codec_name, width: stream.width, height: stream.height };
@@ -353,8 +372,27 @@ function verifyComparisonMetadata(metadata, item, expectedDimensions) {
   }
 }
 
-async function assertBoundaryFrames(filePath, runner) {
-  for (const interval of ["0%+#1", "-1%+#1"]) {
+function frameTimestamp(probe) {
+  if (!Array.isArray(probe?.frames) || probe.frames.length === 0) {
+    fail("Case comparison video is not decodable at its boundary frames.");
+  }
+  const timestamps = probe.frames.map((frame) => Number(frame?.best_effort_timestamp_time));
+  if (timestamps.some((timestamp) => !Number.isFinite(timestamp))) {
+    fail("Case comparison video is not decodable at its boundary frames.");
+  }
+  return Math.max(...timestamps);
+}
+
+async function assertBoundaryFrames(filePath, runner, metadata) {
+  const frameDuration = 1 / metadata.frameRate;
+  const endSeek = Math.max(0, metadata.duration - frameDuration);
+  const boundaries = [
+    { interval: "0%+#1", isEnd: false },
+    // ffprobe seeks to a preceding keyframe. Reading through EOF is required
+    // to prove that an actual end-adjacent frame, not that keyframe, decodes.
+    { interval: `${endSeek.toFixed(12)}%`, isEnd: true },
+  ];
+  for (const { interval, isEnd } of boundaries) {
     const probe = await runProbe(filePath, runner, [
       "-v", "error",
       "-select_streams", "v:0",
@@ -364,7 +402,14 @@ async function assertBoundaryFrames(filePath, runner) {
       "-of", "json",
       filePath,
     ]);
-    if (!Array.isArray(probe.frames) || probe.frames.length === 0) {
+    const timestamp = frameTimestamp(probe);
+    if (
+      (!isEnd && (timestamp < -FRAME_TIMESTAMP_EPSILON_SECONDS || timestamp > frameDuration + FRAME_TIMESTAMP_EPSILON_SECONDS)) ||
+      (isEnd && (
+        timestamp < metadata.duration - frameDuration - FRAME_TIMESTAMP_EPSILON_SECONDS ||
+        timestamp > metadata.duration + FRAME_TIMESTAMP_EPSILON_SECONDS
+      ))
+    ) {
       fail("Case comparison video is not decodable at its boundary frames.");
     }
   }
@@ -393,8 +438,8 @@ async function verifySameRangeMedia(item, directory, runner) {
     fail("Case comparison media duration does not match the manifest range.");
   }
   await Promise.all([
-    assertBoundaryFrames(beforePath, runner),
-    assertBoundaryFrames(afterPath, runner),
+    assertBoundaryFrames(beforePath, runner, before),
+    assertBoundaryFrames(afterPath, runner, after),
   ]);
 }
 

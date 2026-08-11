@@ -94,7 +94,9 @@ function mediaProbe({ duration = 6, width = 640, height = 360, frameRate = "24/1
 
 async function fakeProbe(_executable, args) {
   if (args.includes("-show_frames")) {
-    return { stdout: JSON.stringify({ frames: [{ best_effort_timestamp_time: "0" }] }) };
+    const interval = args[args.indexOf("-read_intervals") + 1];
+    const timestamp = interval === "0%+#1" ? 0 : 6 - 1 / 24;
+    return { stdout: JSON.stringify({ frames: [{ best_effort_timestamp_time: String(timestamp) }] }) };
   }
   if (String(args.at(-1)).endsWith("poster.webp")) {
     return {
@@ -181,7 +183,15 @@ describe("case media verification", () => {
   it("accepts one reported frame of before-after duration drift", async () => {
     const directory = await temporaryCaseDirectory();
     const oneFrameDriftProbe = async (_executable, args) => {
-      if (args.includes("-show_frames")) return fakeProbe(_executable, args);
+      if (args.includes("-show_frames")) {
+        const interval = args[args.indexOf("-read_intervals") + 1];
+        const duration = String(args.at(-1)).endsWith("after.mp4") ? 6.041667 : 6;
+        return {
+          stdout: JSON.stringify({
+            frames: [{ best_effort_timestamp_time: String(interval === "0%+#1" ? 0 : duration - 1 / 24) }],
+          }),
+        };
+      }
       if (String(args.at(-1)).endsWith("poster.webp")) return fakeProbe(_executable, args);
       const isAfter = String(args.at(-1)).endsWith("after.mp4");
       return { stdout: JSON.stringify(mediaProbe({ duration: isAfter ? 6.041667 : 6 })) };
@@ -318,6 +328,106 @@ describe("case media verification", () => {
 
     await expect(verifyCaseMedia({ manifest: validManifest(), directory, runner: missingLastFrameProbe }))
       .rejects.toThrow("Case comparison video is not decodable at its boundary frames.");
+  });
+
+  it("probes an EOF-adjacent primary-video frame and requires its timestamp within one frame of the end", async () => {
+    const directory = await temporaryCaseDirectory();
+    const calls = [];
+    const recordingProbe = async (executable, args, options) => {
+      calls.push({ executable, args, options });
+      return fakeProbe(executable, args, options);
+    };
+
+    await expect(verifyCaseMedia({ manifest: validManifest(), directory, runner: recordingProbe }))
+      .resolves.toEqual({ caseCount: 1, fileCount: 5 });
+
+    const frameCalls = calls.filter(({ args }) => args.includes("-show_frames"));
+    const endFrameCalls = frameCalls.filter(({ args }) =>
+      args[args.indexOf("-read_intervals") + 1] !== "0%+#1",
+    );
+    expect(endFrameCalls).toHaveLength(2);
+    for (const { args } of endFrameCalls) {
+      expect(args).toContain("-select_streams");
+      expect(args[args.indexOf("-select_streams") + 1]).toBe("v:0");
+      const interval = args[args.indexOf("-read_intervals") + 1];
+      const seekSeconds = Number(interval.slice(0, interval.indexOf("%")));
+      expect(interval).toMatch(/%$/u);
+      expect(Math.abs(seekSeconds - (6 - 1 / 24))).toBeLessThan(0.000001);
+    }
+  });
+
+  it("rejects a nonempty early frame returned for the EOF-adjacent probe", async () => {
+    const directory = await temporaryCaseDirectory();
+    const earlyEndFrameProbe = async (_executable, args) => {
+      if (args.includes("-show_frames")) {
+        const interval = args[args.indexOf("-read_intervals") + 1];
+        return {
+          stdout: JSON.stringify({
+            frames: [{ best_effort_timestamp_time: interval === "0%+#1" ? "0" : "0.5" }],
+          }),
+        };
+      }
+      return fakeProbe(_executable, args);
+    };
+
+    await expect(verifyCaseMedia({ manifest: validManifest(), directory, runner: earlyEndFrameProbe }))
+      .rejects.toThrow("Case comparison video is not decodable at its boundary frames.");
+  });
+
+  it("selects v:0 metadata even when an audio stream is listed first", async () => {
+    const directory = await temporaryCaseDirectory();
+    const calls = [];
+    const audioFirstProbe = async (_executable, args) => {
+      calls.push(args);
+      if (args.includes("-show_frames")) return fakeProbe(_executable, args);
+      if (String(args.at(-1)).endsWith("poster.webp")) return fakeProbe(_executable, args);
+      if (args[args.indexOf("-select_streams") + 1] === "v") {
+        return { stdout: JSON.stringify({ streams: [mediaProbe().streams[0]] }) };
+      }
+      return {
+        stdout: JSON.stringify({
+          streams: [
+            { codec_type: "audio", codec_name: "aac" },
+            mediaProbe().streams[0],
+          ],
+          format: { duration: "6" },
+        }),
+      };
+    };
+
+    await expect(verifyCaseMedia({ manifest: validManifest(), directory, runner: audioFirstProbe }))
+      .resolves.toEqual({ caseCount: 1, fileCount: 5 });
+
+    const metadataCalls = calls.filter((args) => args.includes("-show_entries") &&
+      args[args.indexOf("-show_entries") + 1].includes("avg_frame_rate"));
+    expect(metadataCalls).not.toHaveLength(0);
+    for (const args of metadataCalls) {
+      expect(args).toContain("-select_streams");
+      expect(args[args.indexOf("-select_streams") + 1]).toBe("v:0");
+    }
+  });
+
+  it("rejects an asset with an additional nonconforming video stream", async () => {
+    const directory = await temporaryCaseDirectory();
+    const multiVideoProbe = async (_executable, args) => {
+      if (args.includes("-show_frames") || String(args.at(-1)).endsWith("poster.webp")) {
+        return fakeProbe(_executable, args);
+      }
+      if (args[args.indexOf("-select_streams") + 1] === "v") {
+        return {
+          stdout: JSON.stringify({
+            streams: [
+              mediaProbe().streams[0],
+              { codec_name: "vp9", pix_fmt: "yuv444p", width: 1920, height: 1080, avg_frame_rate: "60/1" },
+            ],
+          }),
+        };
+      }
+      return { stdout: JSON.stringify(mediaProbe()) };
+    };
+
+    await expect(verifyCaseMedia({ manifest: validManifest(), directory, runner: multiVideoProbe }))
+      .rejects.toThrow("Case media asset must contain exactly one video stream.");
   });
 });
 
