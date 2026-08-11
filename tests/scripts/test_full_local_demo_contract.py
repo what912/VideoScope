@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import base64
+import hashlib
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -17,6 +20,57 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 CONTRACT_PATH = (
     REPOSITORY_ROOT / "demos" / "full-local-four-mode" / "demo-contract.json"
 )
+COMPOSITION_PATH = REPOSITORY_ROOT / "demos" / "full-local-four-mode" / "index.html"
+EXPECTED_SCENE_IDS = (
+    "clean_hook",
+    "rescue_evidence",
+    "useful_tutorial",
+    "low_information",
+    "privacy_zone",
+    "motion_retake",
+    "verified_ending",
+)
+
+GSAP_VERSION = "3.15.0"
+GSAP_SHA256 = "92bb9a96476f983d212a2bc4f54c889039c1696dd4461d40a736860938570fbb"
+
+
+def test_composition_is_offline_deterministic_and_registered() -> None:
+    html = COMPOSITION_PATH.read_text(encoding="utf-8")
+    assert 'data-composition-id="videoscope-full-local-demo"' in html
+    assert 'data-duration="42"' in html
+    assert 'data-fps="24"' in html
+    assert html.count('data-scene-id="') == 7
+    assert "window.__timelines" in html
+    assert "paused: true" in html
+    for banned in ("http://", "https://", "Math.random", "Date.now", "repeat: -1"):
+        assert banned not in html
+
+
+def test_composition_embeds_verified_offline_gsap_before_application_script() -> None:
+    html = COMPOSITION_PATH.read_text(encoding="utf-8")
+    match = re.search(
+        r'<script data-gsap-version="3\.15\.0" '
+        r'data-integrity-sha256="([0-9a-f]{64})" '
+        r'src="data:text/javascript;base64,([A-Za-z0-9+/=]+)"></script>',
+        html,
+    )
+
+    assert match is not None
+    assert match.group(1) == GSAP_SHA256
+    payload = base64.b64decode(match.group(2), validate=True)
+    assert hashlib.sha256(payload).hexdigest() == GSAP_SHA256
+    assert payload.startswith(b"/*!\n * GSAP 3.15.0\n")
+    assert html.index(match.group(0)) < html.index("const SCENE_COPY")
+
+
+def test_all_scenes_have_transition_and_content_animation() -> None:
+    html = COMPOSITION_PATH.read_text(encoding="utf-8")
+    for scene_id in EXPECTED_SCENE_IDS:
+        assert f'data-scene-id="{scene_id}"' in html
+        assert f'animateScene("{scene_id}"' in html
+    assert html.count('data-transition-id="') == 6
+    assert "transitionBetween(" in html
 
 
 def test_contract_has_exact_timeline_and_privacy_ranges() -> None:
