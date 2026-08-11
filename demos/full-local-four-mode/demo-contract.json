@@ -4,6 +4,8 @@
   "width": 1280,
   "height": 720,
   "frame_rate": 24,
+  "container": "mp4",
+  "frame_rate_mode": "cfr",
   "video": {
     "codec": "h264",
     "pixel_format": "yuv420p"

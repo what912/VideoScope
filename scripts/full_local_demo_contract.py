@@ -8,12 +8,15 @@ import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath, PureWindowsPath
+from urllib.parse import urlsplit
 
 _SCHEMA_VERSION = "1.0"
 _DURATION_SECONDS = 42.0
 _WIDTH = 1280
 _HEIGHT = 720
 _FRAME_RATE = 24
+_CONTAINER = "mp4"
+_FRAME_RATE_MODE = "cfr"
 _SCENE_IDS = (
     "clean_hook",
     "rescue_evidence",
@@ -46,6 +49,8 @@ _CONTRACT_KEYS = {
     "width",
     "height",
     "frame_rate",
+    "container",
+    "frame_rate_mode",
     "video",
     "audio",
     "scenes",
@@ -78,6 +83,8 @@ class DemoContract:
     width: int
     height: int
     frame_rate: int
+    container: str
+    frame_rate_mode: str
     scenes: tuple[DemoScene, ...]
     privacy: DemoPrivacySelection
     useful_keep_ranges: tuple[tuple[float, float], ...]
@@ -128,6 +135,10 @@ class DemoContract:
             width=_require_int(payload["width"], "width"),
             height=_require_int(payload["height"], "height"),
             frame_rate=_require_int(payload["frame_rate"], "frame_rate"),
+            container=_require_string(payload["container"], "container"),
+            frame_rate_mode=_require_string(
+                payload["frame_rate_mode"], "frame_rate_mode"
+            ),
             scenes=scenes,
             privacy=privacy,
             useful_keep_ranges=useful_keep_ranges,
@@ -282,9 +293,15 @@ def _reject_unsafe_strings(value: object) -> None:
         for item in value:
             _reject_unsafe_strings(item)
     elif isinstance(value, str):
-        if "http://" in value or "https://" in value:
-            raise ValueError("remote URLs are not allowed")
-        if PurePosixPath(value).is_absolute() or PureWindowsPath(value).is_absolute():
+        if urlsplit(value).scheme:
+            raise ValueError("URL schemes are not allowed")
+        windows_path = PureWindowsPath(value)
+        if (
+            PurePosixPath(value).is_absolute()
+            or windows_path.is_absolute()
+            or windows_path.drive
+            or windows_path.root
+        ):
             raise ValueError("absolute paths are not allowed")
 
 
@@ -299,6 +316,10 @@ def _validate_contract(contract: DemoContract) -> None:
         _FRAME_RATE,
     ):
         raise ValueError("contract must be 1280x720 at 24 fps")
+    if contract.container != _CONTAINER:
+        raise ValueError("container must be mp4")
+    if contract.frame_rate_mode != _FRAME_RATE_MODE:
+        raise ValueError("frame_rate_mode must be cfr")
     if (contract.video_codec, contract.pixel_format) != ("h264", "yuv420p"):
         raise ValueError("video format must be h264 yuv420p")
     if (

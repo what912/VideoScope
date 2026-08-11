@@ -5,7 +5,13 @@ from pathlib import Path
 
 import pytest
 
-from scripts.full_local_demo_contract import DemoContract, load_demo_contract
+from scripts.full_local_demo_contract import (
+    DemoContract,
+    canonical_json_bytes,
+    load_demo_contract,
+    safe_relative_path,
+    stream_sha256,
+)
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 CONTRACT_PATH = (
@@ -31,6 +37,8 @@ def test_contract_has_exact_timeline_and_privacy_ranges() -> None:
     assert contract.privacy.end_seconds == 32.0
     assert contract.privacy.box == (0.58, 0.18, 0.94, 0.78)
     assert contract.useful_keep_ranges == ((0.0, 5.0), (10.0, 20.0), (36.0, 42.0))
+    assert contract.container == "mp4"
+    assert contract.frame_rate_mode == "cfr"
 
 
 def test_contract_rejects_gaps_overlaps_remote_assets_and_real_identifiers(
@@ -45,3 +53,112 @@ def test_contract_rejects_gaps_overlaps_remote_assets_and_real_identifiers(
     contract_text = CONTRACT_PATH.read_text(encoding="utf-8")
     assert "http://" not in contract_text
     assert "https://" not in contract_text
+
+
+@pytest.mark.parametrize("scene_start", [5.1, 4.9])  # type: ignore[untyped-decorator]
+def test_contract_rejects_scene_gaps_and_overlaps(scene_start: float) -> None:
+    payload = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
+    payload["scenes"][1]["start_seconds"] = scene_start
+
+    with pytest.raises(ValueError, match="contiguous"):
+        DemoContract.from_mapping(payload)
+
+
+@pytest.mark.parametrize(  # type: ignore[untyped-decorator]
+    "field, replacement",
+    [("container", "mov"), ("frame_rate_mode", "vfr")],
+)
+def test_contract_rejects_changed_container_and_frame_rate_mode(
+    field: str, replacement: str
+) -> None:
+    payload = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
+    payload[field] = replacement
+
+    with pytest.raises(ValueError, match=field):
+        DemoContract.from_mapping(payload)
+
+
+@pytest.mark.parametrize(  # type: ignore[untyped-decorator]
+    "unsafe_value",
+    [
+        "HTTP://example.invalid/source",
+        "file:///outside",
+        "/outside",
+        r"C:\\outside",
+        r"\\outside",
+        r"\\\\server\\share",
+    ],
+)
+def test_contract_rejects_remote_and_absolute_or_rooted_paths(
+    unsafe_value: str,
+) -> None:
+    payload = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
+    payload["scenes"][0]["purpose"] = unsafe_value
+
+    with pytest.raises(ValueError, match="URL|path"):
+        DemoContract.from_mapping(payload)
+
+
+@pytest.mark.parametrize(  # type: ignore[untyped-decorator]
+    "index, identifier",
+    [
+        (0, "real.person@example.com"),
+        (1, "+1 202-555-9999"),
+        (2, "1.0000, 2.0000"),
+    ],
+)
+def test_contract_rejects_nonapproved_fictional_identifiers(
+    index: int, identifier: str
+) -> None:
+    payload = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
+    payload["fictional_identifiers"][index] = identifier
+
+    with pytest.raises(ValueError, match="fictional identifiers"):
+        DemoContract.from_mapping(payload)
+
+
+def test_contract_rejects_unknown_nested_keys_and_boolean_numbers() -> None:
+    nested_payload = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
+    nested_payload["privacy"]["extra"] = "not allowed"
+    with pytest.raises(ValueError, match="unknown"):
+        DemoContract.from_mapping(nested_payload)
+
+    boolean_payload = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
+    boolean_payload["frame_rate"] = True
+    with pytest.raises(ValueError, match="integer"):
+        DemoContract.from_mapping(boolean_payload)
+
+
+@pytest.mark.parametrize(  # type: ignore[untyped-decorator]
+    "nonfinite", [float("nan"), float("inf"), float("-inf")]
+)
+def test_contract_rejects_nonfinite_numbers(nonfinite: float) -> None:
+    payload = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
+    payload["duration_seconds"] = nonfinite
+
+    with pytest.raises(ValueError, match="finite"):
+        DemoContract.from_mapping(payload)
+
+
+def test_canonical_json_bytes_is_stable_and_rejects_nan() -> None:
+    assert canonical_json_bytes({"b": "中文", "a": 1}) == (
+        b'{"a":1,"b":"\xe4\xb8\xad\xe6\x96\x87"}\n'
+    )
+
+    with pytest.raises(ValueError):
+        canonical_json_bytes({"value": float("nan")})
+
+
+def test_stream_sha256_and_safe_relative_path_boundaries(tmp_path: Path) -> None:
+    artifact_root = tmp_path / "artifacts"
+    artifact = artifact_root / "nested" / "report.json"
+    artifact.parent.mkdir(parents=True)
+    artifact.write_bytes(b"VideoScope")
+
+    assert stream_sha256(artifact) == (
+        "4fa668ba9d981947265ed15cab22c792f294145708c2ff3b6017806035ee7db4"
+    )
+    assert safe_relative_path(artifact, artifact_root) == "nested/report.json"
+
+    with pytest.raises(ValueError, match="contained"):
+        safe_relative_path(tmp_path / "outside.json", artifact_root)
