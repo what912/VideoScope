@@ -1,5 +1,1687 @@
 {
-  "schemaVersion": 1,
+  "cases": [
+    {
+      "actions": [
+        {
+          "actionId": "rescue_action_3107c680130f27ec9a9b9e130aea9427369013b5aefca8f0cb1b4547c54d6c7b",
+          "description": {
+            "en": "Repackage available streams without applying a visual or audio enhancement.",
+            "zh-CN": "执行已确认的 remux 本地处理。"
+          },
+          "kind": "remux",
+          "parameters": {
+            "container": "matroska"
+          },
+          "version": "1",
+          "workflow": "video-rescue"
+        },
+        {
+          "actionId": "rescue_action_c7491664e311c957953e9eb97a1720301e3afc5b2864fc149a9c7b532b811807",
+          "description": {
+            "en": "Rebuild timeline timestamps around observed discontinuities.",
+            "zh-CN": "执行已确认的 rebuild_timestamps 本地处理。"
+          },
+          "kind": "rebuild_timestamps",
+          "parameters": {},
+          "version": "1",
+          "workflow": "video-rescue"
+        },
+        {
+          "actionId": "rescue_action_c8f662b2c101ea1e1aa40267a696446c0fffd1328000a76179ea54155d4714fe",
+          "description": {
+            "en": "Verify decodability, streams, duration, and source immutability.",
+            "zh-CN": "执行已确认的 verify 本地处理。"
+          },
+          "kind": "verify",
+          "parameters": {},
+          "version": "1",
+          "workflow": "video-rescue"
+        },
+        {
+          "actionId": "remux",
+          "description": {
+            "en": "Repackage compatible streams in an MP4 container.",
+            "zh-CN": "执行已确认的 remux 本地处理。"
+          },
+          "kind": "remux",
+          "parameters": {
+            "container": "mp4"
+          },
+          "version": "1.0.0",
+          "workflow": "publish-ready"
+        },
+        {
+          "actionId": "strip_metadata",
+          "description": {
+            "en": "Remove nonessential source metadata from the output.",
+            "zh-CN": "执行已确认的 strip_metadata 本地处理。"
+          },
+          "kind": "strip_metadata",
+          "parameters": {},
+          "version": "1.0.0",
+          "workflow": "publish-ready"
+        },
+        {
+          "actionId": "faststart",
+          "description": {
+            "en": "Place MP4 playback metadata at the start of the file.",
+            "zh-CN": "执行已确认的 faststart 本地处理。"
+          },
+          "kind": "faststart",
+          "parameters": {},
+          "version": "1.0.0",
+          "workflow": "publish-ready"
+        },
+        {
+          "actionId": "extract_cover",
+          "description": {
+            "en": "Extract one representative cover image.",
+            "zh-CN": "执行已确认的 extract_cover 本地处理。"
+          },
+          "kind": "extract_cover",
+          "parameters": {},
+          "version": "1.0.0",
+          "workflow": "publish-ready"
+        }
+      ],
+      "assets": {
+        "afterVideo": "/VideoScope/cases/timeline-rescue/after.mp4",
+        "beforeVideo": "/VideoScope/cases/timeline-rescue/before.mp4",
+        "poster": "/VideoScope/cases/timeline-rescue/poster.webp",
+        "publicReport": "/VideoScope/cases/timeline-rescue/public-report.json"
+      },
+      "authorizationSummary": {
+        "en": "Generated locally from project-authored lavfi geometry and synthetic audio; no external footage was used.",
+        "zh-CN": "由项目原创的 lavfi 几何画面与合成音频在本地生成，未使用外部视频。"
+      },
+      "comparison": {
+        "endSeconds": 9.0,
+        "startSeconds": 3.0
+      },
+      "featured": true,
+      "id": "growth-timeline-rescue-v1",
+      "limitations": [
+        {
+          "en": "This is project-authored procedural media, not real-user footage.",
+          "zh-CN": "这是项目原创的程序化媒体，并非真实用户视频。"
+        },
+        {
+          "en": "Results demonstrate this controlled source and current local toolchain only.",
+          "zh-CN": "结果仅演示该受控来源与当前本地工具链。"
+        },
+        {
+          "en": "Improved viewing output was not requested for this Conservative run.",
+          "zh-CN": "限制：Improved viewing output was not requested for this Conservative run."
+        },
+        {
+          "en": "Whole-scene darkness may be intentional; preview is required before using the luma adjustment.",
+          "zh-CN": "限制：Whole-scene darkness may be intentional; preview is required before using the luma adjustment."
+        },
+        {
+          "en": "Fixed A/V offset was not assessed because repeated paired events were unavailable.",
+          "zh-CN": "限制：Fixed A/V offset was not assessed because repeated paired events were unavailable."
+        }
+      ],
+      "media": {
+        "durationSeconds": 12.101,
+        "frameRate": 24.0,
+        "height": 360,
+        "width": 640
+      },
+      "observableSymptom": {
+        "en": "The source uses a non-zero container timeline while its geometric motion remains intact.",
+        "zh-CN": "来源采用非零容器时间线，同时几何运动保持完整。"
+      },
+      "provenance": "project-authored",
+      "reproduction": [
+        "python scripts/generate_growth_cases.py --force"
+      ],
+      "sha256": {
+        "afterVideo": "d90f7dd969e139834a73bd324eeb58e7207367206701d892545821b7fb97bcad",
+        "beforeVideo": "37b08531889bd657141fbf6b3a66a3da9b1e14fdffd217b64c67f4675586342c",
+        "poster": "05bbf2b1e2b2efd9b2e4b95317215085a7ca049b1c778e666c6bcab164af7698",
+        "publicReport": "869a2954e97076c943de07ede63d09eb6b55959ea6676b8393c753237ccf6ea5"
+      },
+      "slug": "timeline-rescue",
+      "summary": {
+        "en": "A project-authored non-zero-timestamp source is repackaged and independently verified before publication.",
+        "zh-CN": "项目原创的非零时间戳来源在发布前经过重新封装与独立验证。"
+      },
+      "title": {
+        "en": "Timeline rescue",
+        "zh-CN": "时间线救援"
+      },
+      "unresolved": [
+        {
+          "en": "This controlled case does not measure outcomes on user footage.",
+          "zh-CN": "此受控案例不衡量用户视频上的结果。"
+        }
+      ],
+      "verification": {
+        "checks": [
+          {
+            "checkId": "rescue:faithful:decodable",
+            "measured": {
+              "complete_decode": true
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Complete local decode completed.",
+              "zh-CN": "本地验证检查 rescue:faithful:decodable：passed。"
+            }
+          },
+          {
+            "checkId": "rescue:faithful:duration",
+            "measured": {
+              "expected_seconds": 12.032,
+              "observed_seconds": 12.0,
+              "tolerance_seconds": 0.25
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Measured output duration matches source mappings.",
+              "zh-CN": "本地验证检查 rescue:faithful:duration：passed。"
+            }
+          },
+          {
+            "checkId": "rescue:faithful:streams",
+            "measured": {
+              "expected_audio_streams": 1,
+              "expected_video_streams": 1,
+              "observed_audio_streams": 1,
+              "observed_video_streams": 1
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Output stream inventory matches the confirmed source inventory.",
+              "zh-CN": "本地验证检查 rescue:faithful:streams：passed。"
+            }
+          },
+          {
+            "checkId": "rescue:faithful:source_read_only",
+            "measured": {
+              "current_matches_snapshot": true,
+              "snapshot_matches_plan": true
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Source bytes still match the confirmed plan.",
+              "zh-CN": "本地验证检查 rescue:faithful:source_read_only：passed。"
+            }
+          },
+          {
+            "checkId": "rescue:faithful:artifact_integrity",
+            "measured": {
+              "hash_matches": true,
+              "relative_path_valid": true
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Artifact hash and output-root-relative path are valid.",
+              "zh-CN": "本地验证检查 rescue:faithful:artifact_integrity：passed。"
+            }
+          },
+          {
+            "checkId": "rescue:faithful:audio_loudness",
+            "measured": {
+              "applicable": false,
+              "observed_lufs": -21.83,
+              "target_lufs": null,
+              "tolerance_lu": 1.0
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Measured integrated loudness is within the confirmed bound.",
+              "zh-CN": "本地验证检查 rescue:faithful:audio_loudness：passed。"
+            }
+          },
+          {
+            "checkId": "rescue:faithful:audio_peak",
+            "measured": {
+              "applicable": false,
+              "limit_dbtp": -1.5,
+              "observed_dbtp": -16.08
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Measured true peak is within the confirmed bound.",
+              "zh-CN": "本地验证检查 rescue:faithful:audio_peak：passed。"
+            }
+          },
+          {
+            "checkId": "rescue:faithful:black_regression",
+            "measured": {
+              "applicable": true,
+              "output_events": 0,
+              "reference": "codec_aligned_source",
+              "source_events": 0
+            },
+            "status": "passed",
+            "summary": {
+              "en": "No additional black-event observations were measured.",
+              "zh-CN": "本地验证检查 rescue:faithful:black_regression：passed。"
+            }
+          },
+          {
+            "checkId": "rescue:faithful:fixed_av_offset",
+            "measured": {
+              "applicable": false,
+              "measurement_method": "first_usable_packet_timestamp",
+              "observed_residual_seconds": -0.021333000000000005,
+              "planned_offset_seconds": null,
+              "planned_shift_seconds": null,
+              "tolerance_seconds": 0.04,
+              "tool_version": "ffprobe version 9.0-full_build-www.gyan.dev Copyright (c) 2007-2026 the FFmpeg developers"
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Native packet-timestamp residual is within confirmed tolerance.",
+              "zh-CN": "本地验证检查 rescue:faithful:fixed_av_offset：passed。"
+            }
+          },
+          {
+            "checkId": "rescue:faithful:flicker_regression",
+            "measured": {
+              "applicable": true,
+              "output_events": 0,
+              "reference": "codec_aligned_source",
+              "source_events": 0
+            },
+            "status": "passed",
+            "summary": {
+              "en": "No additional flicker-event observations were measured.",
+              "zh-CN": "本地验证检查 rescue:faithful:flicker_regression：passed。"
+            }
+          },
+          {
+            "checkId": "rescue:faithful:freeze_regression",
+            "measured": {
+              "applicable": true,
+              "output_events": 2,
+              "reference": "codec_aligned_source",
+              "source_events": 2
+            },
+            "status": "passed",
+            "summary": {
+              "en": "No additional freeze-event observations were measured.",
+              "zh-CN": "本地验证检查 rescue:faithful:freeze_regression：passed。"
+            }
+          },
+          {
+            "checkId": "rescue:faithful:luma_clipping",
+            "measured": {
+              "applicable": true,
+              "output_ratio": 0.0,
+              "reference": "codec_aligned_source",
+              "source_ratio": 0.0
+            },
+            "status": "passed",
+            "summary": {
+              "en": "No excessive luma clipping was introduced.",
+              "zh-CN": "本地验证检查 rescue:faithful:luma_clipping：passed。"
+            }
+          },
+          {
+            "checkId": "rescue:faithful:noise_side_effects",
+            "measured": {
+              "applicable": true,
+              "maximum_residual_increase": 0.00392156862745098,
+              "output_residual": 0.03346348640850051,
+              "reference": "codec_aligned_source",
+              "source_residual": 0.03346348640850051
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Noise residual increase remains within the applicable measured tolerance.",
+              "zh-CN": "本地验证检查 rescue:faithful:noise_side_effects：passed。"
+            }
+          },
+          {
+            "checkId": "rescue:faithful:sharpness_side_effects",
+            "measured": {
+              "applicable": true,
+              "output_sharpness": 0.0819979339207972,
+              "reference": "codec_aligned_source",
+              "source_sharpness": 0.0819979339207972
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Measured sharpness loss remains within the configured bound.",
+              "zh-CN": "本地验证检查 rescue:faithful:sharpness_side_effects：passed。"
+            }
+          },
+          {
+            "checkId": "rescue:faithful:source_mapping",
+            "measured": {
+              "complete": true,
+              "mapping_count": 1
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Source mappings are complete, contiguous, and output-root-relative.",
+              "zh-CN": "本地验证检查 rescue:faithful:source_mapping：passed。"
+            }
+          },
+          {
+            "checkId": "rescue:faithful:stabilization_crop",
+            "measured": {
+              "applicable": false,
+              "maximum_ratio": 0.12,
+              "observed_ratio": null,
+              "reason": "measured"
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Measured stabilization crop is within the confirmed bound.",
+              "zh-CN": "本地验证检查 rescue:faithful:stabilization_crop：passed。"
+            }
+          },
+          {
+            "checkId": "publish:decodable",
+            "measured": {
+              "output_metadata_available": true
+            },
+            "status": "passed",
+            "summary": {
+              "en": "The output was independently probed as decodable media.",
+              "zh-CN": "本地验证检查 publish:decodable：passed。"
+            }
+          },
+          {
+            "checkId": "publish:duration",
+            "measured": {
+              "drift_seconds": 0.0,
+              "output_seconds": 12.0,
+              "source_seconds": 12.0,
+              "tolerance_seconds": 0.5
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Output duration is within the source-relative tolerance.",
+              "zh-CN": "本地验证检查 publish:duration：passed。"
+            }
+          },
+          {
+            "checkId": "publish:dimensions",
+            "measured": {
+              "expected_height": 360,
+              "expected_width": 640,
+              "output_height": 360,
+              "output_width": 640
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Output dimensions match the selected profile canvas.",
+              "zh-CN": "本地验证检查 publish:dimensions：passed。"
+            }
+          },
+          {
+            "checkId": "publish:container",
+            "measured": {
+              "output_container": "mov,mp4,m4a,3gp,3g2,mj2",
+              "required_container": "mp4"
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Output container is compatible with the selected profile.",
+              "zh-CN": "本地验证检查 publish:container：passed。"
+            }
+          },
+          {
+            "checkId": "publish:video_codec",
+            "measured": {
+              "output_video_codec": "h264",
+              "required_video_codec": "h264"
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Output video codec matches the selected profile.",
+              "zh-CN": "本地验证检查 publish:video_codec：passed。"
+            }
+          },
+          {
+            "checkId": "publish:pixel_format",
+            "measured": {
+              "output_pixel_format": "yuv420p",
+              "required_pixel_format": "yuv420p"
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Output pixel format matches the selected profile.",
+              "zh-CN": "本地验证检查 publish:pixel_format：passed。"
+            }
+          },
+          {
+            "checkId": "publish:frame_rate",
+            "measured": {
+              "maximum_fps": 60.0,
+              "output_fps": 24.0
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Output frame rate is within the selected profile limit.",
+              "zh-CN": "本地验证检查 publish:frame_rate：passed。"
+            }
+          },
+          {
+            "checkId": "publish:audio_stream",
+            "measured": {
+              "output_has_audio": true,
+              "source_has_audio": true
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Output preserves the source audio-stream requirement.",
+              "zh-CN": "本地验证检查 publish:audio_stream：passed。"
+            }
+          },
+          {
+            "checkId": "publish:audio_codec",
+            "measured": {
+              "audio_required": true,
+              "output_audio_codec": "aac",
+              "required_audio_codec": "aac"
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Output audio codec satisfies the selected profile.",
+              "zh-CN": "本地验证检查 publish:audio_codec：passed。"
+            }
+          },
+          {
+            "checkId": "publish:near_black_regression",
+            "measured": {
+              "after_execution": "ok",
+              "after_high_critical_count": 0,
+              "after_high_critical_duration_seconds": 0,
+              "before_execution": "ok",
+              "before_high_critical_count": 0,
+              "before_high_critical_duration_seconds": 0
+            },
+            "status": "passed",
+            "summary": {
+              "en": "The near_black high/critical event summary did not increase.",
+              "zh-CN": "本地验证检查 publish:near_black_regression：passed。"
+            }
+          },
+          {
+            "checkId": "publish:possible_freeze_regression",
+            "measured": {
+              "after_execution": "ok",
+              "after_high_critical_count": 0,
+              "after_high_critical_duration_seconds": 0,
+              "before_execution": "ok",
+              "before_high_critical_count": 0,
+              "before_high_critical_duration_seconds": 0
+            },
+            "status": "passed",
+            "summary": {
+              "en": "The possible_freeze high/critical event summary did not increase.",
+              "zh-CN": "本地验证检查 publish:possible_freeze_regression：passed。"
+            }
+          },
+          {
+            "checkId": "same-source-range",
+            "measured": {
+              "durationSeconds": 6.0,
+              "endSeconds": 9.0,
+              "startSeconds": 3.0
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Before and after clips use the identical declared source range.",
+              "zh-CN": "本地验证检查 same-source-range：passed。"
+            }
+          },
+          {
+            "checkId": "public-media-decode",
+            "measured": {
+              "afterVideoDurationSeconds": 6.041667,
+              "afterVideoHeight": 360,
+              "afterVideoWidth": 640,
+              "beforeVideoDurationSeconds": 6.0,
+              "beforeVideoHeight": 360,
+              "beforeVideoWidth": 640
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Both public comparison clips decoded and matched the bounded duration.",
+              "zh-CN": "本地验证检查 public-media-decode：passed。"
+            }
+          }
+        ],
+        "status": "completed"
+      },
+      "versions": {
+        "configuration": "growth-case-generator-v1",
+        "ffmpeg": "ffmpeg version 9.0-full_build-www.gyan.dev Copyright (c) 2000-2026 the FFmpeg developers",
+        "platform": "Windows-AMD64",
+        "videoscope": "0.8.0"
+      }
+    },
+    {
+      "actions": [
+        {
+          "actionId": "rescue_action_3b31c5c95a766318c677e5e0bf6078cdc7d3c0096946d726530ca37f07ad8f6d",
+          "description": {
+            "en": "Repackage available streams without applying a visual or audio enhancement.",
+            "zh-CN": "执行已确认的 remux 本地处理。"
+          },
+          "kind": "remux",
+          "parameters": {
+            "container": "matroska"
+          },
+          "version": "1",
+          "workflow": "video-rescue"
+        },
+        {
+          "actionId": "rescue_action_7f0cb35d9e9ddcb99a63f8fbd7e2746e7a1a72c49d9f579c20b5941eb4d71a4d",
+          "description": {
+            "en": "Apply the bounded audio adjustment supported by measured values.",
+            "zh-CN": "执行已确认的 normalize_audio 本地处理。"
+          },
+          "kind": "normalize_audio",
+          "parameters": {
+            "clipping_peak_threshold_dbtp": -0.1,
+            "clipping_ratio_threshold": 0.001,
+            "loudness_deviation_lu": -4.100000000000001,
+            "measured_I": -20.1,
+            "measured_LRA": 3.7,
+            "measured_TP": -9.35,
+            "measured_thresh": -30.1,
+            "minimum_loudness_deviation_lu": 1.0,
+            "minimum_noise_confidence": 0.8,
+            "minimum_noise_event_count": 3,
+            "noise_floor_threshold_dbfs": -45.0,
+            "offset": -0.17,
+            "strength_limit": 1.0,
+            "target_integrated_lufs": -16.0,
+            "target_loudness_range": 11.0,
+            "true_peak_limit_dbtp": -1.5
+          },
+          "version": "1",
+          "workflow": "video-rescue"
+        },
+        {
+          "actionId": "rescue_action_d882189c9070724a0998453f6e2296915a861c587c54ef74685ae7e0ad896e16",
+          "description": {
+            "en": "Verify decodability, streams, duration, and source immutability.",
+            "zh-CN": "执行已确认的 verify 本地处理。"
+          },
+          "kind": "verify",
+          "parameters": {},
+          "version": "1",
+          "workflow": "video-rescue"
+        },
+        {
+          "actionId": "remux",
+          "description": {
+            "en": "Repackage compatible streams in an MP4 container.",
+            "zh-CN": "执行已确认的 remux 本地处理。"
+          },
+          "kind": "remux",
+          "parameters": {
+            "container": "mp4"
+          },
+          "version": "1.0.0",
+          "workflow": "publish-ready"
+        },
+        {
+          "actionId": "strip_metadata",
+          "description": {
+            "en": "Remove nonessential source metadata from the output.",
+            "zh-CN": "执行已确认的 strip_metadata 本地处理。"
+          },
+          "kind": "strip_metadata",
+          "parameters": {},
+          "version": "1.0.0",
+          "workflow": "publish-ready"
+        },
+        {
+          "actionId": "faststart",
+          "description": {
+            "en": "Place MP4 playback metadata at the start of the file.",
+            "zh-CN": "执行已确认的 faststart 本地处理。"
+          },
+          "kind": "faststart",
+          "parameters": {},
+          "version": "1.0.0",
+          "workflow": "publish-ready"
+        },
+        {
+          "actionId": "extract_cover",
+          "description": {
+            "en": "Extract one representative cover image.",
+            "zh-CN": "执行已确认的 extract_cover 本地处理。"
+          },
+          "kind": "extract_cover",
+          "parameters": {},
+          "version": "1.0.0",
+          "workflow": "publish-ready"
+        }
+      ],
+      "assets": {
+        "afterVideo": "/VideoScope/cases/measured-improvement/after.mp4",
+        "beforeVideo": "/VideoScope/cases/measured-improvement/before.mp4",
+        "poster": "/VideoScope/cases/measured-improvement/poster.webp",
+        "publicReport": "/VideoScope/cases/measured-improvement/public-report.json"
+      },
+      "authorizationSummary": {
+        "en": "Generated locally from project-authored lavfi geometry and synthetic audio; no external footage was used.",
+        "zh-CN": "由项目原创的 lavfi 几何画面与合成音频在本地生成，未使用外部视频。"
+      },
+      "comparison": {
+        "endSeconds": 8.0,
+        "startSeconds": 3.0
+      },
+      "featured": true,
+      "id": "growth-measured-improvement-v1",
+      "limitations": [
+        {
+          "en": "This is project-authored procedural media, not real-user footage.",
+          "zh-CN": "这是项目原创的程序化媒体，并非真实用户视频。"
+        },
+        {
+          "en": "Results demonstrate this controlled source and current local toolchain only.",
+          "zh-CN": "结果仅演示该受控来源与当前本地工具链。"
+        },
+        {
+          "en": "Stabilization was omitted because measured motion did not meet the bounded policy (low_inlier_ratio).",
+          "zh-CN": "限制：Stabilization was omitted because measured motion did not meet the bounded policy (low_inlier_ratio)."
+        },
+        {
+          "en": "Fixed A/V offset was not assessed because repeated paired events were unavailable.",
+          "zh-CN": "限制：Fixed A/V offset was not assessed because repeated paired events were unavailable."
+        }
+      ],
+      "media": {
+        "durationSeconds": 12.0,
+        "frameRate": 24.0,
+        "height": 360,
+        "width": 640
+      },
+      "observableSymptom": {
+        "en": "A bounded interval is visibly darker and alternates in brightness with deterministic noise.",
+        "zh-CN": "一个有界区间明显更暗，并伴随确定性噪声与交替亮度。"
+      },
+      "provenance": "project-authored",
+      "reproduction": [
+        "python scripts/generate_growth_cases.py --force"
+      ],
+      "sha256": {
+        "afterVideo": "ef97afc1fb08a8b96b2ce3316c0263e6eb3b5671a635f2be449b4afe72dcc37d",
+        "beforeVideo": "8c4a085fe1703c80230f1b4099dcb65cba32a4d3207dc47ebcc19d67bff96148",
+        "poster": "780709c403fda7e58730db980caa8b20f36e1e96e08cf23463db1b5eda7a40ed",
+        "publicReport": "84ff605adbceaad670787815c6cb875c1fd0248d6ca07a40ffeb41293e1adbfc"
+      },
+      "slug": "measured-improvement",
+      "summary": {
+        "en": "A project-authored 3–8 second luma, flicker, video-noise, and audio-noise interval is preserved while the measured loudness action is applied after exact confirmation.",
+        "zh-CN": "项目原创素材在 3–8 秒包含亮度、闪烁、视频噪声与音频噪声区间；精确确认后仅应用实测响度动作并保留该区间。"
+      },
+      "title": {
+        "en": "Measured local improvement",
+        "zh-CN": "实测本地改善"
+      },
+      "unresolved": [
+        {
+          "en": "This controlled case does not measure outcomes on user footage.",
+          "zh-CN": "此受控案例不衡量用户视频上的结果。"
+        }
+      ],
+      "verification": {
+        "checks": [
+          {
+            "checkId": "rescue:faithful:decodable",
+            "measured": {
+              "complete_decode": true
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Complete local decode completed.",
+              "zh-CN": "本地验证检查 rescue:faithful:decodable：passed。"
+            }
+          },
+          {
+            "checkId": "rescue:faithful:duration",
+            "measured": {
+              "expected_seconds": 12.021333,
+              "observed_seconds": 12.0,
+              "tolerance_seconds": 0.25
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Measured output duration matches source mappings.",
+              "zh-CN": "本地验证检查 rescue:faithful:duration：passed。"
+            }
+          },
+          {
+            "checkId": "rescue:faithful:streams",
+            "measured": {
+              "expected_audio_streams": 1,
+              "expected_video_streams": 1,
+              "observed_audio_streams": 1,
+              "observed_video_streams": 1
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Output stream inventory matches the confirmed source inventory.",
+              "zh-CN": "本地验证检查 rescue:faithful:streams：passed。"
+            }
+          },
+          {
+            "checkId": "rescue:faithful:source_read_only",
+            "measured": {
+              "current_matches_snapshot": true,
+              "snapshot_matches_plan": true
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Source bytes still match the confirmed plan.",
+              "zh-CN": "本地验证检查 rescue:faithful:source_read_only：passed。"
+            }
+          },
+          {
+            "checkId": "rescue:faithful:artifact_integrity",
+            "measured": {
+              "hash_matches": true,
+              "relative_path_valid": true
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Artifact hash and output-root-relative path are valid.",
+              "zh-CN": "本地验证检查 rescue:faithful:artifact_integrity：passed。"
+            }
+          },
+          {
+            "checkId": "rescue:faithful:audio_loudness",
+            "measured": {
+              "applicable": false,
+              "observed_lufs": -20.37,
+              "target_lufs": null,
+              "tolerance_lu": 1.0
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Measured integrated loudness is within the confirmed bound.",
+              "zh-CN": "本地验证检查 rescue:faithful:audio_loudness：passed。"
+            }
+          },
+          {
+            "checkId": "rescue:faithful:audio_peak",
+            "measured": {
+              "applicable": false,
+              "limit_dbtp": -1.5,
+              "observed_dbtp": -8.77
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Measured true peak is within the confirmed bound.",
+              "zh-CN": "本地验证检查 rescue:faithful:audio_peak：passed。"
+            }
+          },
+          {
+            "checkId": "rescue:faithful:black_regression",
+            "measured": {
+              "applicable": true,
+              "output_events": 0,
+              "reference": "codec_aligned_source",
+              "source_events": 0
+            },
+            "status": "passed",
+            "summary": {
+              "en": "No additional black-event observations were measured.",
+              "zh-CN": "本地验证检查 rescue:faithful:black_regression：passed。"
+            }
+          },
+          {
+            "checkId": "rescue:faithful:fixed_av_offset",
+            "measured": {
+              "applicable": false,
+              "measurement_method": "first_usable_packet_timestamp",
+              "observed_residual_seconds": -0.021333000000000005,
+              "planned_offset_seconds": null,
+              "planned_shift_seconds": null,
+              "tolerance_seconds": 0.04,
+              "tool_version": "ffprobe version 9.0-full_build-www.gyan.dev Copyright (c) 2007-2026 the FFmpeg developers"
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Native packet-timestamp residual is within confirmed tolerance.",
+              "zh-CN": "本地验证检查 rescue:faithful:fixed_av_offset：passed。"
+            }
+          },
+          {
+            "checkId": "rescue:faithful:flicker_regression",
+            "measured": {
+              "applicable": true,
+              "output_events": 26,
+              "reference": "codec_aligned_source",
+              "source_events": 26
+            },
+            "status": "passed",
+            "summary": {
+              "en": "No additional flicker-event observations were measured.",
+              "zh-CN": "本地验证检查 rescue:faithful:flicker_regression：passed。"
+            }
+          },
+          {
+            "checkId": "rescue:faithful:freeze_regression",
+            "measured": {
+              "applicable": true,
+              "output_events": 24,
+              "reference": "codec_aligned_source",
+              "source_events": 24
+            },
+            "status": "passed",
+            "summary": {
+              "en": "No additional freeze-event observations were measured.",
+              "zh-CN": "本地验证检查 rescue:faithful:freeze_regression：passed。"
+            }
+          },
+          {
+            "checkId": "rescue:faithful:luma_clipping",
+            "measured": {
+              "applicable": true,
+              "output_ratio": 0.0,
+              "reference": "codec_aligned_source",
+              "source_ratio": 0.0
+            },
+            "status": "passed",
+            "summary": {
+              "en": "No excessive luma clipping was introduced.",
+              "zh-CN": "本地验证检查 rescue:faithful:luma_clipping：passed。"
+            }
+          },
+          {
+            "checkId": "rescue:faithful:noise_side_effects",
+            "measured": {
+              "applicable": true,
+              "maximum_residual_increase": 0.00392156862745098,
+              "output_residual": 0.023459816438873002,
+              "reference": "codec_aligned_source",
+              "source_residual": 0.023459816438873002
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Noise residual increase remains within the applicable measured tolerance.",
+              "zh-CN": "本地验证检查 rescue:faithful:noise_side_effects：passed。"
+            }
+          },
+          {
+            "checkId": "rescue:faithful:sharpness_side_effects",
+            "measured": {
+              "applicable": true,
+              "output_sharpness": 0.03727398047116579,
+              "reference": "codec_aligned_source",
+              "source_sharpness": 0.03727398047116579
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Measured sharpness loss remains within the configured bound.",
+              "zh-CN": "本地验证检查 rescue:faithful:sharpness_side_effects：passed。"
+            }
+          },
+          {
+            "checkId": "rescue:faithful:source_mapping",
+            "measured": {
+              "complete": true,
+              "mapping_count": 1
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Source mappings are complete, contiguous, and output-root-relative.",
+              "zh-CN": "本地验证检查 rescue:faithful:source_mapping：passed。"
+            }
+          },
+          {
+            "checkId": "rescue:faithful:stabilization_crop",
+            "measured": {
+              "applicable": false,
+              "maximum_ratio": 0.12,
+              "observed_ratio": null,
+              "reason": "measured"
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Measured stabilization crop is within the confirmed bound.",
+              "zh-CN": "本地验证检查 rescue:faithful:stabilization_crop：passed。"
+            }
+          },
+          {
+            "checkId": "rescue:improved:decodable",
+            "measured": {
+              "complete_decode": true
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Complete local decode completed.",
+              "zh-CN": "本地验证检查 rescue:improved:decodable：passed。"
+            }
+          },
+          {
+            "checkId": "rescue:improved:duration",
+            "measured": {
+              "expected_seconds": 12.021333,
+              "observed_seconds": 12.0,
+              "tolerance_seconds": 0.25
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Measured output duration matches source mappings.",
+              "zh-CN": "本地验证检查 rescue:improved:duration：passed。"
+            }
+          },
+          {
+            "checkId": "rescue:improved:streams",
+            "measured": {
+              "expected_audio_streams": 1,
+              "expected_video_streams": 1,
+              "observed_audio_streams": 1,
+              "observed_video_streams": 1
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Output stream inventory matches the confirmed source inventory.",
+              "zh-CN": "本地验证检查 rescue:improved:streams：passed。"
+            }
+          },
+          {
+            "checkId": "rescue:improved:source_read_only",
+            "measured": {
+              "current_matches_snapshot": true,
+              "snapshot_matches_plan": true
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Source bytes still match the confirmed plan.",
+              "zh-CN": "本地验证检查 rescue:improved:source_read_only：passed。"
+            }
+          },
+          {
+            "checkId": "rescue:improved:artifact_integrity",
+            "measured": {
+              "hash_matches": true,
+              "relative_path_valid": true
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Artifact hash and output-root-relative path are valid.",
+              "zh-CN": "本地验证检查 rescue:improved:artifact_integrity：passed。"
+            }
+          },
+          {
+            "checkId": "rescue:improved:audio_loudness",
+            "measured": {
+              "applicable": true,
+              "observed_lufs": -15.73,
+              "target_lufs": -16.0,
+              "tolerance_lu": 1.0
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Measured integrated loudness is within the confirmed bound.",
+              "zh-CN": "本地验证检查 rescue:improved:audio_loudness：passed。"
+            }
+          },
+          {
+            "checkId": "rescue:improved:audio_peak",
+            "measured": {
+              "applicable": true,
+              "limit_dbtp": -1.5,
+              "observed_dbtp": -3.31
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Measured true peak is within the confirmed bound.",
+              "zh-CN": "本地验证检查 rescue:improved:audio_peak：passed。"
+            }
+          },
+          {
+            "checkId": "rescue:improved:black_regression",
+            "measured": {
+              "applicable": true,
+              "output_events": 0,
+              "reference": "codec_aligned_source",
+              "source_events": 0
+            },
+            "status": "passed",
+            "summary": {
+              "en": "No additional black-event observations were measured.",
+              "zh-CN": "本地验证检查 rescue:improved:black_regression：passed。"
+            }
+          },
+          {
+            "checkId": "rescue:improved:fixed_av_offset",
+            "measured": {
+              "applicable": false,
+              "measurement_method": "first_usable_packet_timestamp",
+              "observed_residual_seconds": -0.02132166666666667,
+              "planned_offset_seconds": null,
+              "planned_shift_seconds": null,
+              "tolerance_seconds": 0.04,
+              "tool_version": "ffprobe version 9.0-full_build-www.gyan.dev Copyright (c) 2007-2026 the FFmpeg developers"
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Native packet-timestamp residual is within confirmed tolerance.",
+              "zh-CN": "本地验证检查 rescue:improved:fixed_av_offset：passed。"
+            }
+          },
+          {
+            "checkId": "rescue:improved:flicker_regression",
+            "measured": {
+              "applicable": true,
+              "output_events": 26,
+              "reference": "codec_aligned_source",
+              "source_events": 26
+            },
+            "status": "passed",
+            "summary": {
+              "en": "No additional flicker-event observations were measured.",
+              "zh-CN": "本地验证检查 rescue:improved:flicker_regression：passed。"
+            }
+          },
+          {
+            "checkId": "rescue:improved:freeze_regression",
+            "measured": {
+              "applicable": true,
+              "output_events": 24,
+              "reference": "codec_aligned_source",
+              "source_events": 24
+            },
+            "status": "passed",
+            "summary": {
+              "en": "No additional freeze-event observations were measured.",
+              "zh-CN": "本地验证检查 rescue:improved:freeze_regression：passed。"
+            }
+          },
+          {
+            "checkId": "rescue:improved:luma_clipping",
+            "measured": {
+              "applicable": true,
+              "output_ratio": 0.0,
+              "reference": "codec_aligned_source",
+              "source_ratio": 0.0
+            },
+            "status": "passed",
+            "summary": {
+              "en": "No excessive luma clipping was introduced.",
+              "zh-CN": "本地验证检查 rescue:improved:luma_clipping：passed。"
+            }
+          },
+          {
+            "checkId": "rescue:improved:noise_side_effects",
+            "measured": {
+              "applicable": true,
+              "maximum_residual_increase": 0.00392156862745098,
+              "output_residual": 0.023459816438873002,
+              "reference": "codec_aligned_source",
+              "source_residual": 0.023459816438873002
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Noise residual increase remains within the applicable measured tolerance.",
+              "zh-CN": "本地验证检查 rescue:improved:noise_side_effects：passed。"
+            }
+          },
+          {
+            "checkId": "rescue:improved:sharpness_side_effects",
+            "measured": {
+              "applicable": true,
+              "output_sharpness": 0.03727398047116579,
+              "reference": "codec_aligned_source",
+              "source_sharpness": 0.03727398047116579
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Measured sharpness loss remains within the configured bound.",
+              "zh-CN": "本地验证检查 rescue:improved:sharpness_side_effects：passed。"
+            }
+          },
+          {
+            "checkId": "rescue:improved:source_mapping",
+            "measured": {
+              "complete": true,
+              "mapping_count": 1
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Source mappings are complete, contiguous, and output-root-relative.",
+              "zh-CN": "本地验证检查 rescue:improved:source_mapping：passed。"
+            }
+          },
+          {
+            "checkId": "rescue:improved:stabilization_crop",
+            "measured": {
+              "applicable": false,
+              "maximum_ratio": 0.12,
+              "observed_ratio": null,
+              "reason": "measured"
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Measured stabilization crop is within the confirmed bound.",
+              "zh-CN": "本地验证检查 rescue:improved:stabilization_crop：passed。"
+            }
+          },
+          {
+            "checkId": "publish:decodable",
+            "measured": {
+              "output_metadata_available": true
+            },
+            "status": "passed",
+            "summary": {
+              "en": "The output was independently probed as decodable media.",
+              "zh-CN": "本地验证检查 publish:decodable：passed。"
+            }
+          },
+          {
+            "checkId": "publish:duration",
+            "measured": {
+              "drift_seconds": 0.0,
+              "output_seconds": 12.0,
+              "source_seconds": 12.0,
+              "tolerance_seconds": 0.5
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Output duration is within the source-relative tolerance.",
+              "zh-CN": "本地验证检查 publish:duration：passed。"
+            }
+          },
+          {
+            "checkId": "publish:dimensions",
+            "measured": {
+              "expected_height": 360,
+              "expected_width": 640,
+              "output_height": 360,
+              "output_width": 640
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Output dimensions match the selected profile canvas.",
+              "zh-CN": "本地验证检查 publish:dimensions：passed。"
+            }
+          },
+          {
+            "checkId": "publish:container",
+            "measured": {
+              "output_container": "mov,mp4,m4a,3gp,3g2,mj2",
+              "required_container": "mp4"
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Output container is compatible with the selected profile.",
+              "zh-CN": "本地验证检查 publish:container：passed。"
+            }
+          },
+          {
+            "checkId": "publish:video_codec",
+            "measured": {
+              "output_video_codec": "h264",
+              "required_video_codec": "h264"
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Output video codec matches the selected profile.",
+              "zh-CN": "本地验证检查 publish:video_codec：passed。"
+            }
+          },
+          {
+            "checkId": "publish:pixel_format",
+            "measured": {
+              "output_pixel_format": "yuv420p",
+              "required_pixel_format": "yuv420p"
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Output pixel format matches the selected profile.",
+              "zh-CN": "本地验证检查 publish:pixel_format：passed。"
+            }
+          },
+          {
+            "checkId": "publish:frame_rate",
+            "measured": {
+              "maximum_fps": 60.0,
+              "output_fps": 24.0
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Output frame rate is within the selected profile limit.",
+              "zh-CN": "本地验证检查 publish:frame_rate：passed。"
+            }
+          },
+          {
+            "checkId": "publish:audio_stream",
+            "measured": {
+              "output_has_audio": true,
+              "source_has_audio": true
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Output preserves the source audio-stream requirement.",
+              "zh-CN": "本地验证检查 publish:audio_stream：passed。"
+            }
+          },
+          {
+            "checkId": "publish:audio_codec",
+            "measured": {
+              "audio_required": true,
+              "output_audio_codec": "aac",
+              "required_audio_codec": "aac"
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Output audio codec satisfies the selected profile.",
+              "zh-CN": "本地验证检查 publish:audio_codec：passed。"
+            }
+          },
+          {
+            "checkId": "publish:near_black_regression",
+            "measured": {
+              "after_execution": "ok",
+              "after_high_critical_count": 0,
+              "after_high_critical_duration_seconds": 0,
+              "before_execution": "ok",
+              "before_high_critical_count": 0,
+              "before_high_critical_duration_seconds": 0
+            },
+            "status": "passed",
+            "summary": {
+              "en": "The near_black high/critical event summary did not increase.",
+              "zh-CN": "本地验证检查 publish:near_black_regression：passed。"
+            }
+          },
+          {
+            "checkId": "publish:possible_freeze_regression",
+            "measured": {
+              "after_execution": "ok",
+              "after_high_critical_count": 0,
+              "after_high_critical_duration_seconds": 0,
+              "before_execution": "ok",
+              "before_high_critical_count": 0,
+              "before_high_critical_duration_seconds": 0
+            },
+            "status": "passed",
+            "summary": {
+              "en": "The possible_freeze high/critical event summary did not increase.",
+              "zh-CN": "本地验证检查 publish:possible_freeze_regression：passed。"
+            }
+          },
+          {
+            "checkId": "same-source-range",
+            "measured": {
+              "durationSeconds": 5.0,
+              "endSeconds": 8.0,
+              "startSeconds": 3.0
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Before and after clips use the identical declared source range.",
+              "zh-CN": "本地验证检查 same-source-range：passed。"
+            }
+          },
+          {
+            "checkId": "public-media-decode",
+            "measured": {
+              "afterVideoDurationSeconds": 5.041667,
+              "afterVideoHeight": 360,
+              "afterVideoWidth": 640,
+              "beforeVideoDurationSeconds": 5.0,
+              "beforeVideoHeight": 360,
+              "beforeVideoWidth": 640
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Both public comparison clips decoded and matched the bounded duration.",
+              "zh-CN": "本地验证检查 public-media-decode：passed。"
+            }
+          }
+        ],
+        "status": "completed"
+      },
+      "versions": {
+        "configuration": "growth-case-generator-v1",
+        "ffmpeg": "ffmpeg version 9.0-full_build-www.gyan.dev Copyright (c) 2000-2026 the FFmpeg developers",
+        "platform": "Windows-AMD64",
+        "videoscope": "0.8.0"
+      }
+    },
+    {
+      "actions": [
+        {
+          "actionId": "transcode",
+          "description": {
+            "en": "Encode streams to the selected compatibility profile.",
+            "zh-CN": "执行已确认的 transcode 本地处理。"
+          },
+          "kind": "transcode",
+          "parameters": {
+            "audio_codec": "aac",
+            "container": "mp4",
+            "maximum_fps": 60.0,
+            "pixel_format": "yuv420p",
+            "video_codec": "h264"
+          },
+          "version": "1.0.0",
+          "workflow": "publish-ready"
+        },
+        {
+          "actionId": "scale_pad",
+          "description": {
+            "en": "Fit the complete source image and pad the target canvas.",
+            "zh-CN": "执行已确认的 scale_pad 本地处理。"
+          },
+          "kind": "scale_pad",
+          "parameters": {
+            "height": 1920,
+            "mode": "fit",
+            "pad_color": "black",
+            "width": 1080
+          },
+          "version": "1.0.0",
+          "workflow": "publish-ready"
+        },
+        {
+          "actionId": "strip_metadata",
+          "description": {
+            "en": "Remove nonessential source metadata from the output.",
+            "zh-CN": "执行已确认的 strip_metadata 本地处理。"
+          },
+          "kind": "strip_metadata",
+          "parameters": {},
+          "version": "1.0.0",
+          "workflow": "publish-ready"
+        },
+        {
+          "actionId": "faststart",
+          "description": {
+            "en": "Place MP4 playback metadata at the start of the file.",
+            "zh-CN": "执行已确认的 faststart 本地处理。"
+          },
+          "kind": "faststart",
+          "parameters": {},
+          "version": "1.0.0",
+          "workflow": "publish-ready"
+        },
+        {
+          "actionId": "extract_cover",
+          "description": {
+            "en": "Extract one representative cover image.",
+            "zh-CN": "执行已确认的 extract_cover 本地处理。"
+          },
+          "kind": "extract_cover",
+          "parameters": {},
+          "version": "1.0.0",
+          "workflow": "publish-ready"
+        }
+      ],
+      "assets": {
+        "afterVideo": "/VideoScope/cases/no-crop-vertical-publish/after.mp4",
+        "beforeVideo": "/VideoScope/cases/no-crop-vertical-publish/before.mp4",
+        "poster": "/VideoScope/cases/no-crop-vertical-publish/poster.webp",
+        "publicReport": "/VideoScope/cases/no-crop-vertical-publish/public-report.json"
+      },
+      "authorizationSummary": {
+        "en": "Generated locally from project-authored lavfi geometry and synthetic audio; no external footage was used.",
+        "zh-CN": "由项目原创的 lavfi 几何画面与合成音频在本地生成，未使用外部视频。"
+      },
+      "comparison": {
+        "endSeconds": 9.0,
+        "startSeconds": 3.0
+      },
+      "featured": true,
+      "id": "growth-no-crop-vertical-v1",
+      "limitations": [
+        {
+          "en": "This is project-authored procedural media, not real-user footage.",
+          "zh-CN": "这是项目原创的程序化媒体，并非真实用户视频。"
+        },
+        {
+          "en": "Results demonstrate this controlled source and current local toolchain only.",
+          "zh-CN": "结果仅演示该受控来源与当前本地工具链。"
+        }
+      ],
+      "media": {
+        "durationSeconds": 12.0,
+        "frameRate": 24.0,
+        "height": 360,
+        "width": 640
+      },
+      "observableSymptom": {
+        "en": "A direct crop would remove the colored edge markers.",
+        "zh-CN": "直接裁剪会移除彩色边缘标记。"
+      },
+      "provenance": "project-authored",
+      "reproduction": [
+        "python scripts/generate_growth_cases.py --force"
+      ],
+      "sha256": {
+        "afterVideo": "92b4d9e3c11e29ab213d370b4d697799d0fbe9b5a4de92787dbb45ff7ee8eeb6",
+        "beforeVideo": "e3cad7f1c6c69047fb702bb38bb4b1a1be4729e4966646df727196475d52c4cc",
+        "poster": "0985cad5ef9d6b352402e372a262165662a703305582bc4e25701de5eda4020a",
+        "publicReport": "dd0e618a08997322589eccfef350e6964e3b3623ae6384ed2f78c049a3cabb00"
+      },
+      "slug": "no-crop-vertical-publish",
+      "summary": {
+        "en": "A project-authored 16:9 frame with four edge markers is scaled and padded into the verified 9:16 profile.",
+        "zh-CN": "带四侧边缘标记的项目原创 16:9 画面通过缩放与填充进入经验证的 9:16 Profile。"
+      },
+      "title": {
+        "en": "No-crop vertical publish",
+        "zh-CN": "无裁剪竖屏发布"
+      },
+      "unresolved": [
+        {
+          "en": "This controlled case does not measure outcomes on user footage.",
+          "zh-CN": "此受控案例不衡量用户视频上的结果。"
+        }
+      ],
+      "verification": {
+        "checks": [
+          {
+            "checkId": "publish:decodable",
+            "measured": {
+              "output_metadata_available": true
+            },
+            "status": "passed",
+            "summary": {
+              "en": "The output was independently probed as decodable media.",
+              "zh-CN": "本地验证检查 publish:decodable：passed。"
+            }
+          },
+          {
+            "checkId": "publish:duration",
+            "measured": {
+              "drift_seconds": 0.0,
+              "output_seconds": 12.0,
+              "source_seconds": 12.0,
+              "tolerance_seconds": 0.5
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Output duration is within the source-relative tolerance.",
+              "zh-CN": "本地验证检查 publish:duration：passed。"
+            }
+          },
+          {
+            "checkId": "publish:dimensions",
+            "measured": {
+              "expected_height": 1920,
+              "expected_width": 1080,
+              "output_height": 1920,
+              "output_width": 1080
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Output dimensions match the selected profile canvas.",
+              "zh-CN": "本地验证检查 publish:dimensions：passed。"
+            }
+          },
+          {
+            "checkId": "publish:container",
+            "measured": {
+              "output_container": "mov,mp4,m4a,3gp,3g2,mj2",
+              "required_container": "mp4"
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Output container is compatible with the selected profile.",
+              "zh-CN": "本地验证检查 publish:container：passed。"
+            }
+          },
+          {
+            "checkId": "publish:video_codec",
+            "measured": {
+              "output_video_codec": "h264",
+              "required_video_codec": "h264"
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Output video codec matches the selected profile.",
+              "zh-CN": "本地验证检查 publish:video_codec：passed。"
+            }
+          },
+          {
+            "checkId": "publish:pixel_format",
+            "measured": {
+              "output_pixel_format": "yuv420p",
+              "required_pixel_format": "yuv420p"
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Output pixel format matches the selected profile.",
+              "zh-CN": "本地验证检查 publish:pixel_format：passed。"
+            }
+          },
+          {
+            "checkId": "publish:frame_rate",
+            "measured": {
+              "maximum_fps": 60.0,
+              "output_fps": 24.0
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Output frame rate is within the selected profile limit.",
+              "zh-CN": "本地验证检查 publish:frame_rate：passed。"
+            }
+          },
+          {
+            "checkId": "publish:audio_stream",
+            "measured": {
+              "output_has_audio": true,
+              "source_has_audio": true
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Output preserves the source audio-stream requirement.",
+              "zh-CN": "本地验证检查 publish:audio_stream：passed。"
+            }
+          },
+          {
+            "checkId": "publish:audio_codec",
+            "measured": {
+              "audio_required": true,
+              "output_audio_codec": "aac",
+              "required_audio_codec": "aac"
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Output audio codec satisfies the selected profile.",
+              "zh-CN": "本地验证检查 publish:audio_codec：passed。"
+            }
+          },
+          {
+            "checkId": "publish:near_black_regression",
+            "measured": {
+              "after_execution": "ok",
+              "after_high_critical_count": 0,
+              "after_high_critical_duration_seconds": 0,
+              "before_execution": "ok",
+              "before_high_critical_count": 0,
+              "before_high_critical_duration_seconds": 0
+            },
+            "status": "passed",
+            "summary": {
+              "en": "The near_black high/critical event summary did not increase.",
+              "zh-CN": "本地验证检查 publish:near_black_regression：passed。"
+            }
+          },
+          {
+            "checkId": "publish:possible_freeze_regression",
+            "measured": {
+              "after_execution": "ok",
+              "after_high_critical_count": 0,
+              "after_high_critical_duration_seconds": 0,
+              "before_execution": "ok",
+              "before_high_critical_count": 0,
+              "before_high_critical_duration_seconds": 0
+            },
+            "status": "passed",
+            "summary": {
+              "en": "The possible_freeze high/critical event summary did not increase.",
+              "zh-CN": "本地验证检查 publish:possible_freeze_regression：passed。"
+            }
+          },
+          {
+            "checkId": "same-source-range",
+            "measured": {
+              "durationSeconds": 6.0,
+              "endSeconds": 9.0,
+              "startSeconds": 3.0
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Before and after clips use the identical declared source range.",
+              "zh-CN": "本地验证检查 same-source-range：passed。"
+            }
+          },
+          {
+            "checkId": "public-media-decode",
+            "measured": {
+              "afterVideoDurationSeconds": 6.0,
+              "afterVideoHeight": 720,
+              "afterVideoWidth": 406,
+              "beforeVideoDurationSeconds": 6.0,
+              "beforeVideoHeight": 360,
+              "beforeVideoWidth": 640
+            },
+            "status": "passed",
+            "summary": {
+              "en": "Both public comparison clips decoded and matched the bounded duration.",
+              "zh-CN": "本地验证检查 public-media-decode：passed。"
+            }
+          },
+          {
+            "checkId": "vertical-scale-and-pad",
+            "measured": {
+              "bottomEdgeMarkerVisible": true,
+              "leftEdgeMarkerVisible": true,
+              "operation": "scale-and-pad",
+              "publicOutputHeight": 720,
+              "publicOutputWidth": 406,
+              "rightEdgeMarkerVisible": true,
+              "sourceAspectRatio": "16:9",
+              "topEdgeMarkerVisible": true
+            },
+            "status": "passed",
+            "summary": {
+              "en": "The verified Publish Ready output uses scale-and-pad; the public comparison retains 9:16 within its media budget.",
+              "zh-CN": "本地验证检查 vertical-scale-and-pad：passed。"
+            }
+          }
+        ],
+        "status": "completed"
+      },
+      "versions": {
+        "configuration": "growth-case-generator-v1",
+        "ffmpeg": "ffmpeg version 9.0-full_build-www.gyan.dev Copyright (c) 2000-2026 the FFmpeg developers",
+        "platform": "Windows-AMD64",
+        "videoscope": "0.8.0"
+      }
+    }
+  ],
   "generatedBy": "scripts/generate_growth_cases.py",
-  "cases": []
+  "schemaVersion": 1
 }

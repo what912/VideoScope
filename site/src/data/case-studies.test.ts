@@ -1,12 +1,24 @@
 import { describe, expect, it } from "vitest";
 
-import { caseStudyManifest, validateCaseStudyManifest } from "./case-studies";
+import {
+  caseStudyManifest,
+  featuredCaseStudies,
+  validateCaseStudyManifest,
+} from "./case-studies";
 import validCase from "./test-fixtures/valid-case-study.json";
 
 describe("case study manifest", () => {
-  it("starts as a valid versioned manifest", () => {
+  it("publishes three distinct completed project-authored launch cases", () => {
+    expect(featuredCaseStudies).toHaveLength(3);
+    expect(new Set(featuredCaseStudies.map((item) => item.slug)).size).toBe(3);
+    expect(
+      featuredCaseStudies.every((item) => item.provenance === "project-authored"),
+    ).toBe(true);
+  });
+
+  it("loads the generated versioned manifest", () => {
     expect(caseStudyManifest.schemaVersion).toBe(1);
-    expect(caseStudyManifest.cases).toEqual([]);
+    expect(caseStudyManifest.generatedBy).toBe("scripts/generate_growth_cases.py");
   });
 
   it("accepts one complete safe case record", () => {
