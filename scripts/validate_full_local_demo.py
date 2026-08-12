@@ -9,12 +9,46 @@ import shutil
 import tempfile
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from datetime import datetime
+from enum import Enum
 from pathlib import Path, PurePosixPath, PureWindowsPath
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
 
 from scripts.full_local_demo_contract import safe_relative_path, stream_sha256
+from videoscope.content import (
+    ContentConfig,
+    ContentGoal,
+    ContentPipelineConfig,
+    ContentPipelineDependencies,
+    ContentPreviewBuilder,
+    ContentTimeRange,
+    ContentUserRange,
+    ContentUserRangeKind,
+    LongVideoContentPipeline,
+    NativeContentExecutor,
+    StructuralFeatureConfig,
+    make_user_range_id,
+)
+from videoscope.privacy import (
+    NormalizedBox,
+    PrivacyDecision,
+    PrivacyJobOutcome,
+    PrivacyReviewDecision,
+    RedactionStyle,
+)
+from videoscope.privacy.manual import (
+    ManualAudioIntervalInput,
+    ManualVisualRegionInput,
+    build_manual_audio_risk,
+    build_manual_visual_risk,
+)
+from videoscope.privacy.pipeline import (
+    PrivacyScanResult,
+    SafeSharingConfig,
+    SafeSharingPipeline,
+)
 from videoscope.rescue.models import (
     RescueConfirmation,
     RescueStrategy,
@@ -32,7 +66,7 @@ from videoscope.resolve import (
 )
 
 _SHA256 = r"^[0-9a-f]{64}$"
-_WORKFLOWS = ("publish_ready", "video_rescue")
+_WORKFLOWS = ("publish_ready", "video_rescue", "useful_content", "safe_sharing")
 _SOURCE_NAME = "VideoScope-Full-Local-Demo-Source.mp4"
 _MANIFEST_NAME = "demo-manifest.json"
 _REVIEW_PREVIEW_ROOT = PurePosixPath("review-previews")
@@ -47,6 +81,9 @@ _IMPROVEMENT_KINDS = frozenset(
         "denoise_audio",
     }
 )
+_USEFUL_KEEP_RANGES = ((0.0, 5.0), (10.0, 20.0), (36.0, 42.0))
+_PRIVACY_START_SECONDS = 25.0
+_PRIVACY_END_SECONDS = 32.0
 
 
 class DemoConfirmationError(ValueError):
@@ -72,6 +109,54 @@ def _relative_path(value: str) -> str:
     return value
 
 
+def _reject_path_leakage(value: object) -> None:
+    if isinstance(value, Mapping):
+        for item in value.values():
+            _reject_path_leakage(item)
+    elif isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+        for item in value:
+            _reject_path_leakage(item)
+    elif isinstance(value, str) and (
+        Path(value).is_absolute()
+        or PureWindowsPath(value).is_absolute()
+        or bool(PureWindowsPath(value).drive)
+    ):
+        raise ValueError("public data cannot contain an absolute path")
+
+
+def _public_json_value(value: object) -> JsonValue:
+    """Normalize public data deterministically without stringifying private paths."""
+    if value is None or isinstance(value, (bool, int, float, str)):
+        _reject_path_leakage(value)
+        return value
+    if isinstance(value, Enum):
+        return _public_json_value(value.value)
+    if isinstance(value, Path):
+        raise ValueError("public data cannot contain a path value")
+    if hasattr(value, "model_dump"):
+        return _public_json_value(value.model_dump(mode="python"))
+    if isinstance(value, Mapping):
+        normalized: dict[str, JsonValue] = {}
+        for key, item in value.items():
+            if not isinstance(key, str):
+                raise ValueError("public JSON mapping keys must be strings")
+            normalized[key] = _public_json_value(item)
+        return normalized
+    if isinstance(value, (set, frozenset)):
+        items = [_public_json_value(item) for item in value]
+        return sorted(
+            items,
+            key=lambda item: json.dumps(
+                item, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+            ),
+        )
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+        return [_public_json_value(item) for item in value]
+    if hasattr(value, "__dict__"):
+        return _public_json_value(vars(value))
+    raise ValueError(f"public data has unsupported type: {type(value).__name__}")
+
+
 def _safe_artifacts(artifacts: Mapping[str, str]) -> dict[str, str]:
     return {key: _relative_path(value) for key, value in artifacts.items()}
 
@@ -92,6 +177,19 @@ class WorkflowCandidate(_DemoModel):
         for start, end in self.ranges:
             if start < 0 or end < start:
                 raise ValueError("candidate range must be ordered and non-negative")
+        object.__setattr__(
+            self,
+            "evidence",
+            tuple(
+                cast(dict[str, JsonValue], _public_json_value(item))
+                for item in self.evidence
+            ),
+        )
+        object.__setattr__(
+            self,
+            "limitations",
+            tuple(cast(str, _public_json_value(item)) for item in self.limitations),
+        )
         return self
 
 
@@ -113,6 +211,59 @@ class PreparedReview(_DemoModel):
 
     @model_validator(mode="after")
     def validate_workflow_keys(self) -> PreparedReview:
+        if any(key != value.workflow_id for key, value in self.workflows.items()):
+            raise ValueError("workflow map keys must match workflow IDs")
+        return self
+
+
+@dataclass(frozen=True, slots=True)
+class SafeSharingScanPreparation:
+    scan: PrivacyScanResult | object
+    scan_digest: str
+    manual_visual_regions: tuple[ManualVisualRegionInput, ...]
+    manual_audio_intervals: tuple[ManualAudioIntervalInput, ...]
+
+
+class PrivacyReviewChoice(_DemoModel):
+    risk_id: str = Field(pattern=r"^privacy_risk_[0-9a-f]{64}$")
+    decision: Literal["allow", "redact"]
+    style: str | None = None
+
+    @model_validator(mode="after")
+    def validate_decision_style(self) -> PrivacyReviewChoice:
+        if self.decision == "redact" and self.style is None:
+            raise ValueError("redact privacy choice requires a style")
+        if self.decision == "allow" and self.style is not None:
+            raise ValueError("allow privacy choice forbids a style")
+        return self
+
+
+class PrivacyReviewFile(_DemoModel):
+    schema_version: Literal["1"] = "1"
+    source_sha256: str = Field(pattern=_SHA256)
+    contract_sha256: str = Field(pattern=_SHA256)
+    scan_digest: str = Field(pattern=_SHA256)
+    reviewed_at: datetime
+    choices: tuple[PrivacyReviewChoice, ...]
+
+    @model_validator(mode="after")
+    def validate_choices(self) -> PrivacyReviewFile:
+        if self.reviewed_at.tzinfo is None:
+            raise ValueError("privacy review timestamp must include a timezone")
+        ids = tuple(item.risk_id for item in self.choices)
+        if len(ids) != len(set(ids)):
+            raise ValueError("privacy review choices must have unique risk IDs")
+        return self
+
+
+class ConfirmablePlan(_DemoModel):
+    schema_version: Literal["1"] = "1"
+    source_sha256: str = Field(pattern=_SHA256)
+    contract_sha256: str = Field(pattern=_SHA256)
+    workflows: dict[str, PreparedWorkflow]
+
+    @model_validator(mode="after")
+    def validate_workflow_keys(self) -> ConfirmablePlan:
         if any(key != value.workflow_id for key, value in self.workflows.items()):
             raise ValueError("workflow map keys must match workflow IDs")
         return self
@@ -156,6 +307,27 @@ class WorkflowOutcome(_DemoModel):
     @model_validator(mode="after")
     def validate_artifacts(self) -> WorkflowOutcome:
         object.__setattr__(self, "artifacts", _safe_artifacts(self.artifacts))
+        object.__setattr__(
+            self,
+            "actions",
+            tuple(
+                cast(dict[str, JsonValue], _public_json_value(item))
+                for item in self.actions
+            ),
+        )
+        object.__setattr__(
+            self,
+            "checks",
+            tuple(
+                cast(dict[str, JsonValue], _public_json_value(item))
+                for item in self.checks
+            ),
+        )
+        object.__setattr__(
+            self,
+            "limitations",
+            tuple(cast(str, _public_json_value(item)) for item in self.limitations),
+        )
         return self
 
 
@@ -178,12 +350,23 @@ def _unavailable_factory(*_args: object, **_kwargs: object) -> None:
     raise RuntimeError("this workflow is added by the later demo task")
 
 
+def _default_content_factory(config: ContentPipelineConfig) -> LongVideoContentPipeline:
+    ffmpeg = config.features.ffmpeg
+    return LongVideoContentPipeline(
+        config,
+        dependencies=ContentPipelineDependencies(
+            preview_builder=ContentPreviewBuilder(ffmpeg_executable=ffmpeg),
+            executor=NativeContentExecutor(ffmpeg=ffmpeg),
+        ),
+    )
+
+
 def default_dependencies() -> DemoPipelineDependencies:
     return DemoPipelineDependencies(
         publish_factory=PublishReadyPipeline,
         rescue_factory=VideoRescuePipeline,
-        content_factory=_unavailable_factory,
-        privacy_factory=_unavailable_factory,
+        content_factory=_default_content_factory,
+        privacy_factory=SafeSharingPipeline,
     )
 
 
@@ -209,10 +392,10 @@ def _dump(value: object) -> dict[str, JsonValue]:
     if hasattr(value, "model_dump"):
         dumped = value.model_dump(mode="json")
         if isinstance(dumped, dict):
-            return dumped
+            return cast(dict[str, JsonValue], _public_json_value(dumped))
     if isinstance(value, Mapping):
-        return dict(value)
-    return {"value": str(value)}
+        return cast(dict[str, JsonValue], _public_json_value(value))
+    return {"value": _public_json_value(value)}
 
 
 def _manifest_binding(source: Path, manifest_path: Path) -> tuple[str, str]:
@@ -539,10 +722,19 @@ def prepare_all(
         if prepared_rescue is not None:
             rescue.abort(prepared_rescue)
 
+    content_workflow = prepare_useful_content(source, output, dependencies=dependencies)
+    safe_sharing_scan = scan_safe_sharing(source, output, dependencies=dependencies)
+    safe_sharing_workflow = _privacy_scan_workflow(safe_sharing_scan)
+
     review = PreparedReview(
         source_sha256=source_hash,
         contract_sha256=contract_hash,
-        workflows={"publish_ready": publish_workflow, "video_rescue": rescue_workflow},
+        workflows={
+            "publish_ready": publish_workflow,
+            "video_rescue": rescue_workflow,
+            "useful_content": content_workflow,
+            "safe_sharing": safe_sharing_workflow,
+        },
     )
     _write_json(output / "prepared-review.json", review)
     return review
@@ -591,6 +783,500 @@ def prepare_rescue(source: Path, output: Path) -> PreparedWorkflow:
         pipeline.abort(preparation)
 
 
+def _content_user_ranges(source_hash: str) -> tuple[ContentUserRange, ...]:
+    return tuple(
+        ContentUserRange(
+            id=make_user_range_id(source_hash, ContentUserRangeKind.KEEP, source_range),
+            kind=ContentUserRangeKind.KEEP,
+            source_range=source_range,
+            label=f"Reviewed keep {index}",
+        )
+        for index, (start, end) in enumerate(_USEFUL_KEEP_RANGES, start=1)
+        for source_range in (ContentTimeRange(start_seconds=start, end_seconds=end),)
+    )
+
+
+def _content_pipeline_config(source_hash: str, output: Path) -> ContentPipelineConfig:
+    ffmpeg = os.environ.get("VIDEOSCOPE_FFMPEG", "ffmpeg")
+    ffprobe = os.environ.get("VIDEOSCOPE_FFPROBE", "ffprobe")
+    return ContentPipelineConfig(
+        output_directory=output / "useful-content",
+        content=ContentConfig(
+            goal=ContentGoal.SELECTED_CLIPS,
+            export_clips=True,
+            minimum_chapter_duration_seconds=1.0,
+        ),
+        features=StructuralFeatureConfig(ffmpeg=ffmpeg, ffprobe=ffprobe),
+        user_ranges=_content_user_ranges(source_hash),
+    )
+
+
+def _content_preview_evidence(
+    review: object, output: Path, *, preserve: bool
+) -> dict[str, tuple[dict[str, JsonValue], ...]]:
+    private_root = output / "useful-content" / "content-review-private"
+    evidence: dict[str, tuple[dict[str, JsonValue], ...]] = {}
+    for preview in getattr(review, "previews", ()):
+        action_id = str(getattr(preview, "action_id"))
+        items: list[dict[str, JsonValue]] = []
+        for value in getattr(preview, "relative_paths", ()):
+            source = private_root / Path(str(value))
+            relative = (
+                _REVIEW_PREVIEW_ROOT / "useful-content" / action_id / source.name
+            ).as_posix()
+            if preserve:
+                relative = _copy_review_preview(source, output, relative)
+            items.append(
+                {
+                    "source": "preview",
+                    "relative_path": _relative_path(relative),
+                    "identity": str(getattr(preview, "identity")),
+                }
+            )
+        evidence[action_id] = tuple(items)
+    return evidence
+
+
+def _content_workflow(
+    review: object,
+    *,
+    preview_evidence: Mapping[str, tuple[dict[str, JsonValue], ...]] | None = None,
+) -> PreparedWorkflow:
+    plan = getattr(review, "plan")
+    preparation = getattr(review, "preparation")
+    preview_evidence = preview_evidence or {}
+    keep_candidates = tuple(
+        WorkflowCandidate(
+            id=str(getattr(item, "id")),
+            kind="keep",
+            ranges=(
+                (
+                    float(item.source_range.start_seconds),
+                    float(item.source_range.end_seconds),
+                ),
+            ),
+            requires_confirmation=False,
+            evidence=(
+                {"source": "user_range", "label": str(getattr(item, "label", ""))},
+            ),
+        )
+        for item in getattr(
+            getattr(preparation, "content_map", None), "user_ranges", ()
+        )
+        if _status(getattr(item, "kind", "")) == "keep"
+    )
+    if not keep_candidates:
+        content_map_hash = str(
+            getattr(getattr(preparation, "content_map"), "input_hash")
+        )
+        keep_candidates = tuple(
+            WorkflowCandidate(
+                id=item.id,
+                kind="keep",
+                ranges=(
+                    (item.source_range.start_seconds, item.source_range.end_seconds),
+                ),
+                requires_confirmation=True,
+                evidence=({"source": "user_range", "label": item.label or ""},),
+            )
+            for item in _content_user_ranges(content_map_hash)
+        )
+    action_candidates = tuple(
+        WorkflowCandidate(
+            id=str(getattr(action, "id")),
+            kind=_status(getattr(action, "kind")),
+            ranges=tuple(
+                (float(item.start_seconds), float(item.end_seconds))
+                for item in getattr(action, "source_ranges", ())
+            ),
+            requires_confirmation=bool(getattr(action, "requires_confirmation")),
+            evidence=(
+                {"source": "content_action", "value": _dump(action)},
+                *preview_evidence.get(str(getattr(action, "id")), ()),
+            ),
+            preview_relative_path=next(
+                (
+                    str(item["relative_path"])
+                    for item in preview_evidence.get(str(getattr(action, "id")), ())
+                ),
+                None,
+            ),
+            limitations=tuple(getattr(preparation, "warnings", ())),
+        )
+        for action in getattr(plan, "actions", ())
+    )
+    workflow = PreparedWorkflow(
+        workflow_id="useful_content",
+        plan_digest=str(getattr(plan, "plan_digest")),
+        candidates=(*keep_candidates, *action_candidates),
+        preparation_status="ready_to_confirm",
+    )
+    keep_ranges = tuple(
+        candidate.ranges[0]
+        for candidate in workflow.candidates
+        if candidate.kind == "keep"
+    )
+    if keep_ranges != _USEFUL_KEEP_RANGES:
+        raise DemoConfirmationError("Useful Content keep ranges changed")
+    return workflow
+
+
+def prepare_useful_content(
+    source: Path,
+    output: Path,
+    *,
+    dependencies: DemoPipelineDependencies | None = None,
+) -> PreparedWorkflow:
+    """Prepare and preview exact reviewed keep ranges without confirming them."""
+    dependencies = dependencies or default_dependencies()
+    source_hash = stream_sha256(source)
+    pipeline = dependencies.content_factory(
+        _content_pipeline_config(source_hash, output)
+    )
+    try:
+        preparation = pipeline.prepare(source)
+        review = pipeline.preview(preparation)
+        if getattr(getattr(preparation, "content_map"), "input_hash") != source_hash:
+            raise DemoConfirmationError("content plan source hash mismatch")
+        previews = _content_preview_evidence(review, output, preserve=True)
+        return _content_workflow(review, preview_evidence=previews)
+    finally:
+        pipeline.close()
+
+
+def _manual_privacy_inputs() -> tuple[
+    tuple[ManualVisualRegionInput, ...], tuple[ManualAudioIntervalInput, ...]
+]:
+    return (
+        (
+            ManualVisualRegionInput(
+                start_seconds=_PRIVACY_START_SECONDS,
+                end_seconds=_PRIVACY_END_SECONDS,
+                box=NormalizedBox(x_min=0.58, y_min=0.18, x_max=0.94, y_max=0.78),
+                style=RedactionStyle.SOLID_FILL,
+            ),
+        ),
+        (
+            ManualAudioIntervalInput(
+                start_seconds=_PRIVACY_START_SECONDS,
+                end_seconds=_PRIVACY_END_SECONDS,
+                style=RedactionStyle.MUTE,
+            ),
+        ),
+    )
+
+
+def _scan_digest(scan: object) -> str:
+    risk_map = getattr(scan, "risk_map")
+    executions = []
+    for item in getattr(scan, "scanner_executions", ()):
+        dumped = _dump(item)
+        dumped.pop("elapsed_seconds", None)
+        executions.append(dumped)
+    payload = {
+        "risk_map": _dump(risk_map),
+        "scanner_executions": executions,
+        "warnings": list(getattr(scan, "warnings", ())),
+    }
+    import hashlib
+
+    return hashlib.sha256(_canonical(payload)).hexdigest()
+
+
+def _privacy_risks(preparation: SafeSharingScanPreparation) -> tuple[object, ...]:
+    risk_map = getattr(preparation.scan, "risk_map")
+    source_hash = str(getattr(risk_map, "input_hash"))
+    duration = float(getattr(risk_map, "duration_seconds", 42.0))
+    visual = tuple(
+        build_manual_visual_risk(
+            source_hash,
+            item.model_copy(update={"source_duration_seconds": duration}),
+        )
+        for item in preparation.manual_visual_regions
+    )
+    audio = tuple(
+        build_manual_audio_risk(
+            source_hash,
+            item.model_copy(update={"source_duration_seconds": duration}),
+        )
+        for item in preparation.manual_audio_intervals
+    )
+    return (*tuple(getattr(risk_map, "risks", ())), *visual, *audio)
+
+
+def _privacy_scan_workflow(preparation: SafeSharingScanPreparation) -> PreparedWorkflow:
+    candidates = tuple(
+        WorkflowCandidate(
+            id=str(getattr(risk, "id")),
+            kind=_status(getattr(risk, "risk_type")),
+            ranges=(
+                (
+                    float(getattr(risk, "start_seconds")),
+                    float(getattr(risk, "end_seconds")),
+                ),
+            ),
+            requires_confirmation=True,
+            evidence=(
+                {
+                    "source": "privacy_risk",
+                    "scanner_id": str(getattr(risk, "scanner_id")),
+                    "public_description": str(getattr(risk, "public_description")),
+                    "recommended_style": (
+                        _status(getattr(risk, "recommended_style"))
+                        if getattr(risk, "recommended_style", None) is not None
+                        else None
+                    ),
+                    "box": (
+                        getattr(risk, "box").model_dump(mode="json")
+                        if getattr(risk, "box", None) is not None
+                        else None
+                    ),
+                },
+            ),
+            limitations=tuple(getattr(risk, "limitations", ())),
+        )
+        for risk in _privacy_risks(preparation)
+    )
+    workflow = PreparedWorkflow(
+        workflow_id="safe_sharing",
+        plan_digest=preparation.scan_digest,
+        candidates=candidates,
+        preparation_status="awaiting_privacy_review",
+    )
+    manual_visual = tuple(
+        item for item in workflow.candidates if item.kind == "manual_visual"
+    )
+    manual_audio = tuple(
+        item for item in workflow.candidates if item.kind == "manual_audio"
+    )
+    expected_range = ((_PRIVACY_START_SECONDS, _PRIVACY_END_SECONDS),)
+    expected_box = {
+        "x_min": 0.58,
+        "y_min": 0.18,
+        "x_max": 0.94,
+        "y_max": 0.78,
+    }
+    if (
+        len(manual_visual) != 1
+        or manual_visual[0].ranges != expected_range
+        or manual_visual[0].evidence[0].get("box") != expected_box
+        or len(manual_audio) != 1
+        or manual_audio[0].ranges != expected_range
+    ):
+        raise DemoConfirmationError("Safe Sharing manual selections changed")
+    return workflow
+
+
+def scan_safe_sharing(
+    source: Path,
+    output: Path,
+    *,
+    dependencies: DemoPipelineDependencies | None = None,
+) -> SafeSharingScanPreparation:
+    """Scan and propose exact manual risks; never review or implicitly allow."""
+    dependencies = dependencies or default_dependencies()
+    output.mkdir(parents=True, exist_ok=True)
+    lifecycle_root = Path(tempfile.mkdtemp(prefix=".safe-sharing-scan-", dir=output))
+    pipeline = dependencies.privacy_factory(lifecycle_root)
+    scan: object | None = None
+    try:
+        scan = pipeline.scan(
+            source=source,
+            config=SafeSharingConfig(audience="public", sample_fps=5.0),
+        )
+        if getattr(getattr(scan, "risk_map"), "profile", "public") != "public":
+            raise DemoConfirmationError("Safe Sharing demo requires public audience")
+        if getattr(getattr(scan, "risk_map"), "input_hash") != stream_sha256(source):
+            raise DemoConfirmationError("Safe Sharing scan source hash mismatch")
+        visual, audio = _manual_privacy_inputs()
+        return SafeSharingScanPreparation(
+            scan=scan,
+            scan_digest=_scan_digest(scan),
+            manual_visual_regions=visual,
+            manual_audio_intervals=audio,
+        )
+    finally:
+        if scan is not None:
+            pipeline.discard(str(getattr(scan, "scan_id")))
+        shutil.rmtree(lifecycle_root, ignore_errors=True)
+
+
+def _validate_privacy_review(
+    prepared: PreparedWorkflow,
+    review: PrivacyReviewFile,
+    *,
+    source_hash: str,
+    contract_hash: str,
+) -> None:
+    if review.source_sha256 != source_hash or review.contract_sha256 != contract_hash:
+        raise DemoConfirmationError(
+            "privacy review binding does not match source or contract"
+        )
+    if prepared.plan_digest != review.scan_digest:
+        raise DemoConfirmationError(
+            "privacy review scan digest does not match preparation"
+        )
+    expected_ids = {item.id for item in prepared.candidates}
+    choice_ids = [item.risk_id for item in review.choices]
+    if len(choice_ids) != len(set(choice_ids)) or set(choice_ids) != expected_ids:
+        raise DemoConfirmationError(
+            "privacy review requires exactly one choice per risk"
+        )
+    candidate_by_id = {item.id: item for item in prepared.candidates}
+    for choice in review.choices:
+        candidate = candidate_by_id[choice.risk_id]
+        if candidate.kind == "metadata" and (
+            choice.decision != "redact" or choice.style != "remove_metadata"
+        ):
+            raise DemoConfirmationError("metadata risk requires remove_metadata")
+        if candidate.kind == "manual_visual" and (
+            choice.decision != "redact" or choice.style != "solid_fill"
+        ):
+            raise DemoConfirmationError("manual visual risk requires solid_fill")
+        if candidate.kind == "manual_audio" and (
+            choice.decision != "redact" or choice.style != "mute"
+        ):
+            raise DemoConfirmationError("manual audio risk requires mute")
+
+
+def _review_decisions(review: PrivacyReviewFile) -> tuple[PrivacyReviewDecision, ...]:
+    return tuple(
+        PrivacyReviewDecision(
+            risk_id=item.risk_id,
+            decision=PrivacyDecision(item.decision),
+            style=RedactionStyle(item.style) if item.style is not None else None,
+            reviewed_at=review.reviewed_at,
+        )
+        for item in review.choices
+    )
+
+
+def _privacy_plan_workflow(
+    preparation: object, preview_relative: str
+) -> PreparedWorkflow:
+    plan = getattr(preparation, "plan")
+    candidates = tuple(
+        WorkflowCandidate(
+            id=str(getattr(action, "id")),
+            kind=_status(getattr(action, "kind")),
+            ranges=(
+                (
+                    float(getattr(action, "start_seconds")),
+                    float(getattr(action, "end_seconds")),
+                ),
+            ),
+            requires_confirmation=bool(getattr(action, "requires_confirmation")),
+            evidence=(
+                {
+                    "source": "privacy_action",
+                    "box": (
+                        getattr(action, "box").model_dump(mode="json")
+                        if getattr(action, "box", None) is not None
+                        else None
+                    ),
+                    "parameters": _dump(getattr(action, "parameters", {})),
+                },
+            ),
+            preview_relative_path=preview_relative,
+        )
+        for action in getattr(plan, "actions", ())
+    )
+    return PreparedWorkflow(
+        workflow_id="safe_sharing",
+        plan_digest=str(getattr(plan, "digest")),
+        candidates=candidates,
+        preparation_status="ready_to_confirm",
+    )
+
+
+def _fresh_privacy_plan(
+    source: Path,
+    output: Path,
+    prepared_scan: PreparedWorkflow,
+    review_file: PrivacyReviewFile,
+    *,
+    source_hash: str,
+    contract_hash: str,
+    dependencies: DemoPipelineDependencies,
+    preserve_preview: bool,
+) -> tuple[object, object, object, PreparedWorkflow]:
+    output.mkdir(parents=True, exist_ok=True)
+    lifecycle_root = (
+        Path(tempfile.mkdtemp(prefix=".safe-sharing-preview-", dir=output))
+        if preserve_preview
+        else output / "safe-sharing"
+    )
+    pipeline: Any = dependencies.privacy_factory(lifecycle_root)
+    scan: object | None = None
+    try:
+        scan = pipeline.scan(
+            source=source, config=SafeSharingConfig(audience="public", sample_fps=5.0)
+        )
+        visual, audio = _manual_privacy_inputs()
+        scan_preparation = SafeSharingScanPreparation(
+            scan=scan,
+            scan_digest=_scan_digest(scan),
+            manual_visual_regions=visual,
+            manual_audio_intervals=audio,
+        )
+        fresh_scan = _privacy_scan_workflow(scan_preparation)
+        _same_preparation(prepared_scan, fresh_scan)
+        _validate_privacy_review(
+            prepared_scan,
+            review_file,
+            source_hash=source_hash,
+            contract_hash=contract_hash,
+        )
+        reviewed = pipeline.review(
+            getattr(scan, "scan_id"),
+            _review_decisions(review_file),
+            manual_visual_regions=visual,
+            manual_audio_intervals=audio,
+        )
+        preparation = pipeline.prepare(getattr(reviewed, "review_id"))
+        preview = Path(pipeline.preview(getattr(preparation, "preparation_id")))
+        relative = (_REVIEW_PREVIEW_ROOT / "safe-sharing" / preview.name).as_posix()
+        if preserve_preview:
+            relative = _copy_review_preview(preview, output, relative)
+        workflow = _privacy_plan_workflow(preparation, _relative_path(relative))
+        return pipeline, scan, preparation, workflow
+    except BaseException:
+        if scan is not None:
+            pipeline.discard(str(getattr(scan, "scan_id")))
+        if preserve_preview:
+            shutil.rmtree(lifecycle_root, ignore_errors=True)
+        raise
+
+
+def preview_safe_sharing(
+    prepared: PreparedWorkflow,
+    review_file: PrivacyReviewFile,
+    *,
+    source: Path,
+    output: Path,
+    source_hash: str,
+    contract_hash: str,
+    dependencies: DemoPipelineDependencies | None = None,
+) -> PreparedWorkflow:
+    """Re-scan and build a confirmable D plan without confirming it."""
+    dependencies = dependencies or default_dependencies()
+    pipeline, scan, _preparation, workflow = _fresh_privacy_plan(
+        source,
+        output,
+        prepared,
+        review_file,
+        source_hash=source_hash,
+        contract_hash=contract_hash,
+        dependencies=dependencies,
+        preserve_preview=True,
+    )
+    cast(Any, pipeline).discard(str(getattr(scan, "scan_id")))
+    lifecycle_root = Path(getattr(pipeline, "_output", output))
+    if lifecycle_root.name.startswith(".safe-sharing-preview-"):
+        shutil.rmtree(lifecycle_root, ignore_errors=True)
+    return workflow
+
+
 def _same_preparation(expected: PreparedWorkflow, fresh: PreparedWorkflow) -> None:
     if expected.plan_digest != fresh.plan_digest:
         raise DemoConfirmationError("plan digest does not match fresh preparation")
@@ -618,6 +1304,35 @@ def _check_confirmation(
         raise DemoConfirmationError(
             "confirmation action does not match prepared candidates"
         )
+
+
+def _check_exact_action_confirmation(
+    prepared: PreparedWorkflow, confirmation: WorkflowConfirmation
+) -> None:
+    _check_confirmation(prepared, confirmation)
+    required = tuple(
+        item.id for item in prepared.candidates if item.requires_confirmation
+    )
+    if confirmation.accepted_action_ids != required:
+        raise DemoConfirmationError("confirmation must accept exact action IDs")
+
+
+def _validate_confirmation_document(
+    confirmable: ConfirmablePlan, confirmation: ExecutionConfirmation
+) -> None:
+    if confirmation.source_sha256 != confirmable.source_sha256 or (
+        confirmation.contract_sha256 != confirmable.contract_sha256
+    ):
+        raise DemoConfirmationError(
+            "confirmation binding does not match confirmable plan"
+        )
+    if set(confirmation.workflows) != set(confirmable.workflows):
+        raise DemoConfirmationError("confirmation must echo every confirmable workflow")
+    for workflow_id, prepared in confirmable.workflows.items():
+        selected = confirmation.workflows[workflow_id]
+        _check_confirmation(prepared, selected)
+        if workflow_id in {"useful_content", "safe_sharing"}:
+            _check_exact_action_confirmation(prepared, selected)
 
 
 def _relative_existing(path: object, root: Path) -> str | None:
@@ -802,6 +1517,144 @@ def execute_rescue(
             pipeline.abort(fresh_preparation)
 
 
+def execute_useful_content(
+    prepared: PreparedWorkflow,
+    confirmation: WorkflowConfirmation,
+    *,
+    source: Path,
+    output: Path,
+    dependencies: DemoPipelineDependencies | None = None,
+) -> WorkflowOutcome:
+    _check_exact_action_confirmation(prepared, confirmation)
+    dependencies = dependencies or default_dependencies()
+    before = stream_sha256(source)
+    pipeline = dependencies.content_factory(_content_pipeline_config(before, output))
+    try:
+        preparation = pipeline.prepare(source)
+        review = pipeline.preview(preparation)
+        fresh_previews = _content_preview_evidence(review, output, preserve=False)
+        fresh = _content_workflow(review, preview_evidence=fresh_previews)
+        _same_preparation(prepared, fresh)
+        if getattr(getattr(preparation, "content_map"), "input_hash") != before:
+            raise DemoConfirmationError("fresh content source hash mismatch")
+        content_confirmation = pipeline.confirm(
+            review,
+            accepted_action_ids=confirmation.accepted_action_ids,
+        )
+        result = pipeline.execute(review, content_confirmation)
+        after = stream_sha256(source)
+        if after != before:
+            raise DemoConfirmationError(
+                "source changed during Useful Content execution"
+            )
+        status = _status(getattr(result, "status"))
+        verification = getattr(result, "verification", None)
+        verification_outcome = _status(getattr(verification, "outcome", "failed"))
+        if status == "completed" and verification_outcome != "completed":
+            status = verification_outcome
+        root = Path(getattr(result, "public_root", None) or output / "useful-content")
+        artifacts: dict[str, str] = {}
+        for index, artifact in enumerate(getattr(result, "artifacts", ())):
+            relative = _relative_path(str(getattr(artifact, "relative_path")))
+            path = output / "useful-content" / Path(relative)
+            if path.is_file():
+                artifacts[f"artifact_{index:03d}"] = safe_relative_path(path, root)
+        report = getattr(result, "technical_report", None)
+        mappings = tuple(_dump(item) for item in getattr(report, "source_mappings", ()))
+        return WorkflowOutcome(
+            workflow_id="useful_content",
+            status=status,
+            source_sha256_before=before,
+            source_sha256_after=after,
+            actions=mappings,
+            checks=tuple(_dump(item) for item in getattr(verification, "checks", ())),
+            artifacts=artifacts,
+            limitations=tuple(getattr(report, "limitations", ())),
+            final_human_review_required=status != "completed",
+        )
+    finally:
+        pipeline.close()
+
+
+def execute_safe_sharing(
+    prepared_scan: PreparedWorkflow,
+    confirmable: PreparedWorkflow,
+    review_file: PrivacyReviewFile,
+    confirmation: WorkflowConfirmation,
+    *,
+    source: Path,
+    output: Path,
+    source_hash: str,
+    contract_hash: str,
+    dependencies: DemoPipelineDependencies | None = None,
+) -> WorkflowOutcome:
+    _check_exact_action_confirmation(confirmable, confirmation)
+    dependencies = dependencies or default_dependencies()
+    before = stream_sha256(source)
+    if before != source_hash:
+        raise DemoConfirmationError("Safe Sharing source hash changed")
+    pipeline_value, scan, preparation, fresh = _fresh_privacy_plan(
+        source,
+        output,
+        prepared_scan,
+        review_file,
+        source_hash=source_hash,
+        contract_hash=contract_hash,
+        dependencies=dependencies,
+        preserve_preview=False,
+    )
+    consumed = False
+    try:
+        _same_preparation(confirmable, fresh)
+        result = cast(Any, pipeline_value).confirm(
+            str(getattr(preparation, "preparation_id")),
+            confirmation.plan_digest,
+        )
+        consumed = True
+        after = stream_sha256(source)
+        if after != before:
+            raise DemoConfirmationError("source changed during Safe Sharing execution")
+        status = _status(getattr(result, "status"))
+        verification = getattr(result, "verification", None)
+        verification_status = _status(getattr(verification, "status", status))
+        if (
+            status == PrivacyJobOutcome.COMPLETED.value
+            and verification_status != "completed"
+        ):
+            status = verification_status
+        root = output / "safe-sharing"
+        artifacts = {
+            name: relative
+            for name, value in {
+                "video": getattr(result, "video_relative_path", None),
+                "verification": getattr(result, "verification_relative_path", None),
+                "report": getattr(result, "technical_report_relative_path", None),
+            }.items()
+            if isinstance(value, str)
+            and (
+                relative := _relative_existing(root / Path(_relative_path(value)), root)
+            )
+            is not None
+        }
+        return WorkflowOutcome(
+            workflow_id="safe_sharing",
+            status=status,
+            source_sha256_before=before,
+            source_sha256_after=after,
+            actions=tuple(
+                _dump(item)
+                for item in getattr(getattr(preparation, "plan"), "actions", ())
+            ),
+            checks=tuple(_dump(item) for item in getattr(verification, "checks", ())),
+            artifacts=artifacts,
+            limitations=tuple(getattr(verification, "limitations", ())),
+            final_human_review_required=True,
+        )
+    finally:
+        if not consumed:
+            cast(Any, pipeline_value).discard(str(getattr(scan, "scan_id")))
+
+
 def execute_from_confirmation(
     review: PreparedReview,
     confirmation: ExecutionConfirmation,
@@ -809,6 +1662,8 @@ def execute_from_confirmation(
     source: Path,
     output: Path,
     dependencies: DemoPipelineDependencies | None = None,
+    privacy_review: PrivacyReviewFile | None = None,
+    confirmable_plan: ConfirmablePlan | None = None,
 ) -> dict[str, WorkflowOutcome]:
     """Execute only separately authored confirmations bound to one review file."""
     source_hash = stream_sha256(source)
@@ -837,6 +1692,41 @@ def execute_from_confirmation(
                 output=output,
                 dependencies=dependencies,
             )
+        elif workflow_id == "useful_content":
+            if confirmable_plan is None:
+                raise DemoConfirmationError(
+                    "Useful Content requires a confirmable plan"
+                )
+            confirmable = confirmable_plan.workflows.get(workflow_id)
+            if confirmable is None:
+                raise DemoConfirmationError("confirmable plan omits Useful Content")
+            _same_preparation(prepared, confirmable)
+            outcomes[workflow_id] = execute_useful_content(
+                confirmable,
+                selected,
+                source=source,
+                output=output,
+                dependencies=dependencies,
+            )
+        elif workflow_id == "safe_sharing":
+            if privacy_review is None or confirmable_plan is None:
+                raise DemoConfirmationError(
+                    "Safe Sharing requires privacy review and confirmable plan"
+                )
+            confirmable = confirmable_plan.workflows.get(workflow_id)
+            if confirmable is None:
+                raise DemoConfirmationError("confirmable plan omits Safe Sharing")
+            outcomes[workflow_id] = execute_safe_sharing(
+                prepared,
+                confirmable,
+                privacy_review,
+                selected,
+                source=source,
+                output=output,
+                source_hash=review.source_sha256,
+                contract_hash=review.contract_sha256,
+                dependencies=dependencies,
+            )
     return outcomes
 
 
@@ -858,8 +1748,14 @@ def main(
     prepare_parser.add_argument("--source", type=Path, required=True)
     prepare_parser.add_argument("--manifest", type=Path, required=True)
     prepare_parser.add_argument("--output", type=Path, required=True)
+    preview_parser = phases.add_parser("preview")
+    preview_parser.add_argument("--prepared", type=Path, required=True)
+    preview_parser.add_argument("--privacy-review", type=Path, required=True)
+    preview_parser.add_argument("--output", type=Path, required=True)
     execute_parser = phases.add_parser("execute")
     execute_parser.add_argument("--prepared", type=Path, required=True)
+    execute_parser.add_argument("--privacy-review", type=Path)
+    execute_parser.add_argument("--confirmable-plan", type=Path)
     execute_parser.add_argument("--confirmation", type=Path, required=True)
     execute_parser.add_argument("--only", action="append", default=[])
     args = parser.parse_args(argv)
@@ -871,6 +1767,42 @@ def main(
             dependencies=dependencies,
         )
         return 0
+    if args.phase == "preview":
+        output = args.output
+        source = output / _SOURCE_NAME
+        manifest = output / _MANIFEST_NAME
+        review = _read_model(args.prepared, PreparedReview)
+        privacy_review = _read_model(args.privacy_review, PrivacyReviewFile)
+        assert isinstance(review, PreparedReview) and isinstance(
+            privacy_review, PrivacyReviewFile
+        )
+        source_hash, contract_hash = _manifest_binding(source, manifest)
+        if (
+            source_hash != review.source_sha256
+            or contract_hash != review.contract_sha256
+        ):
+            raise DemoConfirmationError("prepared review does not match manifest")
+        prepared_privacy = review.workflows.get("safe_sharing")
+        if prepared_privacy is None:
+            raise DemoConfirmationError("prepared review omits Safe Sharing")
+        privacy_plan = preview_safe_sharing(
+            prepared_privacy,
+            privacy_review,
+            source=source,
+            output=output,
+            source_hash=source_hash,
+            contract_hash=contract_hash,
+            dependencies=dependencies,
+        )
+        workflows = dict(review.workflows)
+        workflows["safe_sharing"] = privacy_plan
+        confirmable = ConfirmablePlan(
+            source_sha256=source_hash,
+            contract_sha256=contract_hash,
+            workflows=workflows,
+        )
+        _write_json(output / "confirmable-plan.json", confirmable)
+        return 0
     output = args.prepared.parent
     source = output / _SOURCE_NAME
     manifest = output / _MANIFEST_NAME
@@ -879,6 +1811,22 @@ def main(
     assert isinstance(review, PreparedReview) and isinstance(
         confirmation, ExecutionConfirmation
     )
+    privacy_review_value = (
+        _read_model(args.privacy_review, PrivacyReviewFile)
+        if args.privacy_review is not None
+        else None
+    )
+    confirmable_value = (
+        _read_model(args.confirmable_plan, ConfirmablePlan)
+        if args.confirmable_plan is not None
+        else None
+    )
+    assert privacy_review_value is None or isinstance(
+        privacy_review_value, PrivacyReviewFile
+    )
+    assert confirmable_value is None or isinstance(confirmable_value, ConfirmablePlan)
+    parsed_privacy_review: PrivacyReviewFile | None = privacy_review_value
+    parsed_confirmable: ConfirmablePlan | None = confirmable_value
     source_hash, contract_hash = _manifest_binding(source, manifest)
     if source_hash not in {review.source_sha256, confirmation.source_sha256} or (
         review.source_sha256 != confirmation.source_sha256
@@ -894,6 +1842,17 @@ def main(
     ):
         raise DemoConfirmationError("contract digest does not match manifest binding")
     selected = {item.replace("-", "_") for item in args.only}
+    if selected.intersection({"useful_content", "safe_sharing"}):
+        if parsed_confirmable is None:
+            raise DemoConfirmationError("C/D execution requires confirmable-plan.json")
+        if (
+            parsed_confirmable.source_sha256 != review.source_sha256
+            or parsed_confirmable.contract_sha256 != review.contract_sha256
+        ):
+            raise DemoConfirmationError(
+                "confirmable plan binding does not match review"
+            )
+        _validate_confirmation_document(parsed_confirmable, confirmation)
     if selected:
         review = review.model_copy(
             update={
@@ -913,19 +1872,114 @@ def main(
                 }
             }
         )
+    outcome_path = output / "execution-outcomes.json"
+    existing_outcomes = (
+        _read_existing_execution_outcomes(
+            outcome_path,
+            source_hash=source_hash,
+            contract_hash=contract_hash,
+        )
+        if selected
+        else {}
+    )
     outcomes = execute_from_confirmation(
         review,
         confirmation,
         source=source,
         output=output,
         dependencies=dependencies,
+        privacy_review=parsed_privacy_review,
+        confirmable_plan=parsed_confirmable,
     )
-    _write_json(output / "execution-outcomes.json", _OutcomeDocument(outcomes=outcomes))
+    outcome_document = (
+        _OutcomeDocument(
+            source_sha256=source_hash,
+            contract_sha256=contract_hash,
+            outcomes={**existing_outcomes, **outcomes},
+        )
+        if selected
+        else _OutcomeDocument(
+            source_sha256=source_hash,
+            contract_sha256=contract_hash,
+            outcomes=outcomes,
+        )
+    )
+    _write_json(outcome_path, outcome_document)
     return 0
 
 
 class _OutcomeDocument(_DemoModel):
+    schema_version: Literal["1"] = "1"
+    source_sha256: str = Field(pattern=_SHA256)
+    contract_sha256: str = Field(pattern=_SHA256)
     outcomes: dict[str, WorkflowOutcome]
+
+    @model_validator(mode="after")
+    def validate_outcomes(self) -> _OutcomeDocument:
+        if any(key not in _WORKFLOWS for key in self.outcomes):
+            raise ValueError("outcome document contains an unknown workflow")
+        if any(key != value.workflow_id for key, value in self.outcomes.items()):
+            raise ValueError("outcome map keys must match workflow IDs")
+        if any(
+            value.source_sha256_before != self.source_sha256
+            or value.source_sha256_after != self.source_sha256
+            for value in self.outcomes.values()
+        ):
+            raise ValueError("outcome source hash does not match document binding")
+        return self
+
+
+def _merge_execution_outcomes(
+    path: Path,
+    replacements: Mapping[str, WorkflowOutcome],
+    *,
+    source_hash: str,
+    contract_hash: str,
+) -> _OutcomeDocument:
+    """Preserve only strictly bound known outcomes during a selected execution."""
+    outcomes = _read_existing_execution_outcomes(
+        path,
+        source_hash=source_hash,
+        contract_hash=contract_hash,
+    )
+    outcomes.update(replacements)
+    try:
+        return _OutcomeDocument(
+            source_sha256=source_hash,
+            contract_sha256=contract_hash,
+            outcomes=outcomes,
+        )
+    except ValueError as exc:
+        raise DemoConfirmationError(
+            "cannot merge unbound outcome workflow data"
+        ) from exc
+
+
+def _read_existing_execution_outcomes(
+    path: Path,
+    *,
+    source_hash: str,
+    contract_hash: str,
+) -> dict[str, WorkflowOutcome]:
+    """Read only a strict outcome document bound to the current demo inputs."""
+    if path.exists():
+        try:
+            existing_value = _OutcomeDocument.model_validate_json(
+                path.read_text(encoding="utf-8")
+            )
+        except (OSError, ValueError) as exc:
+            raise DemoConfirmationError(
+                "cannot merge existing outcome workflow document"
+            ) from exc
+        if (
+            existing_value.source_sha256 != source_hash
+            or existing_value.contract_sha256 != contract_hash
+        ):
+            raise DemoConfirmationError(
+                "existing outcome binding does not match current source and contract"
+            )
+        return dict(existing_value.outcomes)
+    return {}
 
 
 if __name__ == "__main__":
