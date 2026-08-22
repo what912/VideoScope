@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import shutil
 from collections.abc import Iterator
 from dataclasses import replace
@@ -14,16 +15,25 @@ import cv2
 import numpy as np
 import pytest
 
+from tests.rescue.clarity_runtime_provenance import (
+    ClarityRuntimeGuard,
+    read_clarity_runtime_provenance,
+)
+from videoscope.domain import VideoMetadata
 from videoscope.rescue.assessment import RescueAssessmentBundle
 from videoscope.rescue.errors import RescueConfirmationError
-from videoscope.rescue.executor import SourceMapping
+from videoscope.rescue.executor import NativeRescueExecutor, SourceMapping
 from videoscope.rescue.models import (
     DamageInterval,
     DamageKind,
+    MediaDamageMap,
     RescueActionKind,
     RescueConfirmation,
+    RescueEffectiveConfig,
+    RescueOutcome,
     RescueStrategy,
     RescueVerificationStatus,
+    canonical_video_encode_contract,
     make_damage_id,
 )
 from videoscope.rescue.pipeline import (
@@ -32,13 +42,29 @@ from videoscope.rescue.pipeline import (
     RescueResult,
     RescueStatus,
     VideoRescuePipeline,
+    _cleanup_verification_controls,
+    _public_source_mappings,
 )
+from videoscope.rescue.planner import build_rescue_plan
+from videoscope.rescue.qualification import (
+    SHARPEN_QUALIFICATION_LIMITATION,
+    NativeRescueCandidateQualifier,
+    _map_exact_qualification_ranges,
+    validate_path_free_canonical_json,
+    validate_plan_sharpen_output_range_contracts,
+    validate_plan_sharpen_qualification_contracts,
+)
+from videoscope.rescue.stabilization import MotionTransform, StabilizationAssessment
 from videoscope.rescue.verification import (
     MediaVerificationSnapshot,
     NativeMediaMeasurementProvider,
     RescueVerifier,
 )
-from videoscope.rescue.visual import FlickerCorrectionPlan
+from videoscope.rescue.visual import (
+    FlickerCorrectionPlan,
+    VisualAssessment,
+    VisualMetrics,
+)
 
 FIXTURE_ROOT = Path(__file__).parents[1] / "fixtures" / "generated"
 MANIFEST_PATH = Path(__file__).parents[1] / "fixtures" / "manifest.json"
@@ -101,6 +127,27 @@ def _fixture(filename: str) -> Path:
     if not source.is_file():
         pytest.skip("generate deterministic fixtures before real Rescue acceptance")
     return source
+
+
+def _activate_fixed_native_tools(
+    monkeypatch: pytest.MonkeyPatch,
+) -> tuple[Path, Path]:
+    tool_root = (
+        Path(__file__).parents[4]
+        / ".release-audit"
+        / "tools"
+        / "ffmpeg"
+        / "ffmpeg-8.1.2-essentials_build"
+        / "bin"
+    )
+    ffmpeg = tool_root / "ffmpeg.exe"
+    ffprobe = tool_root / "ffprobe.exe"
+    if not ffmpeg.is_file() or not ffprobe.is_file():
+        pytest.skip("fixed FFmpeg 8.1.2 is required for Rescue acceptance")
+    monkeypatch.setenv("PATH", f"{tool_root}{os.pathsep}{os.environ['PATH']}")
+    assert Path(shutil.which("ffmpeg") or "").resolve() == ffmpeg.resolve()
+    assert Path(shutil.which("ffprobe") or "").resolve() == ffprobe.resolve()
+    return ffmpeg, ffprobe
 
 
 IMPROVEMENT_ACTION_KINDS = {
@@ -375,6 +422,518 @@ def test_real_dark_noisy_fixture_delivers_both_verified_outputs(
     assert_improvement_within_manifest_bounds(result, "rescue_dark_noise.mp4")
 
 
+def test_native_soft_detail_runs_full_same_generation_sharpen_qualification(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The fixed native path must measure every configured full-range profile."""
+    _activate_fixed_native_tools(monkeypatch)
+    source = _fixture("rescue_soft_detail.mp4")
+    source_hash = sha256_file(source)
+    config = RescueEffectiveConfig()
+    damage = DamageInterval(
+        id=make_damage_id(
+            source_hash,
+            "video:0",
+            DamageKind.SOFT_DETAIL,
+            0.0,
+            6.0,
+        ),
+        stream_id="video:0",
+        kind=DamageKind.SOFT_DETAIL,
+        start_seconds=0.0,
+        end_seconds=6.0,
+    )
+    metadata = VideoMetadata(
+        filename=source.name,
+        container_format="mp4",
+        codec="h264",
+        width=320,
+        height=180,
+        duration_seconds=6.0,
+        average_frame_rate=10.0,
+        estimated_frame_count=60,
+        has_audio=True,
+        file_size_bytes=source.stat().st_size,
+    )
+    damage_map = MediaDamageMap(
+        input_hash=source_hash,
+        duration_seconds=6.0,
+        scan_coverage=((0.0, 6.0),),
+        intervals=(damage,),
+    )
+    visual = VisualAssessment(
+        metrics=VisualMetrics(
+            luma_p10=0.2,
+            luma_p50=0.45,
+            luma_p90=0.8,
+            low_clip_ratio=0.0,
+            high_clip_ratio=0.0,
+            noise_residual=0.005,
+            sharpness=0.001,
+        ),
+        recommended_actions=(RescueActionKind.SHARPEN,),
+        preview_required=True,
+        public_explanation="Measured soft detail supports bounded qualification.",
+    )
+    draft = build_rescue_plan(
+        metadata=metadata,
+        damage_map=damage_map,
+        strategy=RescueStrategy.BALANCED,
+        config=config,
+        visual_assessment=visual,
+    )
+    draft_sharpen = tuple(
+        action for action in draft.actions if action.kind is RescueActionKind.SHARPEN
+    )
+    assert len(draft_sharpen) == 1
+    qualification_root = tmp_path / "native sharpen qualification 中文"
+
+    evidence = NativeRescueCandidateQualifier().qualify(
+        draft,
+        source,
+        qualification_root,
+        lambda: False,
+    )
+
+    assert not qualification_root.exists()
+    assert tuple(item.profile for item in evidence.profile_measurements) == (
+        config.sharpen_qualification_profiles
+    )
+    assert all(
+        item.metrics.range_coverage_ratio == 1.0
+        and item.metrics.expected_frames == item.metrics.compared_frames == 60
+        for item in evidence.profile_measurements
+    )
+    final = build_rescue_plan(
+        metadata=metadata,
+        damage_map=damage_map,
+        strategy=RescueStrategy.BALANCED,
+        config=config,
+        visual_assessment=visual,
+        sharpen_qualification=evidence,
+        require_sharpen_qualification=True,
+    )
+    final_sharpen = tuple(
+        action for action in final.actions if action.kind is RescueActionKind.SHARPEN
+    )
+    if evidence.selected is None:
+        assert final_sharpen == ()
+        assert SHARPEN_QUALIFICATION_LIMITATION in final.assessment_limitations
+    else:
+        assert len(final_sharpen) == 1
+        validate_plan_sharpen_qualification_contracts(final)
+    assert sha256_file(source) == source_hash
+
+
+def test_native_fixed_8_1_2_soft_detail_qualification_matches_final_verifier(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    clarity_runtime_provenance_guard: ClarityRuntimeGuard,
+) -> None:
+    """Run the fixed real-source clarity chain without publishing its output."""
+    ffmpeg, ffprobe = _activate_fixed_native_tools(monkeypatch)
+    clarity_runtime_provenance_guard.bind_tools(ffmpeg, ffprobe)
+    source = _fixture("rescue_soft_detail.mp4")
+    source_hash = sha256_file(source)
+    clarity_runtime_provenance_guard.bind_source_before(source, source_hash)
+    config = RescueEffectiveConfig()
+    damage = DamageInterval(
+        id=make_damage_id(
+            source_hash,
+            "video:0",
+            DamageKind.SOFT_DETAIL,
+            0.0,
+            6.0,
+        ),
+        stream_id="video:0",
+        kind=DamageKind.SOFT_DETAIL,
+        start_seconds=0.0,
+        end_seconds=6.0,
+    )
+    metadata = VideoMetadata(
+        filename=source.name,
+        container_format="mp4",
+        codec="h264",
+        width=320,
+        height=180,
+        duration_seconds=6.0,
+        average_frame_rate=10.0,
+        estimated_frame_count=60,
+        has_audio=True,
+        file_size_bytes=source.stat().st_size,
+    )
+    damage_map = MediaDamageMap(
+        input_hash=source_hash,
+        duration_seconds=6.0,
+        scan_coverage=((0.0, 6.0),),
+        intervals=(damage,),
+    )
+    visual = VisualAssessment(
+        metrics=VisualMetrics(
+            luma_p10=0.2,
+            luma_p50=0.45,
+            luma_p90=0.8,
+            low_clip_ratio=0.0,
+            high_clip_ratio=0.0,
+            noise_residual=0.005,
+            sharpness=0.001,
+        ),
+        recommended_actions=(RescueActionKind.SHARPEN,),
+        preview_required=True,
+        public_explanation="Measured soft detail supports bounded qualification.",
+    )
+    planner_inputs: dict[str, Any] = {
+        "metadata": metadata,
+        "damage_map": damage_map,
+        "strategy": RescueStrategy.BALANCED,
+        "config": config,
+        "visual_assessment": visual,
+    }
+    draft = build_rescue_plan(**planner_inputs)
+    draft_sharpen = tuple(
+        action for action in draft.actions if action.kind is RescueActionKind.SHARPEN
+    )
+    assert len(draft_sharpen) == 1
+
+    executor = NativeRescueExecutor(ffmpeg=str(ffmpeg), ffprobe=str(ffprobe))
+    provider = NativeMediaMeasurementProvider(ffmpeg=str(ffmpeg), ffprobe=str(ffprobe))
+    qualification_root = tmp_path / "clarity qualification fixed 8.1.2 中文"
+    assert not qualification_root.exists()
+    evidence = NativeRescueCandidateQualifier(
+        executor=executor,
+        measurement_provider=provider,
+    ).qualify(draft, source, qualification_root, lambda: False)
+    assert not qualification_root.exists()
+    validate_path_free_canonical_json(
+        cast(Any, evidence.model_dump(mode="json")),
+        field_name="native clarity qualification evidence",
+    )
+    assert tuple(item.profile for item in evidence.profile_measurements) == (
+        config.sharpen_qualification_profiles
+    )
+    assert evidence.encode_contract == canonical_video_encode_contract(config)
+
+    execution_root = tmp_path / "clarity final execution fixed 8.1.2 中文"
+    if evidence.selected is None:
+        assert evidence.limitation == SHARPEN_QUALIFICATION_LIMITATION
+        assert not execution_root.exists()
+        source_hash_after = sha256_file(source)
+        assert source_hash_after == source_hash
+        no_profile_envelope = clarity_runtime_provenance_guard.seal_no_profile(
+            source=source,
+            source_sha256_after=source_hash_after,
+            draft=draft,
+            evidence=evidence,
+            qualification_root=qualification_root,
+            execution_root=execution_root,
+        )
+        assert no_profile_envelope.outcome == "no_profile_passed"
+        assert (
+            read_clarity_runtime_provenance(
+                tmp_path
+                / "clarity-runtime-provenance"
+                / "clarity-runtime-provenance.json"
+            )
+            == no_profile_envelope
+        )
+        pytest.fail(SHARPEN_QUALIFICATION_LIMITATION)
+
+    final = build_rescue_plan(
+        **planner_inputs,
+        sharpen_qualification=evidence,
+        require_sharpen_qualification=True,
+    )
+    final_sharpen = tuple(
+        action for action in final.actions if action.kind is RescueActionKind.SHARPEN
+    )
+    assert len(final_sharpen) == 1
+    selected = evidence.selected
+    assert selected is not None
+    action = final_sharpen[0]
+    assert action.id != draft_sharpen[0].id
+    assert final.plan_digest != draft.plan_digest
+    assert action.source_ranges == evidence.source_ranges == ((0.0, 6.0),)
+    validate_plan_sharpen_qualification_contracts(final)
+
+    controls: tuple[Any, ...] = ()
+    cleanup_paths: tuple[Path, ...] = ()
+    try:
+        assert not execution_root.exists()
+        execution = executor.execute_faithful(
+            final,
+            source,
+            execution_root,
+            lambda: False,
+        )
+        validate_plan_sharpen_output_range_contracts(
+            final,
+            execution.source_mappings,
+        )
+        improved = executor.execute_improved_with_controls(
+            final,
+            execution.output_path,
+            execution_root,
+            lambda: False,
+            source_mappings=execution.source_mappings,
+            inherited_action_ids=execution.applied_action_ids,
+        )
+        controls = tuple(improved.verification_controls)
+        assert len(controls) == 1
+        cleanup_paths = tuple(
+            path for handle in controls for path in handle.cleanup_paths
+        )
+        recipe = controls[0].recipe
+        assert recipe.plan_digest == final.plan_digest
+        assert recipe.action_id == action.id
+        assert recipe.source_ranges == action.source_ranges
+        assert recipe.output_ranges == evidence.output_ranges
+        assert recipe.encode_contract == canonical_video_encode_contract(config)
+        assert recipe.inventory_frame_count == 60
+        assert recipe.baseline_sha256 == selected.baseline_sha256
+        assert recipe.visibility_control_sha256 == selected.visibility_control_sha256
+        assert recipe.candidate_sha256 == selected.candidate_sha256
+        assert recipe.normalized_pts_digest == selected.normalized_pts_digest
+        assert recipe.stream_topology_digest == selected.stream_topology_digest
+        assert recipe.inventory_frame_count == selected.inventory_frame_count
+
+        verifier_mappings = _public_source_mappings(execution.source_mappings)
+        report = RescueVerifier(measurement_provider=provider).verify(
+            source,
+            execution.output_path,
+            improved.output_path,
+            final,
+            verifier_mappings,
+            lambda: False,
+            faithful_render_mode=execution.render_mode,
+            verification_controls=controls,
+        )
+        check = next(
+            item
+            for item in report.checks
+            if item.artifact == "improved"
+            and item.check_id == "perceptible_sharpness_improvement"
+        )
+        measured = check.measured
+        assert check.status is RescueVerificationStatus.PASSED
+        assert measured["valid"] is True
+        assert measured["reference"] == "runtime_same_generation_visibility_control"
+        assert measured["source_ranges"] == [[0.0, 6.0]]
+        assert measured["output_ranges"] == [
+            list(value) for value in evidence.output_ranges
+        ]
+        assert float(cast(float, measured["range_coverage_ratio"])) == 1.0
+        assert measured["expected_frames"] == measured["compared_frames"] == 60
+        assert measured["range_count"] == measured["passing_range_count"] == 1
+        selected_metrics = selected.metrics
+        for metric_name in (
+            "range_coverage_ratio",
+            "minimum_aggregate_gain_ratio",
+            "minimum_recovered_baseline_ratio",
+            "minimum_improved_frame_fraction",
+            "maximum_noise_increase",
+            "maximum_edge_overshoot_ratio",
+            "maximum_edge_overshoot_amplitude",
+            "maximum_ringing_ratio",
+        ):
+            assert float(cast(float, measured[metric_name])) == pytest.approx(
+                float(getattr(selected_metrics, metric_name)), abs=1e-9, rel=0.0
+            )
+        for metric_name in (
+            "expected_frames",
+            "compared_frames",
+            "range_count",
+            "passing_range_count",
+        ):
+            assert measured[metric_name] == getattr(selected_metrics, metric_name)
+        assert float(cast(float, measured["minimum_aggregate_gain_ratio"])) >= float(
+            cast(float, action.parameters["minimum_perceptible_sharpness_gain_ratio"])
+        )
+        assert float(
+            cast(float, measured["minimum_recovered_baseline_ratio"])
+        ) >= float(cast(float, action.parameters["minimum_recovered_baseline_ratio"]))
+        assert float(cast(float, measured["minimum_improved_frame_fraction"])) >= float(
+            cast(float, action.parameters["minimum_improved_frame_fraction"])
+        )
+        assert float(cast(float, measured["maximum_noise_increase"])) <= float(
+            cast(float, action.parameters["maximum_noise_increase"])
+        )
+        assert float(cast(float, measured["maximum_edge_overshoot_ratio"])) <= float(
+            cast(float, action.parameters["maximum_edge_overshoot_ratio"])
+        )
+        assert float(
+            cast(float, measured["maximum_edge_overshoot_amplitude"])
+        ) <= float(cast(float, action.parameters["maximum_edge_overshoot_amplitude"]))
+        assert float(cast(float, measured["maximum_ringing_ratio"])) <= float(
+            cast(float, action.parameters["maximum_ringing_ratio"])
+        )
+        assert report.improved_status is RescueVerificationStatus.PASSED
+    finally:
+        if controls:
+            _cleanup_verification_controls(execution_root, controls)
+        assert all(not path.exists() for path in cleanup_paths)
+
+    source_hash_after = sha256_file(source)
+    assert source_hash_after == source_hash
+    assert not (execution_root / "rescue-output").exists()
+    assert not (execution_root / "report.json").exists()
+    assert not (execution_root / "report.html").exists()
+    envelope = clarity_runtime_provenance_guard.seal_success(
+        source=source,
+        source_sha256_after=source_hash_after,
+        draft=draft,
+        evidence=evidence,
+        final=final,
+        faithful=execution,
+        improved=improved,
+        controls=controls,
+        report=report,
+        qualification_root=qualification_root,
+        execution_root=execution_root,
+    )
+    assert envelope.outcome == "passed"
+    assert (
+        read_clarity_runtime_provenance(
+            tmp_path / "clarity-runtime-provenance" / "clarity-runtime-provenance.json"
+        )
+        == envelope
+    )
+
+
+def test_native_stabilization_binds_and_measures_generation_matched_control(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Parent, identity sibling, and actual warp must share one native inventory."""
+    _activate_fixed_native_tools(monkeypatch)
+    source = _fixture("rescue_shake.mp4")
+    source_hash = sha256_file(source)
+    source_range = (1.0, 5.0)
+    damage = DamageInterval(
+        id=make_damage_id(
+            source_hash,
+            "video:0",
+            DamageKind.SHAKE,
+            *source_range,
+        ),
+        stream_id="video:0",
+        kind=DamageKind.SHAKE,
+        start_seconds=source_range[0],
+        end_seconds=source_range[1],
+    )
+    transforms = tuple(
+        MotionTransform(
+            timestamp_seconds=round(1.0 + index / 10.0, 6),
+            rotation_degrees=0.0,
+            scale=1.0,
+            translation_x=1.0,
+            translation_y=0.0,
+            inlier_ratio=0.95,
+            residual_pixels=0.1,
+            semantics="frame_correction",
+        )
+        for index in range(40)
+    )
+    plan = build_rescue_plan(
+        metadata=VideoMetadata(
+            filename=source.name,
+            container_format="mp4",
+            codec="h264",
+            width=320,
+            height=180,
+            duration_seconds=6.0,
+            average_frame_rate=10.0,
+            estimated_frame_count=60,
+            has_audio=True,
+            file_size_bytes=source.stat().st_size,
+        ),
+        damage_map=MediaDamageMap(
+            input_hash=source_hash,
+            duration_seconds=6.0,
+            scan_coverage=((0.0, 6.0),),
+            intervals=(damage,),
+        ),
+        strategy=RescueStrategy.BALANCED,
+        config=RescueEffectiveConfig(),
+        stabilization_assessment=StabilizationAssessment(
+            recommended=True,
+            reason="Measured stable correction.",
+            crop_ratio=0.02,
+            transforms=transforms,
+            parameters={
+                "crop_ratio": 0.02,
+                "frame_width": 320,
+                "frame_height": 180,
+                "maximum_timeline_gap_seconds": 1.0,
+                "smoothing_window_samples": 5,
+            },
+        ),
+    )
+    action = next(
+        item for item in plan.actions if item.kind is RescueActionKind.STABILIZE
+    )
+    work_root = tmp_path / "native stabilization control 中文"
+    executor = NativeRescueExecutor()
+    handles: tuple[Any, ...] = ()
+    try:
+        execution = executor.execute_faithful(
+            plan,
+            source,
+            work_root,
+            lambda: False,
+        )
+        restored = executor.execute_faithful_restoration(
+            plan,
+            execution,
+            work_root,
+            lambda: False,
+        )
+        handles = restored.verification_controls
+        assert len(handles) == 1
+        handle = cast(Any, handles[0])
+        recipe = handle.recipe
+        assert recipe.candidate_sha256 == sha256_file(restored.output_path)
+        assert recipe.parent_frame_count == recipe.frame_count
+        assert recipe.candidate_frame_count == recipe.frame_count == 60
+        output_ranges = _map_exact_qualification_ranges(
+            action.source_ranges,
+            execution.source_mappings,
+        )
+        provider = NativeMediaMeasurementProvider()
+        measured = provider.measure_stabilization_freeze_attribution_with_control(
+            source,
+            handle.parent_path,
+            handle.path,
+            restored.output_path,
+            action.source_ranges,
+            output_ranges,
+            action.parameters,
+            lambda: False,
+        )
+        assert measured["control_normalized_pts_digest"] == (
+            recipe.normalized_pts_digest
+        )
+        assert measured["parent_normalized_pts_digest"] == (
+            recipe.parent_normalized_pts_digest
+        )
+        assert measured["candidate_normalized_pts_digest"] == (
+            recipe.candidate_normalized_pts_digest
+        )
+        assert measured["control_frame_count"] == recipe.frame_count
+        assert measured["parent_frame_count"] == recipe.parent_frame_count
+        assert measured["candidate_frame_count"] == recipe.candidate_frame_count
+        assert measured["range_coverage_ratio"] == 1.0
+        assert measured["outside_range_coverage_ratio"] == 1.0
+    finally:
+        if handles:
+            cleanup_paths = tuple(
+                path for handle in handles for path in handle.cleanup_paths
+            )
+            _cleanup_verification_controls(work_root, handles)
+            assert all(not path.exists() for path in cleanup_paths)
+    assert sha256_file(source) == source_hash
+
+
 def _assert_duration_within_manifest(result: RescueResult, filename: str) -> None:
     assert result.verification is not None
     contract = cast(dict[str, float], _manifest_entry(filename)["acceptance"])
@@ -388,15 +947,75 @@ def _assert_duration_within_manifest(result: RescueResult, filename: str) -> Non
     assert abs(observed - expected) <= contract["duration_tolerance_seconds"]
 
 
-def test_real_clean_fixture_completes(tmp_path: Path) -> None:
+def test_clean_fixture_manifest_keeps_faithful_structural_completed_scope() -> None:
+    acceptance = cast(
+        dict[str, Any], _manifest_entry("rescue_clean_av.mp4")["acceptance"]
+    )
+
+    assert acceptance["outcome_scope"] == "faithful_structural"
+    assert acceptance["expected_outcome"] == "completed"
+
+
+def test_real_clean_balanced_fixture_preserves_faithful_and_reviews_weak_improvement(
+    tmp_path: Path,
+) -> None:
     filename = "rescue_clean_av.mp4"
     source = _fixture(filename)
     source_hash = sha256_file(source)
 
     result = run_confirmed_balanced_rescue(source, tmp_path / filename)
 
-    assert result.status is RescueStatus.COMPLETED
+    assert result.status is RescueStatus.NEEDS_REVIEW
     assert result.faithful_path is not None and result.faithful_path.is_file()
+    assert result.improved_path is None
+    assert result.public_root is not None
+    assert not (result.public_root / "improved-viewing.mp4").exists()
+    assert result.verification is not None
+    assert result.verification.faithful_status is RescueVerificationStatus.PASSED
+    assert result.verification.improved_status is (
+        RescueVerificationStatus.NEEDS_REVIEW
+    )
+    assert result.verification.outcome is RescueOutcome.NEEDS_REVIEW
+    assert all(
+        item.status is RescueVerificationStatus.PASSED
+        for item in result.verification.checks
+        if item.artifact == "faithful" and item.required
+    )
+    luma = next(
+        item
+        for item in result.verification.checks
+        if item.artifact == "improved"
+        and item.check_id == "perceptible_luma_improvement"
+    )
+    noise = next(
+        item
+        for item in result.verification.checks
+        if item.artifact == "improved" and item.check_id == "noise_side_effects"
+    )
+    assert luma.status is RescueVerificationStatus.NEEDS_REVIEW
+    assert luma.measured["applicable"] is True
+    assert luma.measured["measurement_valid"] is True
+    assert luma.message == (
+        "Observed luma change or clipping falls outside the configured bounds; "
+        "manual review is required."
+    )
+    assert float(cast(float, luma.measured["minimum_luma_delta"])) == pytest.approx(
+        3.0 / 255.0
+    )
+    luma_thresholds = cast(dict[str, Any], luma.measured["thresholds"])
+    assert float(luma_thresholds["minimum_luma_delta"]) == 0.04
+    assert noise.status is RescueVerificationStatus.NEEDS_REVIEW
+    assert noise.measured["applicable"] is True
+    assert noise.measured["measurement_valid"] is True
+    assert noise.message == (
+        "Observed noise increase exceeds the configured bound; manual review is "
+        "required."
+    )
+    assert float(
+        cast(float, noise.measured["maximum_noise_increase"])
+    ) == pytest.approx(8.7932663187398e-05)
+    noise_thresholds = cast(dict[str, Any], noise.measured["thresholds"])
+    assert float(noise_thresholds["maximum_noise_increase"]) == 0.0
     assert sha256_file(source) == source_hash
     _assert_duration_within_manifest(result, filename)
 
@@ -630,6 +1249,44 @@ class _InjectedSideEffectProvider:
             render_mode,
             reference_options,
             cancellation_callback,
+        )
+
+    def measure_ranges(
+        self,
+        path: Path,
+        ranges: tuple[tuple[float, float], ...],
+        cancellation_callback: Any,
+    ) -> dict[str, float]:
+        return self._native.measure_ranges(path, ranges, cancellation_callback)
+
+    def compare_ranges(
+        self,
+        reference: Path,
+        candidate: Path,
+        ranges: tuple[tuple[float, float], ...],
+        cancellation_callback: Any,
+    ) -> dict[str, float]:
+        return self._native.compare_ranges(
+            reference, candidate, ranges, cancellation_callback
+        )
+
+    def measure_audio_noise(
+        self,
+        path: Path,
+        config: Any,
+        cancellation_callback: Any,
+    ) -> tuple[Any, ...]:
+        return self._native.measure_audio_noise(path, config, cancellation_callback)
+
+    def measure_stabilization(
+        self,
+        reference: Path,
+        candidate: Path,
+        ranges: tuple[tuple[float, float], ...],
+        cancellation_callback: Any,
+    ) -> dict[str, float]:
+        return self._native.measure_stabilization(
+            reference, candidate, ranges, cancellation_callback
         )
 
 

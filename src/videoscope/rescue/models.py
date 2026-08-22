@@ -11,7 +11,14 @@ from hashlib import sha256
 from pathlib import PurePosixPath, PureWindowsPath
 from typing import Any, Final, Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    JsonValue,
+    field_validator,
+    model_validator,
+)
 
 RESCUE_SCHEMA_VERSION: Final = "0.2"
 _SHA256_PATTERN: Final = r"^[0-9a-f]{64}$"
@@ -21,6 +28,37 @@ RESCUE_REQUIRED_VERIFICATION_CHECK_IDS: Final = (
     "duration",
     "streams",
     "source_read_only",
+)
+RESCUE_ACTION_VERIFICATION_CHECK_IDS: Final = (
+    "deblur_edge_recovery",
+    "deblur_ringing",
+    "deblur_temporal_consistency",
+    "tonal_interference_reduction",
+    "tonal_boundary_transient",
+    "anchor_stabilization_residual",
+    "transition_stabilization_consensus",
+    "transition_stabilization_seam",
+    "transition_stabilization_coverage",
+)
+_APPLICABLE_REVIEW_GATES: Final = frozenset(
+    {
+        "audio_loudness",
+        "audio_peak",
+        "audio_sample_rate",
+        "black_regression",
+        "fixed_av_offset",
+        "flicker_regression",
+        "freeze_regression",
+        "luma_chroma_side_effects",
+        "luma_clipping",
+        "noise_side_effects",
+        "perceptible_audio_noise_reduction",
+        "perceptible_luma_improvement",
+        "perceptible_sharpness_improvement",
+        "perceptible_stabilization_improvement",
+        "sharpness_side_effects",
+        "stabilization_crop",
+    }
 )
 RESCUE_REQUIRED_PUBLIC_DOCUMENTS: Final = (
     "rescue-plan.json",
@@ -163,6 +201,7 @@ class RescueActionKind(StrEnum):
     NORMALIZE_AUDIO = "normalize_audio"
     DENOISE_AUDIO = "denoise_audio"
     VERIFY = "verify"
+    DEBLUR = "deblur"
 
 
 class RescueOutcome(StrEnum):
@@ -197,6 +236,22 @@ _BALANCED_ONLY_ACTIONS: Final = frozenset(
         RescueActionKind.STABILIZE,
         RescueActionKind.NORMALIZE_AUDIO,
         RescueActionKind.DENOISE_AUDIO,
+    }
+)
+FAITHFUL_RESTORATION_ACTION_KINDS: Final = frozenset(
+    {
+        RescueActionKind.DENOISE_VIDEO,
+        RescueActionKind.DEBLUR,
+        RescueActionKind.STABILIZE,
+        RescueActionKind.DENOISE_AUDIO,
+    }
+)
+REMAINING_IMPROVEMENT_ACTION_KINDS: Final = frozenset(
+    {
+        RescueActionKind.ADJUST_LUMA,
+        RescueActionKind.SHARPEN,
+        RescueActionKind.DEFLICKER,
+        RescueActionKind.NORMALIZE_AUDIO,
     }
 )
 
@@ -258,10 +313,90 @@ class MediaDamageMap(RescueModel):
         return self
 
 
+class CanonicalVideoEncodeContract(RescueModel):
+    """Stable action wire for every output-affecting video encode option."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    contract_version: Literal["1"] = "1"
+    encoder: Literal["libx264"] = "libx264"
+    preset: Literal["slow", "medium"] = "medium"
+    crf: int = Field(default=16, ge=1, le=30)
+    pixel_format: Literal["yuv420p"] = "yuv420p"
+    profile: Literal["high"] = "high"
+    level: Literal["3.1"] = "3.1"
+    fps_mode: Literal["cfr"] = "cfr"
+    track_timescale: int = Field(default=120000, ge=120000, le=120000, strict=True)
+    gop_size: int = Field(default=48, ge=48, le=48, strict=True)
+    minimum_keyframe_interval: int = Field(default=24, ge=24, le=24, strict=True)
+    b_frames: int = Field(default=0, ge=0, le=0, strict=True)
+    reference_frames: int = Field(default=3, ge=3, le=3, strict=True)
+    scene_change_threshold: int = Field(default=0, ge=0, le=0, strict=True)
+
+
+class SharpenQualificationProfile(RescueModel):
+    """One finite, source-independent SHARPEN candidate profile."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    profile_id: str = Field(min_length=1, pattern=r"^[a-z0-9_]+$")
+    cas_strength_scale: float = Field(gt=0.0, le=1.0, allow_inf_nan=False)
+    unsharp_amount_scale: float = Field(gt=0.0, le=1.0, allow_inf_nan=False)
+    pass_count: int = Field(ge=1, le=3, strict=True)
+    radius: int = Field(default=2, ge=1, le=3, strict=True)
+
+
+class StabilizationQualificationProfile(RescueModel):
+    """One finite optional estimator profile for transition stabilization."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    profile_id: str = Field(min_length=1, pattern=r"^[a-z0-9_]+$")
+    estimator_algorithm_version: Literal["transition_anchor_v1"] = (
+        "transition_anchor_v1"
+    )
+
+
+def _default_sharpen_qualification_profiles() -> tuple[
+    SharpenQualificationProfile, ...
+]:
+    return (
+        SharpenQualificationProfile(
+            profile_id="full",
+            cas_strength_scale=1.0,
+            unsharp_amount_scale=1.0,
+            pass_count=3,
+        ),
+        SharpenQualificationProfile(
+            profile_id="moderate",
+            cas_strength_scale=0.75,
+            unsharp_amount_scale=0.75,
+            pass_count=2,
+        ),
+        SharpenQualificationProfile(
+            profile_id="gentle",
+            cas_strength_scale=0.5,
+            unsharp_amount_scale=0.5,
+            pass_count=1,
+        ),
+    )
+
+
+def _default_stabilization_qualification_profiles() -> tuple[
+    StabilizationQualificationProfile, ...
+]:
+    return (StabilizationQualificationProfile(profile_id="transition_anchor_v1"),)
+
+
 class RescueEffectiveConfig(RescueModel):
     """Path-free configuration bound into a confirmation digest."""
 
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
     planner_version: str = Field(default="1", min_length=1)
+    deblur_algorithm_version: Literal["1"] = "1"
+    tonal_algorithm_version: Literal["1"] = "1"
+    anchor_stabilization_algorithm_version: Literal["1"] = "1"
     source_read_only: Literal[True] = True
     max_preview_ranges: int = Field(default=3, ge=1, le=3)
     max_preview_total_seconds: float = Field(
@@ -269,8 +404,59 @@ class RescueEffectiveConfig(RescueModel):
     )
     trim_guard_seconds: float = Field(default=0.0, ge=0, allow_inf_nan=False)
     balanced_strength_limit: float = Field(default=1.0, gt=0, le=1, allow_inf_nan=False)
+    improved_video_crf: int = Field(default=16, ge=1, le=30)
+    improved_video_preset: Literal["slow", "medium"] = "medium"
+    improved_pixel_format: Literal["yuv420p"] = "yuv420p"
+    video_encode_topology_version: Literal["1"] = "1"
+    video_encoder: Literal["libx264"] = "libx264"
+    video_profile: Literal["high"] = "high"
+    video_level: Literal["3.1"] = "3.1"
+    video_fps_mode: Literal["cfr"] = "cfr"
+    video_track_timescale: int = Field(
+        default=120000, ge=120000, le=120000, strict=True
+    )
+    video_gop_size: int = Field(default=48, ge=48, le=48, strict=True)
+    video_min_keyframe_interval: int = Field(default=24, ge=24, le=24, strict=True)
+    video_b_frames: int = Field(default=0, ge=0, le=0, strict=True)
+    video_reference_frames: int = Field(default=3, ge=3, le=3, strict=True)
+    video_scene_change_threshold: int = Field(default=0, ge=0, le=0, strict=True)
+    improved_audio_bitrate_kbps: int = Field(default=192, ge=96, le=320)
+    sharpen_qualification_profiles: tuple[SharpenQualificationProfile, ...] = Field(
+        default_factory=_default_sharpen_qualification_profiles
+    )
+    stabilization_qualification_profiles: tuple[
+        StabilizationQualificationProfile, ...
+    ] = Field(default_factory=_default_stabilization_qualification_profiles)
     locked_ranges: tuple[tuple[float, float], ...] = ()
     verification_policy: tuple[str, ...] = RESCUE_REQUIRED_VERIFICATION_CHECK_IDS
+
+    @field_validator("locked_ranges", mode="before")
+    @classmethod
+    def accept_json_range_arrays(cls, value: object) -> object:
+        """Normalize only JSON array containers; scalar values remain strict."""
+        if isinstance(value, list):
+            return tuple(
+                tuple(item) if isinstance(item, list) else item for item in value
+            )
+        return value
+
+    @field_validator("verification_policy", mode="before")
+    @classmethod
+    def accept_json_policy_array(cls, value: object) -> object:
+        """Normalize the JSON array representation of the immutable policy."""
+        return tuple(value) if isinstance(value, list) else value
+
+    @field_validator("sharpen_qualification_profiles", mode="before")
+    @classmethod
+    def accept_json_profile_array(cls, value: object) -> object:
+        """Normalize the JSON array while retaining strict nested validation."""
+        return tuple(value) if isinstance(value, list) else value
+
+    @field_validator("stabilization_qualification_profiles", mode="before")
+    @classmethod
+    def accept_json_stabilization_profile_array(cls, value: object) -> object:
+        """Normalize the JSON array while retaining strict nested validation."""
+        return tuple(value) if isinstance(value, list) else value
 
     @model_validator(mode="after")
     def validate_policy(self) -> Self:
@@ -285,6 +471,20 @@ class RescueEffectiveConfig(RescueModel):
             )
             normalized_ranges.append((start_seconds, end_seconds))
         object.__setattr__(self, "locked_ranges", tuple(sorted(set(normalized_ranges))))
+        profile_ids = tuple(
+            profile.profile_id for profile in self.sharpen_qualification_profiles
+        )
+        if not profile_ids:
+            raise ValueError("at least one SHARPEN qualification profile is required")
+        if len(profile_ids) != len(set(profile_ids)):
+            raise ValueError("duplicate SHARPEN qualification profile ID")
+        stabilization_profile_ids = tuple(
+            profile.profile_id for profile in self.stabilization_qualification_profiles
+        )
+        if not stabilization_profile_ids:
+            raise ValueError("at least one STABILIZE qualification profile is required")
+        if len(stabilization_profile_ids) != len(set(stabilization_profile_ids)):
+            raise ValueError("duplicate STABILIZE qualification profile ID")
         return self
 
 
@@ -403,6 +603,27 @@ class RescuePlan(RescueModel):
                 )
             if any(dependency not in action_ids for dependency in action.depends_on):
                 raise ValueError("rescue action dependency is not in the plan")
+            _validate_action_video_encode_contract(action, self.effective_config)
+        if RescueActionKind.ADJUST_LUMA in action_kinds:
+            from videoscope.rescue.visual import validate_plan_luma_action_contracts
+
+            validate_plan_luma_action_contracts(self)
+        if RescueActionKind.SHARPEN in action_kinds:
+            from videoscope.rescue.qualification import (
+                validate_plan_sharpen_qualification_contracts,
+            )
+
+            validate_plan_sharpen_qualification_contracts(self)
+        if RescueActionKind.DENOISE_AUDIO in action_kinds:
+            from videoscope.rescue.tonal import validate_plan_tonal_action_contracts
+
+            validate_plan_tonal_action_contracts(self)
+        if RescueActionKind.STABILIZE in action_kinds:
+            from videoscope.rescue.stabilization import (
+                validate_plan_stabilization_qualification_contracts,
+            )
+
+            validate_plan_stabilization_qualification_contracts(self)
         for start_seconds, end_seconds in self.preview_ranges:
             _validate_time_range(start_seconds, end_seconds, field_name="preview range")
         _validate_path_collection(self.private_artifacts, field_name="private artifact")
@@ -453,10 +674,43 @@ class RescuePlan(RescueModel):
         if set(confirmation.accepted_trim_damage_ids) != trim_damage_ids:
             raise ValueError("confirmation must accept the immutable trim set")
         supports_improved = self.strategy is RescueStrategy.BALANCED and any(
-            action.kind in _BALANCED_ONLY_ACTIONS for action in self.actions
+            action.kind in REMAINING_IMPROVEMENT_ACTION_KINDS for action in self.actions
         )
         if confirmation.publish_improved is not supports_improved:
             raise ValueError("publish_improved must match the immutable action set")
+
+
+def required_verification_check_ids_for_plan(
+    plan: RescuePlan,
+) -> tuple[str, ...]:
+    """Derive the one canonical verification policy from confirmed actions."""
+    kinds: set[RescueActionKind] = set()
+    transition_stabilization = False
+    for action in plan.actions:
+        if action.kind is RescueActionKind.DEBLUR:
+            kinds.add(action.kind)
+        elif action.kind is RescueActionKind.DENOISE_AUDIO and action.parameters.get(
+            "interference_profiles"
+        ):
+            kinds.add(action.kind)
+        elif action.kind is RescueActionKind.STABILIZE and action.parameters.get(
+            "method"
+        ) in {"anchor_v1", "transition_anchor_v1"}:
+            kinds.add(action.kind)
+            transition_stabilization = (
+                transition_stabilization
+                or action.parameters.get("method") == "transition_anchor_v1"
+            )
+    required = list(RESCUE_REQUIRED_VERIFICATION_CHECK_IDS)
+    if RescueActionKind.DEBLUR in kinds:
+        required.extend(RESCUE_ACTION_VERIFICATION_CHECK_IDS[:3])
+    if RescueActionKind.DENOISE_AUDIO in kinds:
+        required.extend(RESCUE_ACTION_VERIFICATION_CHECK_IDS[3:5])
+    if RescueActionKind.STABILIZE in kinds:
+        required.append(RESCUE_ACTION_VERIFICATION_CHECK_IDS[5])
+    if transition_stabilization:
+        required.extend(RESCUE_ACTION_VERIFICATION_CHECK_IDS[6:9])
+    return tuple(required)
 
 
 class RescueConfirmation(RescueModel):
@@ -521,9 +775,31 @@ class RescueVerificationReport(RescueModel):
 
     @model_validator(mode="after")
     def validate_statuses(self) -> Self:
-        if self.required_check_ids != RESCUE_REQUIRED_VERIFICATION_CHECK_IDS:
+        if self.required_check_ids[: len(RESCUE_REQUIRED_VERIFICATION_CHECK_IDS)] != (
+            RESCUE_REQUIRED_VERIFICATION_CHECK_IDS
+        ):
             raise ValueError(
                 "required rescue verification checks must match the canonical v0.1 "
+                "verification policy"
+            )
+        action_check_ids = self.required_check_ids[
+            len(RESCUE_REQUIRED_VERIFICATION_CHECK_IDS) :
+        ]
+        if (
+            len(action_check_ids) != len(set(action_check_ids))
+            or any(
+                check_id not in RESCUE_ACTION_VERIFICATION_CHECK_IDS
+                for check_id in action_check_ids
+            )
+            or action_check_ids
+            != tuple(
+                check_id
+                for check_id in RESCUE_ACTION_VERIFICATION_CHECK_IDS
+                if check_id in action_check_ids
+            )
+        ):
+            raise ValueError(
+                "required rescue verification checks must match the canonical action "
                 "verification policy"
             )
         faithful_checks = tuple(
@@ -659,6 +935,115 @@ def make_rescue_plan_digest(plan_without_digest: Mapping[str, JsonValue]) -> str
     return _canonical_digest(payload)
 
 
+def canonical_video_encode_contract(
+    config: RescueEffectiveConfig,
+) -> CanonicalVideoEncodeContract:
+    """Project the effective config into the one stable action-level wire."""
+    return CanonicalVideoEncodeContract(
+        contract_version=config.video_encode_topology_version,
+        encoder=config.video_encoder,
+        preset=config.improved_video_preset,
+        crf=config.improved_video_crf,
+        pixel_format=config.improved_pixel_format,
+        profile=config.video_profile,
+        level=config.video_level,
+        fps_mode=config.video_fps_mode,
+        track_timescale=config.video_track_timescale,
+        gop_size=config.video_gop_size,
+        minimum_keyframe_interval=config.video_min_keyframe_interval,
+        b_frames=config.video_b_frames,
+        reference_frames=config.video_reference_frames,
+        scene_change_threshold=config.video_scene_change_threshold,
+    )
+
+
+def make_rescue_action_id(
+    *,
+    kind: RescueActionKind,
+    parameters: Mapping[str, JsonValue],
+    source_ranges: tuple[tuple[float, float], ...],
+    strategy: RescueStrategy,
+    version: str,
+) -> str:
+    """Return the stable identity of an action and its executable parameters."""
+    return "rescue_action_" + _canonical_digest(
+        {
+            "kind": kind.value,
+            "parameters": parameters,
+            "source_ranges": source_ranges,
+            "strategy": strategy.value,
+            "version": version,
+        }
+    )
+
+
+def validate_plan_video_encode_contracts(
+    plan: RescuePlan,
+    *,
+    allow_unqualified_sharpen_draft: bool = False,
+    allow_unqualified_tonal_draft: bool = False,
+) -> None:
+    """Recheck action wires at preview/command/executor trust boundaries."""
+    for action in plan.actions:
+        _validate_action_video_encode_contract(action, plan.effective_config)
+    from videoscope.rescue.qualification import (
+        validate_plan_sharpen_qualification_contracts,
+    )
+    from videoscope.rescue.stabilization import (
+        validate_plan_stabilization_qualification_contracts,
+    )
+    from videoscope.rescue.tonal import validate_plan_tonal_action_contracts
+    from videoscope.rescue.visual import validate_plan_luma_action_contracts
+
+    validate_plan_luma_action_contracts(plan)
+    validate_plan_tonal_action_contracts(
+        plan, allow_unqualified_draft=allow_unqualified_tonal_draft
+    )
+    validate_plan_sharpen_qualification_contracts(
+        plan, allow_unqualified_draft=allow_unqualified_sharpen_draft
+    )
+    validate_plan_stabilization_qualification_contracts(plan)
+
+
+def validate_rescue_plan_identity_contract(plan: RescuePlan) -> None:
+    """Recompute the immutable plan digest at every media-writing boundary."""
+    expected_digest = make_rescue_plan_digest(
+        plan.model_dump(mode="json", exclude={"plan_digest"})
+    )
+    if plan.plan_digest != expected_digest:
+        raise ValueError("plan digest differs from the effective RescuePlan")
+
+
+def _validate_action_video_encode_contract(
+    action: RescueAction,
+    config: RescueEffectiveConfig,
+) -> None:
+    raw_contract = action.parameters.get("video_encode_contract")
+    if not action.changes_content:
+        if raw_contract is not None:
+            raise ValueError("non-content action must not bind a video encode contract")
+        return
+    if raw_contract is None:
+        raise ValueError("content action video encode contract is missing")
+    try:
+        observed = CanonicalVideoEncodeContract.model_validate(raw_contract)
+    except ValueError as exc:
+        raise ValueError("content action video encode contract is invalid") from exc
+    if observed != canonical_video_encode_contract(config):
+        raise ValueError(
+            "content action video encode contract does not match effective config"
+        )
+    expected_id = make_rescue_action_id(
+        kind=action.kind,
+        parameters=action.parameters,
+        source_ranges=action.source_ranges,
+        strategy=action.strategy,
+        version=action.version,
+    )
+    if action.id != expected_id:
+        raise ValueError("content action ID does not match its video encode contract")
+
+
 def _validate_relative_posix_path(value: str, *, field_name: str) -> None:
     path = PurePosixPath(value)
     if (
@@ -737,8 +1122,27 @@ def _validate_required_checks(
 def _artifact_verification_status(
     checks: tuple[RescueVerificationCheck, ...],
 ) -> RescueVerificationStatus:
-    """Derive an artifact status from all of its mandatory check statuses."""
-    statuses = {check.status for check in checks}
+    """Derive status from mandatory and applicable safety checks.
+
+    Supplementary checks remain optional in the stable serialized policy, but
+    an observed check which explicitly applies to the delivered artifact is a
+    real safety gate.  Placeholders for an unselected action carry
+    ``applicable=false`` and therefore cannot turn an otherwise verified
+    artifact into ``needs_review``.
+    """
+    statuses = {
+        check.status
+        for check in checks
+        if (
+            check.required
+            or check.status is RescueVerificationStatus.FAILED
+            or (
+                check.status is RescueVerificationStatus.NEEDS_REVIEW
+                and check.check_id in _APPLICABLE_REVIEW_GATES
+                and check.measured.get("applicable") is True
+            )
+        )
+    }
     if RescueVerificationStatus.FAILED in statuses:
         return RescueVerificationStatus.FAILED
     if RescueVerificationStatus.NEEDS_REVIEW in statuses:

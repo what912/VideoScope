@@ -63,6 +63,17 @@ def _non_negative_int(value: object) -> int:
     return converted if converted >= 0 else 0
 
 
+def _positive_bounded_int(value: object, *, maximum: int) -> int | None:
+    """Parse a positive integer without accepting booleans or decimals."""
+    if isinstance(value, bool) or not isinstance(value, (str, int)):
+        return None
+    text = str(value)
+    if not text.isdigit():
+        return None
+    converted = int(text)
+    return converted if 0 < converted <= maximum else None
+
+
 def _duration_seconds(
     video_stream: Mapping[str, Any],
     media_format: Mapping[str, Any],
@@ -180,6 +191,12 @@ def metadata_from_ffprobe(
     )
     if audio_stream is not None and audio_stream.get("codec_name"):
         raw_probe["audio_codec"] = str(audio_stream["codec_name"])
+    if audio_stream is not None:
+        audio_sample_rate = _positive_bounded_int(
+            audio_stream.get("sample_rate"), maximum=384000
+        )
+        if audio_sample_rate is not None and audio_sample_rate >= 8000:
+            raw_probe["audio_sample_rate_hz"] = audio_sample_rate
     rotation_degrees = _rotation_degrees(video_stream)
     if rotation_degrees != 0:
         raw_probe["rotation_degrees"] = rotation_degrees

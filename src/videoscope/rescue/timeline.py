@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 from collections.abc import Sequence
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Final
 
 from videoscope.rescue.errors import RescueInputError, RescueMediaError
@@ -13,6 +14,64 @@ from videoscope.rescue.models import DamageKind, RescueActionKind, RescuePlan
 # Native container measurements can differ slightly from source timestamps.
 # This is the same parity tolerance used by Rescue verification.
 DEFAULT_MAPPING_DURATION_TOLERANCE_SECONDS: Final = 0.25
+ACTUAL_VIDEO_STREAM_START_TOLERANCE_SECONDS: Final = 0.002
+
+
+def timestamp_in_half_open_range(
+    timestamp: float,
+    start: float,
+    end: float,
+) -> bool:
+    """Classify measured PTS with strict half-open range ownership."""
+    if not all(math.isfinite(value) for value in (timestamp, start, end)) or (
+        end <= start
+    ):
+        return False
+    return start <= timestamp < end
+
+
+def normalize_actual_video_timestamps(
+    timestamps: Sequence[float],
+    stream_start_seconds: float,
+    *,
+    origin_tolerance_seconds: float = ACTUAL_VIDEO_STREAM_START_TOLERANCE_SECONDS,
+) -> tuple[float, ...]:
+    """Normalize measured frame PTS only by an explicit video-stream origin."""
+    if (
+        isinstance(stream_start_seconds, bool)
+        or not isinstance(stream_start_seconds, (int, float))
+        or not math.isfinite(float(stream_start_seconds))
+        or float(stream_start_seconds) < 0
+        or isinstance(origin_tolerance_seconds, bool)
+        or not isinstance(origin_tolerance_seconds, (int, float))
+        or not math.isfinite(float(origin_tolerance_seconds))
+        or float(origin_tolerance_seconds) < 0
+    ):
+        raise ValueError("video stream start time is invalid")
+    raw = tuple(timestamps)
+    if not raw or any(
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not math.isfinite(float(value))
+        or float(value) < 0
+        for value in raw
+    ):
+        raise ValueError("actual video timestamps are invalid")
+    if any(
+        float(current) <= float(previous) for previous, current in zip(raw, raw[1:])
+    ):
+        raise ValueError("actual video timestamps are not strictly ordered")
+    origin = float(stream_start_seconds)
+    first_offset = float(raw[0]) - origin
+    if first_offset < 0 or first_offset > float(origin_tolerance_seconds):
+        raise ValueError("actual video timestamps do not match stream start")
+    # ffprobe serializes timestamps as finite decimal text.  Subtracting their
+    # binary-float parses directly makes equivalent stream-relative inventories
+    # differ by one representation bit (for example, 0.121 - 0.021 versus 0.1).
+    # Decimal subtraction over the canonical float strings preserves the probed
+    # decimal semantics without snapping to an index, frame rate, or first PTS.
+    decimal_origin = Decimal(str(origin))
+    return tuple(float(Decimal(str(float(value))) - decimal_origin) for value in raw)
 
 
 @dataclass(frozen=True, slots=True)
@@ -194,4 +253,5 @@ __all__ = [
     "mappings_match_retained_ranges",
     "preview_source_mappings",
     "retained_source_ranges",
+    "timestamp_in_half_open_range",
 ]

@@ -2,7 +2,7 @@
 
 Date: 2026-08-12
 
-Status: approved design, awaiting written-spec review
+Status: approved written specification
 
 ## 1. Objective
 

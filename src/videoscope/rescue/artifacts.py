@@ -27,6 +27,7 @@ from videoscope.rescue.models import (
     RescuePlan,
     RescueVerificationReport,
     RescueVerificationStatus,
+    required_verification_check_ids_for_plan,
     rescue_public_artifacts,
 )
 
@@ -228,27 +229,30 @@ def publish_verified_rescue(
         raise RescueArtifactError("Rescue public root already exists")
     if verification.plan_digest != plan.plan_digest:
         raise RescueArtifactError("verification report is bound to another plan")
+    if verification.required_check_ids != required_verification_check_ids_for_plan(
+        plan
+    ):
+        raise RescueArtifactError(
+            "verification report does not match the plan required verification policy"
+        )
     if verification.faithful_status is not RescueVerificationStatus.PASSED:
         return ()
-    selected = ["faithful-rescue.mp4"]
-    if verification.improved_status in {
-        RescueVerificationStatus.PASSED,
-        RescueVerificationStatus.NEEDS_REVIEW,
-    }:
-        selected.append("improved-viewing.mp4")
+    public_verification = project_public_rescue_verification(plan, verification)
+    selected = [item.relative_path for item in public_verification.artifacts]
     expected_declaration = rescue_public_artifacts(
         include_improved="improved-viewing.mp4" in selected
     )
     allowed_declarations = {expected_declaration}
-    if "improved-viewing.mp4" not in selected and _plan_has_improvement(plan):
+    if (
+        "improved-viewing.mp4" not in selected
+        and "improved-viewing.mp4" in plan.public_artifacts
+    ):
         allowed_declarations.add(rescue_public_artifacts(include_improved=True))
     if plan.public_artifacts not in allowed_declarations:
         raise RescueArtifactError(
             "confirmed Rescue plan does not declare the exact public bundle"
         )
-    bindings = {item.relative_path: item for item in verification.artifacts}
-    if any(name not in bindings for name in selected):
-        raise RescueArtifactError("verification report lacks a selected artifact hash")
+    bindings = {item.relative_path: item for item in public_verification.artifacts}
     if set(public_documents) != _CALLER_DOCUMENTS:
         raise RescueArtifactError("public Rescue document set is incomplete")
     if cancellation_callback():
@@ -264,7 +268,7 @@ def publish_verified_rescue(
             "damaged-segments.json": build_damaged_segments_manifest(
                 mappings=mappings, damaged_ranges=damaged_ranges
             ),
-            "verification-report.json": verification.model_dump(mode="json"),
+            "verification-report.json": public_verification.model_dump(mode="json"),
             **dict(public_documents),
         }
         for name, content in generated_documents.items():
@@ -366,6 +370,7 @@ def _plan_has_improvement(plan: RescuePlan) -> bool:
         RescueActionKind.ADJUST_LUMA,
         RescueActionKind.DENOISE_VIDEO,
         RescueActionKind.SHARPEN,
+        RescueActionKind.DEBLUR,
         RescueActionKind.DEFLICKER,
         RescueActionKind.STABILIZE,
         RescueActionKind.NORMALIZE_AUDIO,
@@ -628,6 +633,30 @@ def _rename_transaction(source: Path, destination: Path) -> None:
         raise
     except OSError as exc:
         raise RescueArtifactError("Rescue public bundle rename failed") from exc
+
+
+def project_public_rescue_verification(
+    plan: RescuePlan,
+    verification: RescueVerificationReport,
+) -> RescueVerificationReport:
+    """Keep verification evidence while projecting artifact bindings to publication."""
+    selected: list[str] = []
+    if verification.faithful_status is RescueVerificationStatus.PASSED:
+        selected.append("faithful-rescue.mp4")
+        if (
+            "improved-viewing.mp4" in plan.public_artifacts
+            and verification.improved_status is RescueVerificationStatus.PASSED
+        ):
+            selected.append("improved-viewing.mp4")
+    bindings = {item.relative_path: item for item in verification.artifacts}
+    if any(name not in bindings for name in selected):
+        raise RescueArtifactError("verification report lacks a selected artifact hash")
+    return RescueVerificationReport.model_validate(
+        {
+            **verification.model_dump(mode="python"),
+            "artifacts": [bindings[name] for name in selected],
+        }
+    )
 
 
 def _atomic_rename_directory_no_replace(source: Path, destination: Path) -> None:

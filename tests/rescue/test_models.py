@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import json
 from typing import cast
 
 import pytest
 from pydantic import JsonValue
 
 from videoscope.rescue.models import (
+    RESCUE_ACTION_VERIFICATION_CHECK_IDS,
     RESCUE_REQUIRED_VERIFICATION_CHECK_IDS,
     DamageInterval,
     DamageKind,
@@ -168,6 +170,133 @@ def test_plan_digest_binds_the_exact_public_artifact_declaration() -> None:
         RescuePlan.model_validate(payload)
 
 
+def test_effective_config_validates_and_binds_improved_encoding_quality() -> None:
+    config = RescueEffectiveConfig()
+    assert config.improved_video_crf == 16
+    assert config.improved_video_preset == "medium"
+    assert config.improved_pixel_format == "yuv420p"
+    assert config.video_encode_topology_version == "1"
+    assert config.video_encoder == "libx264"
+    assert config.video_profile == "high"
+    assert config.video_level == "3.1"
+    assert config.video_fps_mode == "cfr"
+    assert config.video_track_timescale == 120000
+    assert config.video_gop_size == 48
+    assert config.video_min_keyframe_interval == 24
+    assert config.video_b_frames == 0
+    assert config.video_reference_frames == 3
+    assert config.video_scene_change_threshold == 0
+    assert config.improved_audio_bitrate_kbps == 192
+    with pytest.raises(ValueError):
+        RescueEffectiveConfig(improved_video_crf=31)
+    with pytest.raises(ValueError):
+        RescueEffectiveConfig(improved_video_crf=0)
+    with pytest.raises(ValueError):
+        RescueEffectiveConfig(improved_audio_bitrate_kbps=64)
+    with pytest.raises(ValueError):
+        RescueEffectiveConfig.model_validate({"video_encoder": "h264_nvenc"})
+    with pytest.raises(ValueError):
+        RescueEffectiveConfig.model_validate({"video_profile": "high444"})
+
+    first = make_plan_payload()
+    second = make_plan_payload()
+    second["effective_config"] = RescueEffectiveConfig(
+        improved_video_crf=18
+    ).model_dump(mode="json")
+
+    assert make_rescue_plan_digest(first) != make_rescue_plan_digest(second)
+
+
+@pytest.mark.parametrize(
+    ("field_name", "malformed"),
+    (
+        ("improved_video_crf", "16"),
+        ("improved_video_crf", True),
+        ("video_track_timescale", 120000.0),
+        ("video_b_frames", False),
+        ("video_reference_frames", 3.0),
+        ("video_reference_frames", True),
+        ("video_gop_size", float("nan")),
+        ("video_gop_size", float("inf")),
+    ),
+)
+def test_canonical_encode_config_rejects_coercible_or_nonfinite_types(
+    field_name: str, malformed: object
+) -> None:
+    with pytest.raises(ValueError):
+        RescueEffectiveConfig.model_validate({field_name: malformed})
+
+
+def test_canonical_encode_config_json_round_trip_is_strict_and_deterministic() -> None:
+    config = RescueEffectiveConfig(improved_video_crf=18)
+    encoded = json.dumps(
+        config.model_dump(mode="json"),
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+
+    first = RescueEffectiveConfig.model_validate_json(encoded)
+    second = RescueEffectiveConfig.model_validate_json(encoded)
+
+    assert first == config
+    assert second == config
+    assert first.model_dump_json() == second.model_dump_json()
+
+
+def test_deblur_action_kind_round_trips_exactly() -> None:
+    """A public deblur action must retain its exact stable wire value."""
+    assert RescueActionKind.DEBLUR.value == "deblur"
+    assert RescueActionKind("deblur") is RescueActionKind.DEBLUR
+
+
+def test_perceptual_algorithm_versions_are_strict_and_digest_bound() -> None:
+    """Versioned perceptual measurements must be public plan inputs."""
+    config = RescueEffectiveConfig()
+    assert config.deblur_algorithm_version == "1"
+    assert config.tonal_algorithm_version == "1"
+    assert config.anchor_stabilization_algorithm_version == "1"
+    serialized = config.model_dump(mode="json")
+    assert serialized["deblur_algorithm_version"] == "1"
+    assert serialized["tonal_algorithm_version"] == "1"
+    assert serialized["anchor_stabilization_algorithm_version"] == "1"
+
+    for field_name in (
+        "deblur_algorithm_version",
+        "tonal_algorithm_version",
+        "anchor_stabilization_algorithm_version",
+    ):
+        with pytest.raises(ValueError):
+            RescueEffectiveConfig.model_validate({field_name: "2"})
+
+    first = make_plan_payload()
+    changed_config = RescueEffectiveConfig().model_dump(mode="json")
+    changed_config["deblur_algorithm_version"] = "2"
+    second = {**first, "effective_config": changed_config}
+    assert make_rescue_plan_digest(first) != make_rescue_plan_digest(second)
+
+
+def test_perceptual_algorithm_versions_accept_legacy_omission_but_forbid_extras() -> (
+    None
+):
+    """Additive defaults preserve old JSON without weakening strict parsing."""
+    legacy_payload = RescueEffectiveConfig().model_dump(mode="json")
+    for field_name in (
+        "deblur_algorithm_version",
+        "tonal_algorithm_version",
+        "anchor_stabilization_algorithm_version",
+    ):
+        legacy_payload.pop(field_name)
+
+    parsed = RescueEffectiveConfig.model_validate(legacy_payload)
+    assert parsed.deblur_algorithm_version == "1"
+    assert parsed.tonal_algorithm_version == "1"
+    assert parsed.anchor_stabilization_algorithm_version == "1"
+
+    with pytest.raises(ValueError, match="Extra inputs are not permitted"):
+        RescueEffectiveConfig.model_validate({"unrecognized": "value"})
+
+
 def test_conservative_plan_rejects_subjective_enhancement() -> None:
     """A Conservative plan must not silently include an enhancement action."""
     payload = make_plan_payload()
@@ -250,6 +379,141 @@ def test_verification_derives_failed_status_from_required_check() -> None:
 
     assert report.faithful_status is RescueVerificationStatus.FAILED
     assert report.outcome == "failed"
+
+
+def test_optional_review_check_does_not_pollute_verified_artifact_status() -> None:
+    """Optional diagnostics remain public without overriding required evidence."""
+    checks = tuple(
+        RescueVerificationCheck(
+            check_id=check_id,
+            artifact="faithful",
+            status=RescueVerificationStatus.PASSED,
+            message="The required local check passed.",
+        )
+        for check_id in RESCUE_REQUIRED_VERIFICATION_CHECK_IDS
+    ) + (
+        RescueVerificationCheck(
+            check_id="manual_visual_note",
+            artifact="faithful",
+            status=RescueVerificationStatus.NEEDS_REVIEW,
+            message="An optional observation remains visible for review.",
+            required=False,
+        ),
+    )
+
+    report = RescueVerificationReport(
+        plan_digest="a" * 64,
+        faithful_status=RescueVerificationStatus.NEEDS_REVIEW,
+        checks=checks,
+        outcome=RescueOutcome.NEEDS_REVIEW,
+    )
+
+    assert report.faithful_status is RescueVerificationStatus.PASSED
+    assert report.outcome is RescueOutcome.COMPLETED
+    assert report.checks[-1].status is RescueVerificationStatus.NEEDS_REVIEW
+
+
+def test_optional_failed_safety_check_still_fails_the_artifact() -> None:
+    """A mislabeled load-bearing failure cannot be hidden by required metadata."""
+    checks = tuple(
+        RescueVerificationCheck(
+            check_id=check_id,
+            artifact="faithful",
+            status=RescueVerificationStatus.PASSED,
+            message="The required local check passed.",
+        )
+        for check_id in RESCUE_REQUIRED_VERIFICATION_CHECK_IDS
+    ) + (
+        RescueVerificationCheck(
+            check_id="artifact_integrity",
+            artifact="faithful",
+            status=RescueVerificationStatus.FAILED,
+            message="The published artifact binding is invalid.",
+            required=False,
+        ),
+    )
+
+    report = RescueVerificationReport(
+        plan_digest="a" * 64,
+        faithful_status=RescueVerificationStatus.PASSED,
+        checks=checks,
+        outcome=RescueOutcome.COMPLETED,
+    )
+
+    assert report.faithful_status is RescueVerificationStatus.FAILED
+    assert report.outcome is RescueOutcome.FAILED
+
+
+def test_action_specific_required_checks_extend_base_policy_stably() -> None:
+    """A report may append only canonical action-specific evidence gates."""
+    policy = (
+        *RESCUE_REQUIRED_VERIFICATION_CHECK_IDS,
+        RESCUE_ACTION_VERIFICATION_CHECK_IDS[0],
+        RESCUE_ACTION_VERIFICATION_CHECK_IDS[-1],
+    )
+    checks = tuple(
+        RescueVerificationCheck(
+            check_id=check_id,
+            artifact="faithful",
+            status=RescueVerificationStatus.PASSED,
+            message="The required local check passed.",
+        )
+        for check_id in policy
+    )
+
+    report = RescueVerificationReport(
+        plan_digest="a" * 64,
+        faithful_status=RescueVerificationStatus.NEEDS_REVIEW,
+        checks=checks,
+        outcome=RescueOutcome.NEEDS_REVIEW,
+        required_check_ids=policy,
+    )
+
+    assert report.required_check_ids == policy
+    assert report.faithful_status is RescueVerificationStatus.PASSED
+
+
+@pytest.mark.parametrize(  # type: ignore[untyped-decorator]
+    "policy",
+    [
+        (
+            *RESCUE_REQUIRED_VERIFICATION_CHECK_IDS,
+            "unknown_perceptual_gate",
+        ),
+        (
+            *RESCUE_REQUIRED_VERIFICATION_CHECK_IDS,
+            RESCUE_ACTION_VERIFICATION_CHECK_IDS[1],
+            RESCUE_ACTION_VERIFICATION_CHECK_IDS[0],
+        ),
+        (
+            *RESCUE_REQUIRED_VERIFICATION_CHECK_IDS,
+            RESCUE_ACTION_VERIFICATION_CHECK_IDS[0],
+            RESCUE_ACTION_VERIFICATION_CHECK_IDS[0],
+        ),
+    ],
+)
+def test_action_specific_required_policy_rejects_unknown_reordered_or_duplicate_ids(
+    policy: tuple[str, ...],
+) -> None:
+    """Callers cannot invent, reorder or duplicate action-specific gates."""
+    checks = tuple(
+        RescueVerificationCheck(
+            check_id=check_id,
+            artifact="faithful",
+            status=RescueVerificationStatus.PASSED,
+            message="The local check passed.",
+        )
+        for check_id in policy
+    )
+
+    with pytest.raises(ValueError, match="canonical action verification policy"):
+        RescueVerificationReport(
+            plan_digest="a" * 64,
+            faithful_status=RescueVerificationStatus.PASSED,
+            checks=checks,
+            outcome=RescueOutcome.COMPLETED,
+            required_check_ids=policy,
+        )
 
 
 @pytest.mark.parametrize(  # type: ignore[untyped-decorator]

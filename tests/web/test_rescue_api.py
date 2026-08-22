@@ -38,7 +38,9 @@ from videoscope.rescue.models import (
     RescueVerificationCheck,
     RescueVerificationReport,
     RescueVerificationStatus,
+    canonical_video_encode_contract,
     make_damage_id,
+    make_rescue_action_id,
     make_rescue_plan_digest,
     rescue_public_artifacts,
 )
@@ -46,6 +48,13 @@ from videoscope.rescue.pipeline import (
     RescuePipelineDependencies,
     RescueStatus,
     VideoRescuePipeline,
+)
+from videoscope.rescue.visual import (
+    LumaAdjustmentConfig,
+    VisualEvidence,
+    VisualMetrics,
+    apply_luma_strength_limit,
+    derive_visual_action_parameters,
 )
 from videoscope.web import rescue_jobs as rescue_jobs_module
 from videoscope.web.app import create_app
@@ -367,6 +376,64 @@ class ContractRescuePipeline:
             os.close(descriptor)
 
 
+def _faithful_fallback_improvement(
+    effective_config: RescueEffectiveConfig,
+) -> RescueAction:
+    luma_config = LumaAdjustmentConfig()
+    metrics = VisualMetrics(
+        luma_p10=0.05,
+        luma_p50=0.08,
+        luma_p90=0.12,
+        low_clip_ratio=0.0,
+        high_clip_ratio=0.0,
+        noise_residual=0.0,
+        sharpness=0.1,
+    )
+    evidence = VisualEvidence(
+        action=RescueActionKind.ADJUST_LUMA,
+        timestamp_seconds=0.5,
+        metric="luma_p10",
+        observed=metrics.luma_p10,
+        threshold=luma_config.dark_percentile_threshold,
+        context_luma_p50=metrics.luma_p50,
+    )
+    parameters = derive_visual_action_parameters(
+        RescueActionKind.ADJUST_LUMA,
+        metrics,
+        luma_config=luma_config,
+    )
+    apply_luma_strength_limit(parameters, effective_config.balanced_strength_limit)
+    parameters.update(
+        {
+            "strength_limit": effective_config.balanced_strength_limit,
+            "assessment_metrics": metrics.model_dump(mode="json"),
+            "assessment_evidence": [evidence.model_dump(mode="json")],
+            "assessment_limitations": [],
+            "video_encode_contract": canonical_video_encode_contract(
+                effective_config
+            ).model_dump(mode="json"),
+        }
+    )
+    return RescueAction(
+        id=make_rescue_action_id(
+            kind=RescueActionKind.ADJUST_LUMA,
+            parameters=parameters,
+            source_ranges=((0.0, 1.0),),
+            strategy=RescueStrategy.BALANCED,
+            version="1",
+        ),
+        version="1",
+        kind=RescueActionKind.ADJUST_LUMA,
+        description="Apply a bounded luminance adjustment.",
+        source_ranges=((0.0, 1.0),),
+        parameters=parameters,
+        changes_content=True,
+        requires_confirmation=True,
+        depends_on=("remux",),
+        strategy=RescueStrategy.BALANCED,
+    )
+
+
 class FaithfulFallbackContractPipeline(ContractRescuePipeline):
     """Issue a Balanced plan but publish only its verified faithful fallback."""
 
@@ -375,21 +442,12 @@ class FaithfulFallbackContractPipeline(ContractRescuePipeline):
         remux = preparation.plan.actions[0].model_copy(
             update={"strategy": RescueStrategy.BALANCED}
         )
-        improve = RescueAction(
-            id="adjust-luma",
-            version="1",
-            kind=RescueActionKind.ADJUST_LUMA,
-            description="Apply a bounded luminance adjustment.",
-            source_ranges=((0.0, 1.0),),
-            changes_content=True,
-            requires_confirmation=True,
-            depends_on=("remux",),
-            strategy=RescueStrategy.BALANCED,
-        )
+        effective_config = preparation.plan.effective_config
+        improve = _faithful_fallback_improvement(effective_config)
         payload: dict[str, JsonValue] = {
             "input_hash": preparation.plan.input_hash,
             "strategy": RescueStrategy.BALANCED,
-            "effective_config": RescueEffectiveConfig().model_dump(mode="json"),
+            "effective_config": effective_config.model_dump(mode="json"),
             "actions": [
                 remux.model_dump(mode="json"),
                 improve.model_dump(mode="json"),
@@ -1822,13 +1880,20 @@ def test_rescue_restore_accepts_verified_faithful_fallback_from_balanced_plan(
         assert created.status_code == 202
         job_id = created.json()["job_id"]
         awaiting = _wait(client, job_id, {"awaiting_confirmation"})
+        awaiting_snapshot = manager.require(job_id).snapshot()
+        awaiting_events = manager.events_after(job_id, 0)
+        assert awaiting_snapshot.status is RescueJobStatus.AWAITING_CONFIRMATION
+        assert awaiting_snapshot.error is None
+        assert awaiting_events[-1].status is RescueJobStatus.AWAITING_CONFIRMATION
         response = client.post(
             f"/api/rescue/jobs/{job_id}/confirm",
             json={
                 "plan_digest": awaiting["plan_digest"],
                 "publish_faithful": True,
                 "publish_improved": True,
-                "accepted_action_ids": ["adjust-luma"],
+                "accepted_action_ids": [
+                    _faithful_fallback_improvement(RescueEffectiveConfig()).id
+                ],
                 "accepted_trim_damage_ids": [],
             },
         )

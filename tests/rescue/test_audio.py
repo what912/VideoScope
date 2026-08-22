@@ -41,6 +41,7 @@ def test_low_loudness_proposes_normalization_with_peak_guard() -> None:
 
     assert assessment.recommended_actions == (RescueActionKind.NORMALIZE_AUDIO,)
     assert assessment.parameters["true_peak_limit_dbtp"] == -1.5
+    assert assessment.parameters["loudness_tolerance_lu"] == 1.5
     assert "measured_I=-27" in loudnorm_apply_filter(
         parse_loudnorm_measurement(
             '{"input_i":"-27.0","input_tp":"-3.0","input_lra":"5.0","input_thresh":"-37.0","target_offset":"0.0"}'
@@ -126,7 +127,7 @@ def test_repeated_high_confidence_noise_has_bounded_denoise_parameters() -> None
         audio_filter_fragment_from_actions(
             (RescueActionKind.DENOISE_AUDIO,), assessment.parameters
         )
-        == "afftdn=nr=9:nf=-34"
+        == "afftdn=nr=9:nf=-34:tn=1:gs=8"
     )
 
 
@@ -190,6 +191,8 @@ def test_audio_configs_are_strict_finite_and_immutable() -> None:
     """Catches unsafe thresholds or mutable config changing a confirmed filter."""
     with pytest.raises(ValidationError):
         LoudnessConfig(true_peak_limit_dbtp=math.nan)
+    with pytest.raises(ValidationError):
+        LoudnessConfig(verification_tolerance_lu=3.1)
     with pytest.raises(ValidationError):
         AudioDenoiseConfig(maximum_reduction_db=20.0)
     with pytest.raises(ValidationError):
@@ -354,7 +357,11 @@ def test_conservative_fixed_offset_is_rendered_into_faithful_output(
                 0,
                 "",
                 '{"format":{"duration":"4.0"},"streams":['
-                '{"codec_type":"video"},{"codec_type":"audio"}]}',
+                '{"codec_type":"video","codec_name":"h264",'
+                '"start_time":"0.0","duration":"4.0",'
+                '"avg_frame_rate":"4/1","r_frame_rate":"4/1",'
+                '"nb_frames":"16"},{"codec_type":"audio",'
+                '"sample_rate":"48000"}]}',
             )
         if "null" in arguments:
             return CommandResult(0, "", "")
@@ -461,7 +468,11 @@ def test_custom_fixed_offset_limit_is_bound_into_and_rendered_from_plan(
             stderr_summary="",
             stdout_summary=(
                 '{"format":{"duration":"4.0"},"streams":['
-                '{"codec_type":"video"},{"codec_type":"audio"}]}'
+                '{"codec_type":"video","codec_name":"h264",'
+                '"start_time":"0.0","duration":"4.0",'
+                '"avg_frame_rate":"4/1","r_frame_rate":"4/1",'
+                '"nb_frames":"16"},{"codec_type":"audio",'
+                '"sample_rate":"48000"}]}'
             ),
         )
 
@@ -555,7 +566,14 @@ def test_audio_executor_cancels_atomically_without_touching_unicode_source(
         return CommandResult(
             returncode=0,
             stderr_summary="",
-            stdout_summary='{"format":{"duration":"4.0"},"streams":[{"codec_type":"video"},{"codec_type":"audio"}]}',
+            stdout_summary=(
+                '{"format":{"duration":"4.0"},"streams":['
+                '{"codec_type":"video","codec_name":"h264",'
+                '"start_time":"0.0","duration":"4.0",'
+                '"avg_frame_rate":"4/1","r_frame_rate":"4/1",'
+                '"nb_frames":"16"},{"codec_type":"audio",'
+                '"sample_rate":"48000"}]}'
+            ),
         )
 
     with pytest.raises(RescueCancelledError):

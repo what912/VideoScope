@@ -39,6 +39,7 @@ def ffprobe_payload() -> dict[str, object]:
                 "index": 1,
                 "codec_type": "audio",
                 "codec_name": "aac",
+                "sample_rate": "48000",
             },
         ],
         "format": {
@@ -100,6 +101,7 @@ def test_probe_normal_video_and_unicode_path(
     assert metadata.file_size_bytes == len(b"synthetic-video")
     assert metadata.creation_time is not None
     assert metadata.raw_probe["audio_codec"] == "aac"
+    assert metadata.raw_probe["audio_sample_rate_hz"] == 48000
     assert "filename" not in metadata.raw_probe
     assert "tags" not in metadata.raw_probe
 
@@ -127,6 +129,24 @@ def test_probe_summary_omits_missing_audio_codec_and_sensitive_metadata(
     assert "author" not in metadata.raw_probe
     assert "location" not in metadata.raw_probe
     assert input_path.name not in str(metadata.raw_probe)
+
+
+@pytest.mark.parametrize(  # type: ignore[untyped-decorator]
+    "value", [None, "", "invalid", "0", "99999999"]
+)
+def test_probe_summary_omits_invalid_audio_sample_rate(
+    value: object, tmp_path: Path
+) -> None:
+    input_path = tmp_path / "audio rate.mp4"
+    input_path.write_bytes(b"video")
+    payload = ffprobe_payload()
+    audio_stream = payload["streams"][1]  # type: ignore[index]
+    assert isinstance(audio_stream, dict)
+    audio_stream["sample_rate"] = value
+
+    metadata = metadata_from_ffprobe(payload, input_path=input_path)
+
+    assert "audio_sample_rate_hz" not in metadata.raw_probe
 
 
 def test_missing_duration_and_frame_count_are_tolerated(tmp_path: Path) -> None:
