@@ -572,4 +572,3 @@ Expected: all Python, site, web, packaging, and isolated Rescue gates pass.
 git add src/videoscope/web/static docs
 git commit -m "docs: explain verified rescue to publish outcomes"
 ```
-
