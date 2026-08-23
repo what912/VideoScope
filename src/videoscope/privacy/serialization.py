@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
+import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import TypeVar
 
@@ -17,6 +20,8 @@ from videoscope.privacy.models import (
 )
 
 PrivacyJsonModel = TypeVar("PrivacyJsonModel", bound=BaseModel)
+
+_WINDOWS_REPLACE_RETRY_DELAYS_SECONDS = (0.01, 0.02, 0.04, 0.08, 0.16)
 
 
 def privacy_risk_map_to_json(risk_map: PrivacyRiskMap) -> str:
@@ -114,6 +119,30 @@ def _to_json(value: PrivacyJsonModel, model_type: type[PrivacyJsonModel]) -> str
     )
 
 
+def _retry_windows_replace(
+    source: Path,
+    destination: Path,
+    *,
+    replace: Callable[[Path, Path], None] | None = None,
+    sleep: Callable[[float], None] | None = None,
+) -> None:
+    replace_file = replace or os.replace
+    sleep_for = sleep or time.sleep
+    for delay in (*_WINDOWS_REPLACE_RETRY_DELAYS_SECONDS, None):
+        try:
+            replace_file(source, destination)
+        except OSError as error:
+            if (
+                delay is None
+                or getattr(error, "winerror", None) != 5
+                or not os.path.lexists(source)
+            ):
+                raise
+            sleep_for(delay)
+        else:
+            return
+
+
 def _write_json(content: str, path: Path) -> None:
     """Atomically replace a destination using a same-directory temporary file."""
     destination = Path(path)
@@ -132,7 +161,7 @@ def _write_json(content: str, path: Path) -> None:
             temporary_path = Path(stream.name)
             stream.write(f"{content}\n")
             stream.flush()
-        temporary_path.replace(destination)
+        _retry_windows_replace(temporary_path, destination)
     finally:
         if temporary_path is not None:
             temporary_path.unlink(missing_ok=True)

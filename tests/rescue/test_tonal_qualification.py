@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import subprocess
 from pathlib import Path
 from types import SimpleNamespace
@@ -1617,20 +1618,38 @@ def test_full_interval_raw_qualification_rejects_infeasible_high_amplitude() -> 
     assert qualify(0.7) == ()
 
 
+def test_fixed_native_tonal_tools_come_from_explicit_environment(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    tool_root = tmp_path / "arbitrary checkout depth" / "fixed tools"
+    tool_root.mkdir(parents=True)
+    ffmpeg = tool_root / "ffmpeg.exe"
+    ffprobe = tool_root / "ffprobe.exe"
+    ffmpeg.write_bytes(b"fixed ffmpeg")
+    ffprobe.write_bytes(b"fixed ffprobe")
+    monkeypatch.setenv("VIDEOSCOPE_TEST_FFMPEG", str(ffmpeg))
+    monkeypatch.setenv("VIDEOSCOPE_TEST_FFPROBE", str(ffprobe))
+
+    assert _fixed_native_tonal_tools_from_environment() == (ffmpeg, ffprobe)
+
+
+def _fixed_native_tonal_tools_from_environment() -> tuple[Path, Path]:
+    raw_ffmpeg = os.environ.get("VIDEOSCOPE_TEST_FFMPEG")
+    raw_ffprobe = os.environ.get("VIDEOSCOPE_TEST_FFPROBE")
+    assert raw_ffmpeg, "VIDEOSCOPE_TEST_FFMPEG must name fixed FFmpeg 8.1.2"
+    assert raw_ffprobe, "VIDEOSCOPE_TEST_FFPROBE must name fixed ffprobe 8.1.2"
+    ffmpeg = Path(raw_ffmpeg)
+    ffprobe = Path(raw_ffprobe)
+    assert ffmpeg.is_file(), "VIDEOSCOPE_TEST_FFMPEG is not a regular file"
+    assert ffprobe.is_file(), "VIDEOSCOPE_TEST_FFPROBE is not a regular file"
+    return ffmpeg, ffprobe
+
+
 def test_native_fixed_8_1_2_encoded_qualification_matches_final_verifier(
     tmp_path: Path,
 ) -> None:
-    tool_root = (
-        Path(__file__).parents[4]
-        / ".release-audit"
-        / "tools"
-        / "ffmpeg"
-        / "ffmpeg-8.1.2-essentials_build"
-        / "bin"
-    )
-    ffmpeg = tool_root / "ffmpeg.exe"
-    ffprobe = tool_root / "ffprobe.exe"
-    assert ffmpeg.is_file() and ffprobe.is_file()
+    ffmpeg, ffprobe = _fixed_native_tonal_tools_from_environment()
     version = subprocess.run(
         [str(ffmpeg), "-version"],
         shell=False,

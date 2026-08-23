@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import time
 from collections.abc import Callable
 from hashlib import sha256
 from pathlib import Path
@@ -62,6 +63,129 @@ def _stage(layout: RescueArtifactLayout, name: str, content: bytes) -> Path:
     path = layout.private_root / "staging" / name
     path.write_bytes(content)
     return path
+
+
+def _winerror(code: int) -> PermissionError:
+    error = PermissionError("injected Windows rename failure")
+    error.winerror = code  # type: ignore[attr-defined]
+    return error
+
+
+_WINDOWS_RENAME_RETRY_DELAYS_SECONDS = (0.01, 0.02, 0.04, 0.08, 0.16)
+
+
+def _retry_test_windows_no_replace_rename(
+    source: Path,
+    destination: Path,
+    *,
+    rename: Callable[[Path, Path], None] | None = None,
+    sleep: Callable[[float], None] | None = None,
+) -> None:
+    rename_file = rename or os.rename
+    sleep_for = sleep or time.sleep
+    for delay in (*_WINDOWS_RENAME_RETRY_DELAYS_SECONDS, None):
+        try:
+            rename_file(source, destination)
+        except OSError as error:
+            if (
+                delay is None
+                or getattr(error, "winerror", None) != 5
+                or not os.path.lexists(source)
+                or os.path.lexists(destination)
+            ):
+                raise
+            sleep_for(delay)
+        else:
+            return
+
+
+def test_test_setup_windows_rename_retries_transient_access_denial(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "private"
+    destination = tmp_path / "private-old"
+    source.mkdir()
+    attempts = 0
+    delays: list[float] = []
+
+    def rename(observed_source: Path, observed_destination: Path) -> None:
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise _winerror(5)
+        observed_source.rename(observed_destination)
+
+    _retry_test_windows_no_replace_rename(
+        source,
+        destination,
+        rename=rename,
+        sleep=delays.append,
+    )
+
+    assert attempts == 2
+    assert delays == [0.01]
+    assert not source.exists()
+    assert destination.is_dir()
+
+
+def test_test_setup_windows_rename_surfaces_exhausted_access_denial(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "private"
+    destination = tmp_path / "private-old"
+    source.mkdir()
+    attempts = 0
+    delays: list[float] = []
+    final_error = _winerror(5)
+
+    def rename(_source: Path, _destination: Path) -> None:
+        nonlocal attempts
+        attempts += 1
+        raise final_error
+
+    with pytest.raises(PermissionError) as caught:
+        _retry_test_windows_no_replace_rename(
+            source,
+            destination,
+            rename=rename,
+            sleep=delays.append,
+        )
+
+    assert caught.value is final_error
+    assert attempts == 6
+    assert delays == [0.01, 0.02, 0.04, 0.08, 0.16]
+    assert source.is_dir()
+    assert not destination.exists()
+
+
+def test_test_setup_windows_rename_does_not_retry_other_windows_errors(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "private"
+    destination = tmp_path / "private-old"
+    source.mkdir()
+    attempts = 0
+    delays: list[float] = []
+    final_error = _winerror(32)
+
+    def rename(_source: Path, _destination: Path) -> None:
+        nonlocal attempts
+        attempts += 1
+        raise final_error
+
+    with pytest.raises(PermissionError) as caught:
+        _retry_test_windows_no_replace_rename(
+            source,
+            destination,
+            rename=rename,
+            sleep=delays.append,
+        )
+
+    assert caught.value is final_error
+    assert attempts == 1
+    assert delays == []
+    assert source.is_dir()
+    assert not destination.exists()
 
 
 _REQUIRED_DOCUMENTS = (
@@ -1044,12 +1168,27 @@ def test_publication_rejects_staged_symlink_and_hardlink_alias(tmp_path: Path) -
         _publish(layout, _report(layout))
 
 
-def test_layout_identity_change_is_rejected_before_publication(tmp_path: Path) -> None:
+def test_layout_identity_change_is_rejected_before_publication(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     layout = RescueArtifactLayout.create(tmp_path / "job")
     _stage(layout, "faithful-rescue.mp4", b"faithful")
     original = layout.private_root
     moved = layout.job_root / "private-old"
-    original.rename(moved)
+    original_rename = os.rename
+    attempts = 0
+
+    def rename(observed_source: Path, observed_destination: Path) -> None:
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise _winerror(5)
+        original_rename(observed_source, observed_destination)
+
+    monkeypatch.setattr(os, "rename", rename)
+    _retry_test_windows_no_replace_rename(original, moved)
+    assert attempts == 2
     original.mkdir()
     (original / "staging").mkdir()
     _stage(layout, "faithful-rescue.mp4", b"attacker")

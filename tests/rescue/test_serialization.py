@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import json
+import os
+import time
 from collections.abc import Callable
 from pathlib import Path
 
 import pytest
 from pydantic import JsonValue, ValidationError
 
+import videoscope.rescue.serialization as serialization_module
 from videoscope.rescue.models import (
     RESCUE_SCHEMA_VERSION,
     DamageInterval,
@@ -119,6 +122,165 @@ def make_report() -> RescueTechnicalReport:
         artifacts=(artifact,),
         limitations=("This record contains no overall recovery score.",),
     )
+
+
+def _winerror(code: int) -> PermissionError:
+    error = PermissionError("injected Windows replace failure")
+    error.winerror = code  # type: ignore[attr-defined]
+    return error
+
+
+def test_rescue_windows_replace_retries_transient_access_denial(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "result.json.tmp"
+    destination = tmp_path / "result.json"
+    source.write_bytes(b"new")
+    destination.write_bytes(b"old")
+    attempts = 0
+    delays: list[float] = []
+
+    def replace(observed_source: Path, observed_destination: Path) -> None:
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise _winerror(5)
+        os.replace(observed_source, observed_destination)
+
+    serialization_module._retry_windows_replace(
+        source,
+        destination,
+        replace=replace,
+        sleep=delays.append,
+    )
+
+    assert attempts == 2
+    assert delays == [0.01]
+    assert destination.read_bytes() == b"new"
+    assert not source.exists()
+
+
+def test_rescue_windows_replace_surfaces_exhausted_access_denial(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "result.json.tmp"
+    destination = tmp_path / "result.json"
+    source.write_bytes(b"new")
+    destination.write_bytes(b"old")
+    attempts = 0
+    delays: list[float] = []
+    final_error = _winerror(5)
+
+    def replace(_source: Path, _destination: Path) -> None:
+        nonlocal attempts
+        attempts += 1
+        raise final_error
+
+    with pytest.raises(PermissionError) as caught:
+        serialization_module._retry_windows_replace(
+            source,
+            destination,
+            replace=replace,
+            sleep=delays.append,
+        )
+
+    assert caught.value is final_error
+    assert attempts == 6
+    assert delays == [0.01, 0.02, 0.04, 0.08, 0.16]
+    assert source.read_bytes() == b"new"
+    assert destination.read_bytes() == b"old"
+
+
+def test_rescue_windows_replace_does_not_retry_other_errors(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "result.json.tmp"
+    destination = tmp_path / "result.json"
+    source.write_bytes(b"new")
+    destination.write_bytes(b"old")
+    attempts = 0
+    delays: list[float] = []
+    final_error = _winerror(32)
+
+    def replace(_source: Path, _destination: Path) -> None:
+        nonlocal attempts
+        attempts += 1
+        raise final_error
+
+    with pytest.raises(PermissionError) as caught:
+        serialization_module._retry_windows_replace(
+            source,
+            destination,
+            replace=replace,
+            sleep=delays.append,
+        )
+
+    assert caught.value is final_error
+    assert attempts == 1
+    assert delays == []
+    assert source.read_bytes() == b"new"
+    assert destination.read_bytes() == b"old"
+
+
+def test_rescue_windows_replace_does_not_retry_after_source_disappears(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "result.json.tmp"
+    destination = tmp_path / "result.json"
+    source.write_bytes(b"new")
+    destination.write_bytes(b"old")
+    attempts = 0
+    delays: list[float] = []
+    final_error = _winerror(5)
+
+    def replace(observed_source: Path, _destination: Path) -> None:
+        nonlocal attempts
+        attempts += 1
+        observed_source.unlink()
+        raise final_error
+
+    with pytest.raises(PermissionError) as caught:
+        serialization_module._retry_windows_replace(
+            source,
+            destination,
+            replace=replace,
+            sleep=delays.append,
+        )
+
+    assert caught.value is final_error
+    assert attempts == 1
+    assert delays == []
+    assert not source.exists()
+    assert destination.read_bytes() == b"old"
+
+
+def test_rescue_writer_cleans_temporary_file_after_exhausted_access_denial(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    destination = tmp_path / "中文 目录" / "result.json"
+    destination.parent.mkdir()
+    destination.write_bytes(b"old")
+    attempts = 0
+    delays: list[float] = []
+    final_error = _winerror(5)
+
+    def replace(_source: Path, _destination: Path) -> None:
+        nonlocal attempts
+        attempts += 1
+        raise final_error
+
+    monkeypatch.setattr(os, "replace", replace)
+    monkeypatch.setattr(time, "sleep", delays.append)
+
+    with pytest.raises(PermissionError) as caught:
+        write_damage_map_json(make_damage_map(), destination)
+
+    assert caught.value is final_error
+    assert attempts == 6
+    assert delays == [0.01, 0.02, 0.04, 0.08, 0.16]
+    assert destination.read_bytes() == b"old"
+    assert list(destination.parent.glob("*.tmp")) == []
 
 
 @pytest.mark.parametrize(  # type: ignore[untyped-decorator]
