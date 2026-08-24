@@ -538,7 +538,7 @@ describe("PublishReadyView", () => {
 
   it("re-presents one raw SSE error when the locale changes", async () => {
     const api = fakeApi(job("inspecting"));
-    let emitSseError: ((error: Error) => void) | null = null;
+    let emitSseError!: (error: Error) => void;
     api.subscribeToPublishEvents = vi.fn((_jobId, _onEvent, onError) => {
       emitSseError = onError;
       return { close: vi.fn() };
@@ -551,8 +551,12 @@ describe("PublishReadyView", () => {
       />,
     );
     await screen.findAllByText("Inspect source");
+    await waitFor(() => {
+      expect(api.subscribeToPublishEvents).toHaveBeenCalledTimes(1);
+      expect(emitSseError).toBeTypeOf("function");
+    });
 
-    act(() => emitSseError?.(new Error("Opaque stream detail")));
+    act(() => emitSseError(new Error("Opaque stream detail")));
     expect(await screen.findByText("Opaque stream detail")).toBeVisible();
     view.rerender(
       <PublishReadyView
