@@ -169,6 +169,31 @@ def test_manifest_packages_safe_sharing_json_example() -> None:
     assert "recursive-include examples *.py *.ps1 *.sh *.yaml *.json" in manifest
 
 
+def test_manifest_excludes_internal_superpowers_working_documents() -> None:
+    """Internal plans with workstation evidence must not enter the public sdist."""
+    manifest = (REPOSITORY_ROOT / "MANIFEST.in").read_text(encoding="utf-8")
+
+    assert "prune docs/superpowers" in manifest
+
+
+def test_sdist_allows_only_declared_clarity_contract_path_literals() -> None:
+    """Synthetic privacy fixtures stay narrow without exempting the whole test file."""
+    source_name = "tests/rescue/test_v15_clarity_node_contract.py"
+    source = (REPOSITORY_ROOT / source_name).read_bytes()
+    exemptions = audit_distribution.SDIST_PERSONAL_PATH_SOURCE_LITERAL_EXEMPTIONS
+    known_literals = exemptions.get(source_name, ())
+
+    assert known_literals
+    assert (
+        audit_distribution.personal_path_matches(
+            source_name,
+            source,
+            known_test_source_literals=known_literals,
+        )
+        == ()
+    )
+
+
 def test_generated_video_and_run_output_are_rejected(tmp_path: Path) -> None:
     wheel = tmp_path / "videoscope-0.1.0-py3-none-any.whl"
     make_wheel(
@@ -293,6 +318,7 @@ def test_ci_gates_public_site_and_bounds_windows_ffmpeg_install() -> None:
     assert "foreach ($attempt in 1..3)" in workflow
     assert "Get-Command ffmpeg" in workflow
     assert "Get-Command ffprobe" in workflow
+    assert 'PYTHONUTF8: "1"' in workflow
 
 
 def test_personal_absolute_path_is_rejected(tmp_path: Path) -> None:

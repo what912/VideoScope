@@ -9,6 +9,8 @@ import viteConfig from "../../vite.config";
 import { Header } from "../components/layout/Header";
 import { AppProviders } from "./AppProviders";
 import { TestApp } from "./router";
+import manifest from "../data/case-studies.json";
+import publicFunnelCopy from "../../public/growth-home-copy.json";
 
 function renderWithShellProviders(element: ReactElement) {
   return render(
@@ -21,10 +23,14 @@ function renderWithShellProviders(element: ReactElement) {
 describe("product routes", () => {
   beforeEach(() => {
     window.localStorage.clear();
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => ({
+      ok: true,
+      json: async () => url.endsWith("growth-home-copy.json") ? publicFunnelCopy : manifest,
+    })));
   });
 
   it.each([
-    ["/", "See what your video hides"],
+    ["/", "Rescue a problematic video"],
     ["/workspace", "Workspace"],
     ["/compare", "Compare videos"],
   ])("renders %s", async (path, expected) => {
@@ -61,20 +67,21 @@ describe("application shell", () => {
 
     for (const label of [
       "Product",
-      "Features",
-      "Compare",
-      "Research",
-      "Open Source",
-      "Docs",
+      "Rescue",
+      "Examples",
+      "Download",
+      "Developers",
+      "Roadmap",
+      "Community",
       "GitHub",
     ]) {
       expect(within(navigation).getByRole("link", { name: label })).toBeVisible();
     }
     expect(
-      within(navigation).getByRole("link", { name: "Research" }),
+      within(navigation).getByRole("link", { name: "GitHub" }),
     ).toHaveAttribute(
       "href",
-      "https://github.com/what912/VideoScope/tree/main/docs",
+      "https://github.com/what912/VideoScope",
     );
     const header = screen.getByRole("banner");
     expect(

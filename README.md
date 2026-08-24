@@ -69,7 +69,7 @@ videoscope analyze input.mp4 --output runs\first-check
 | **Check** | JSON + offline HTML with exact issue ranges and evidence frames |
 | **A · Publish Ready** | New verified MP4 for common horizontal/vertical delivery |
 | **D · Safe Sharing** | Human-reviewed privacy-redacted sharing copy |
-| **B · Video Rescue** | Faithful salvage and optional bounded viewing improvement |
+| **B · Video Rescue** | Automatic issue localization, content-faithful cleanup, and bounded viewing improvement |
 | **C · Useful Content** | Reviewed chapters, selected clips, source map and report |
 
 Advanced AI is optional: trusted transcript or explicitly approved Faster
@@ -150,6 +150,10 @@ with `--confirm-plan`. Successful public artifacts are placed in
 `improved-viewing.mp4`, plan/damage/change/verification/technical JSON, and an
 offline `report.html`. A `partial` result includes precise unrecovered source
 ranges; `needs_review` is not completion.
+
+For confirmed Balanced cleanup, both delivered video files independently retain
+the bounded denoise, sharpening, and stabilization work. The improved-viewing
+file inherits those repairs rather than applying them a second time.
 
 Filtering may improve observable playback, but it cannot recreate missing source
 frames, clipped audio samples, or image detail that was never recorded or has been

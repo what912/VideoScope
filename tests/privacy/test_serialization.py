@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
+import os
+import time
 from collections.abc import Callable
 from pathlib import Path
 
 import pytest
 
+import videoscope.privacy.serialization as serialization_module
 from videoscope.domain import Severity
 from videoscope.privacy.models import (
     PRIVACY_REQUIRED_VERIFICATION_CHECK_IDS,
@@ -141,6 +144,131 @@ def make_report() -> PrivacyTechnicalReport:
         ),
         artifacts=plan.artifacts,
     )
+
+
+def _winerror(code: int) -> PermissionError:
+    error = PermissionError("injected Windows replace failure")
+    error.winerror = code  # type: ignore[attr-defined]
+    return error
+
+
+def test_privacy_windows_replace_retries_transient_access_denial(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "result.json.tmp"
+    destination = tmp_path / "result.json"
+    source.write_bytes(b"new")
+    destination.write_bytes(b"old")
+    calls: list[tuple[Path, Path]] = []
+    delays: list[float] = []
+
+    def replace(observed_source: Path, observed_destination: Path) -> None:
+        calls.append((observed_source, observed_destination))
+        if len(calls) == 1:
+            raise _winerror(5)
+
+    serialization_module._retry_windows_replace(
+        source,
+        destination,
+        replace=replace,
+        sleep=delays.append,
+    )
+
+    assert calls == [(source, destination), (source, destination)]
+    assert delays == [0.01]
+    assert source.read_bytes() == b"new"
+    assert destination.read_bytes() == b"old"
+
+
+def test_privacy_windows_replace_surfaces_exhausted_access_denial(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "result.json.tmp"
+    destination = tmp_path / "result.json"
+    source.write_bytes(b"new")
+    destination.write_bytes(b"old")
+    attempts = 0
+    delays: list[float] = []
+    final_error = _winerror(5)
+
+    def replace(_source: Path, _destination: Path) -> None:
+        nonlocal attempts
+        attempts += 1
+        raise final_error
+
+    with pytest.raises(PermissionError) as caught:
+        serialization_module._retry_windows_replace(
+            source,
+            destination,
+            replace=replace,
+            sleep=delays.append,
+        )
+
+    assert caught.value is final_error
+    assert attempts == 6
+    assert delays == [0.01, 0.02, 0.04, 0.08, 0.16]
+    assert source.read_bytes() == b"new"
+    assert destination.read_bytes() == b"old"
+
+
+def test_privacy_windows_replace_does_not_retry_other_windows_errors(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "result.json.tmp"
+    destination = tmp_path / "result.json"
+    source.write_bytes(b"new")
+    destination.write_bytes(b"old")
+    attempts = 0
+    delays: list[float] = []
+    final_error = _winerror(32)
+
+    def replace(_source: Path, _destination: Path) -> None:
+        nonlocal attempts
+        attempts += 1
+        raise final_error
+
+    with pytest.raises(PermissionError) as caught:
+        serialization_module._retry_windows_replace(
+            source,
+            destination,
+            replace=replace,
+            sleep=delays.append,
+        )
+
+    assert caught.value is final_error
+    assert attempts == 1
+    assert delays == []
+    assert source.read_bytes() == b"new"
+    assert destination.read_bytes() == b"old"
+
+
+def test_privacy_writer_cleans_temporary_file_after_exhausted_access_denial(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    destination = tmp_path / "中文 目录" / "result.json"
+    destination.parent.mkdir()
+    destination.write_bytes(b"old")
+    attempts = 0
+    delays: list[float] = []
+    final_error = _winerror(5)
+
+    def replace(_source: Path, _destination: Path) -> None:
+        nonlocal attempts
+        attempts += 1
+        raise final_error
+
+    monkeypatch.setattr(os, "replace", replace)
+    monkeypatch.setattr(time, "sleep", delays.append)
+
+    with pytest.raises(PermissionError) as caught:
+        write_privacy_technical_report_json(make_report(), destination)
+
+    assert caught.value is final_error
+    assert attempts == 6
+    assert delays == [0.01, 0.02, 0.04, 0.08, 0.16]
+    assert destination.read_bytes() == b"old"
+    assert list(destination.parent.glob("*.tmp")) == []
 
 
 @pytest.mark.parametrize(  # type: ignore[untyped-decorator]

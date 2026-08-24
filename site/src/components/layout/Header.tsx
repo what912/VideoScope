@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from "react";
 import { Link } from "react-router";
 
 import { useAuth } from "../../features/auth/AuthProvider";
+import { REPOSITORY_URL } from "../../features/growth/growth-constants";
 import { useI18n } from "../../i18n/I18nProvider";
 import type { Locale } from "../../i18n/types";
 import { CreatorBadge } from "../brand/CreatorBadge";
@@ -10,8 +11,6 @@ import {
   MobileNavigation,
   type NavigationItem,
 } from "./MobileNavigation";
-
-const REPOSITORY_URL = "https://github.com/what912/VideoScope";
 
 type HeaderProps = {
   showSignIn?: boolean;
@@ -26,23 +25,12 @@ export function Header({ showSignIn = true }: HeaderProps) {
 
   const navigationItems: NavigationItem[] = [
     { href: "/", label: t.navigation.product },
-    { href: "/#features", label: t.navigation.features },
-    { href: "/compare", label: t.navigation.compare },
-    { href: "/connect", label: t.navigation.fullModes },
-    {
-      external: true,
-      href: `${REPOSITORY_URL}/tree/main/docs`,
-      label: t.navigation.research,
-    },
-    {
-      external: true,
-      href: REPOSITORY_URL,
-      label: t.navigation.openSource,
-    },
-    {
-      href: "/docs",
-      label: t.navigation.docs,
-    },
+    { href: "/rescue", label: t.navigation.rescue },
+    { href: "/examples", label: t.navigation.examples },
+    { href: "/download", label: t.navigation.download },
+    { href: "/developers", label: t.navigation.developers },
+    { href: "/roadmap", label: t.navigation.roadmap },
+    { href: "/community", label: t.navigation.community },
     {
       external: true,
       href: REPOSITORY_URL,

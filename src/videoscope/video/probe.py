@@ -28,6 +28,7 @@ from videoscope.video.errors import (
 )
 
 DEFAULT_PROBE_TIMEOUT_SECONDS = 30.0
+FFPROBE_METADATA_ATTEMPTS = 2
 
 
 def parse_frame_rate(value: object) -> float:
@@ -61,6 +62,17 @@ def _non_negative_int(value: object) -> int:
     except (TypeError, ValueError):
         return 0
     return converted if converted >= 0 else 0
+
+
+def _positive_bounded_int(value: object, *, maximum: int) -> int | None:
+    """Parse a positive integer without accepting booleans or decimals."""
+    if isinstance(value, bool) or not isinstance(value, (str, int)):
+        return None
+    text = str(value)
+    if not text.isdigit():
+        return None
+    converted = int(text)
+    return converted if 0 < converted <= maximum else None
 
 
 def _duration_seconds(
@@ -180,6 +192,12 @@ def metadata_from_ffprobe(
     )
     if audio_stream is not None and audio_stream.get("codec_name"):
         raw_probe["audio_codec"] = str(audio_stream["codec_name"])
+    if audio_stream is not None:
+        audio_sample_rate = _positive_bounded_int(
+            audio_stream.get("sample_rate"), maximum=384000
+        )
+        if audio_sample_rate is not None and audio_sample_rate >= 8000:
+            raw_probe["audio_sample_rate_hz"] = audio_sample_rate
     rotation_degrees = _rotation_degrees(video_stream)
     if rotation_degrees != 0:
         raw_probe["rotation_degrees"] = rotation_degrees
@@ -269,48 +287,80 @@ def _probe_payload(
         "-show_chapters",
         str(input_path),
     ]
-    try:
-        completed = subprocess.run(
-            arguments,
-            check=False,
-            capture_output=True,
-            encoding="utf-8",
-            errors="replace",
-            shell=False,
-            timeout=timeout_seconds,
-            **pinned_subprocess_options(arguments),
-        )
-    except FileNotFoundError as exc:
-        raise ExternalToolNotFoundError(
-            f"Required executable not found: {Path(ffprobe).name}"
-        ) from exc
-    except subprocess.TimeoutExpired as exc:
-        raise VideoProbeError(
-            f"ffprobe timed out while probing: {input_path.name}"
-        ) from exc
-    except OSError as exc:
-        raise VideoProbeError(
-            f"Could not start ffprobe for: {input_path.name}"
-        ) from exc
+    for attempt in range(1, FFPROBE_METADATA_ATTEMPTS + 1):
+        try:
+            completed = subprocess.run(
+                arguments,
+                check=False,
+                capture_output=True,
+                encoding="utf-8",
+                errors="replace",
+                shell=False,
+                timeout=timeout_seconds,
+                **pinned_subprocess_options(arguments),
+            )
+        except FileNotFoundError as exc:
+            raise ExternalToolNotFoundError(
+                f"Required executable not found: {Path(ffprobe).name}"
+            ) from exc
+        except subprocess.TimeoutExpired as exc:
+            raise VideoProbeError(
+                f"ffprobe timed out while probing: {input_path.name}"
+            ) from exc
+        except OSError as exc:
+            raise VideoProbeError(
+                f"Could not start ffprobe for: {input_path.name}"
+            ) from exc
 
-    if completed.returncode != 0:
-        diagnostic = sanitize_diagnostic(
-            completed.stderr or completed.stdout,
-            sensitive_paths=(input_path,),
-        )
-        raise VideoDecodeError(
-            f"ffprobe could not decode: {input_path.name}",
-            stderr_summary=diagnostic,
-        )
+        if completed.returncode != 0:
+            diagnostic = sanitize_diagnostic(
+                completed.stderr or completed.stdout,
+                sensitive_paths=(input_path,),
+            )
+            raise VideoDecodeError(
+                f"ffprobe could not decode: {input_path.name}",
+                stderr_summary=diagnostic,
+            )
 
-    try:
-        raw_payload: object = json.loads(completed.stdout)
-    except json.JSONDecodeError as exc:
-        raise VideoProbeError(
-            f"ffprobe returned invalid JSON for: {input_path.name}"
-        ) from exc
-    if not isinstance(raw_payload, Mapping):
-        raise VideoProbeError(
-            f"ffprobe returned an invalid JSON root for: {input_path.name}"
-        )
-    return input_path, cast(Mapping[str, Any], raw_payload)
+        try:
+            raw_payload: object = json.loads(completed.stdout)
+        except json.JSONDecodeError as exc:
+            if attempt < FFPROBE_METADATA_ATTEMPTS:
+                continue
+            raise VideoProbeError(
+                "ffprobe returned invalid JSON after "
+                f"{attempt} attempts for: {input_path.name} "
+                f"(line {exc.lineno}, column {exc.colno})"
+            ) from exc
+        if not isinstance(raw_payload, Mapping):
+            if attempt < FFPROBE_METADATA_ATTEMPTS:
+                continue
+            raise VideoProbeError(
+                "ffprobe returned an invalid JSON root after "
+                f"{attempt} attempts for: {input_path.name}"
+            )
+        payload = cast(Mapping[str, Any], raw_payload)
+        structure_error = _ffprobe_payload_structure_error(payload)
+        if structure_error is not None:
+            if attempt < FFPROBE_METADATA_ATTEMPTS:
+                continue
+            raise VideoProbeError(
+                "ffprobe returned an unusable JSON structure after "
+                f"{attempt} attempts for: {input_path.name} "
+                f"({structure_error})"
+            )
+        return input_path, payload
+
+    raise AssertionError("ffprobe metadata retry loop exhausted unexpectedly")
+
+
+def _ffprobe_payload_structure_error(payload: Mapping[str, Any]) -> str | None:
+    """Return a stable reason for truncated ffprobe container structures."""
+    streams = payload.get("streams")
+    if not isinstance(streams, list):
+        return "streams_not_array"
+    if any(not isinstance(stream, Mapping) for stream in streams):
+        return "stream_not_object"
+    if not isinstance(payload.get("format"), Mapping):
+        return "format_not_object"
+    return None

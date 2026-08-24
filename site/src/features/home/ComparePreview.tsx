@@ -8,9 +8,11 @@ import { Link } from "react-router";
 
 import { useI18n } from "../../i18n/I18nProvider";
 import { HomeMedia } from "./HomeMedia";
+import { legacyHomeCopy } from "./legacy-home-copy";
 
 export function ComparePreview() {
-  const { t } = useI18n();
+  const { locale } = useI18n();
+  const copy = legacyHomeCopy[locale];
   const [position, setPosition] = useState(42);
   const [playing, setPlaying] = useState(false);
   const firstVideoRef = useRef<HTMLVideoElement>(null);
@@ -88,40 +90,40 @@ export function ComparePreview() {
   return (
     <section className="home-section compare-preview">
       <div className="home-section__heading">
-        <p className="eyebrow">{t.home.compare.eyebrow}</p>
-        <h2>{t.home.compare.title}</h2>
-        <p>{t.home.compare.description}</p>
-        <span className="demo-label">{t.home.demoLabel}</span>
+        <p className="eyebrow">{copy.compare.eyebrow}</p>
+        <h2>{copy.compare.title}</h2>
+        <p>{copy.compare.description}</p>
+        <span className="demo-label">{copy.demoLabel}</span>
       </div>
       <div className="compare-preview__players">
         <figure>
           <HomeMedia
             autoPlayOnIntersection={false}
-            label={t.home.compare.a}
+            label={copy.compare.a}
             mediaRef={firstVideoRef}
             onLoadedMetadata={applyRequestedSeek}
             onTimeUpdate={synchronizeFromFirst}
             onViewportExit={pauseBoth}
             role="compare-a"
           />
-          <figcaption>{t.home.compare.a}</figcaption>
+          <figcaption>{copy.compare.a}</figcaption>
         </figure>
         <figure>
           <HomeMedia
             autoPlayOnIntersection={false}
-            label={t.home.compare.b}
+            label={copy.compare.b}
             mediaRef={secondVideoRef}
             onLoadedMetadata={applyRequestedSeek}
             onViewportExit={pauseBoth}
             role="compare-b"
           />
-          <figcaption>{t.home.compare.b}</figcaption>
+          <figcaption>{copy.compare.b}</figcaption>
         </figure>
       </div>
       <label className="compare-preview__scrubber">
-        <span>{t.home.compare.sync}</span>
+        <span>{copy.compare.sync}</span>
         <input
-          aria-label={t.home.compare.sync}
+          aria-label={copy.compare.sync}
           max="100"
           min="0"
           onChange={(event) => seekBoth(Number(event.currentTarget.value))}
@@ -139,10 +141,10 @@ export function ComparePreview() {
           onClick={() => void togglePlayback()}
           type="button"
         >
-          {playing ? t.home.compare.pause : t.home.compare.play}
+          {playing ? copy.compare.pause : copy.compare.play}
         </button>
         <Link className="button button--quiet" to="/compare">
-          {t.home.compare.open}
+          {copy.compare.open}
         </Link>
       </div>
     </section>

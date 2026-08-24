@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import os
+import time
 from collections.abc import Callable
 from hashlib import sha256
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 import pytest
 from pydantic import JsonValue
@@ -32,7 +35,27 @@ from videoscope.rescue.models import (
     RescueVerificationCheck,
     RescueVerificationReport,
     RescueVerificationStatus,
+    canonical_video_encode_contract,
+    make_rescue_action_id,
     make_rescue_plan_digest,
+)
+from videoscope.rescue.tonal import (
+    InterferenceTone,
+    TonalInterferenceConfig,
+    TonalRenderQualification,
+)
+from videoscope.rescue.tonal_qualification import (
+    TonalAudioEncodeContractV2,
+    TonalAudioTimelineV1,
+    TonalEncodedCandidateAttemptV2,
+    TonalEncodedMetricsV2,
+    TonalEncodedProfileQualificationV2,
+    TonalEncodedQualificationEvidenceV3,
+    TonalEncodedThresholdsV2,
+    TonalRangeMappingV2,
+    _qualification_for_q,
+    audio_topology_from_ffprobe_stdout,
+    qualified_tonal_action_parameters,
 )
 
 
@@ -40,6 +63,129 @@ def _stage(layout: RescueArtifactLayout, name: str, content: bytes) -> Path:
     path = layout.private_root / "staging" / name
     path.write_bytes(content)
     return path
+
+
+def _winerror(code: int) -> PermissionError:
+    error = PermissionError("injected Windows rename failure")
+    error.winerror = code  # type: ignore[attr-defined]
+    return error
+
+
+_WINDOWS_RENAME_RETRY_DELAYS_SECONDS = (0.01, 0.02, 0.04, 0.08, 0.16)
+
+
+def _retry_test_windows_no_replace_rename(
+    source: Path,
+    destination: Path,
+    *,
+    rename: Callable[[Path, Path], None] | None = None,
+    sleep: Callable[[float], None] | None = None,
+) -> None:
+    rename_file = rename or os.rename
+    sleep_for = sleep or time.sleep
+    for delay in (*_WINDOWS_RENAME_RETRY_DELAYS_SECONDS, None):
+        try:
+            rename_file(source, destination)
+        except OSError as error:
+            if (
+                delay is None
+                or getattr(error, "winerror", None) != 5
+                or not os.path.lexists(source)
+                or os.path.lexists(destination)
+            ):
+                raise
+            sleep_for(delay)
+        else:
+            return
+
+
+def test_test_setup_windows_rename_retries_transient_access_denial(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "private"
+    destination = tmp_path / "private-old"
+    source.mkdir()
+    attempts = 0
+    delays: list[float] = []
+
+    def rename(observed_source: Path, observed_destination: Path) -> None:
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise _winerror(5)
+        observed_source.rename(observed_destination)
+
+    _retry_test_windows_no_replace_rename(
+        source,
+        destination,
+        rename=rename,
+        sleep=delays.append,
+    )
+
+    assert attempts == 2
+    assert delays == [0.01]
+    assert not source.exists()
+    assert destination.is_dir()
+
+
+def test_test_setup_windows_rename_surfaces_exhausted_access_denial(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "private"
+    destination = tmp_path / "private-old"
+    source.mkdir()
+    attempts = 0
+    delays: list[float] = []
+    final_error = _winerror(5)
+
+    def rename(_source: Path, _destination: Path) -> None:
+        nonlocal attempts
+        attempts += 1
+        raise final_error
+
+    with pytest.raises(PermissionError) as caught:
+        _retry_test_windows_no_replace_rename(
+            source,
+            destination,
+            rename=rename,
+            sleep=delays.append,
+        )
+
+    assert caught.value is final_error
+    assert attempts == 6
+    assert delays == [0.01, 0.02, 0.04, 0.08, 0.16]
+    assert source.is_dir()
+    assert not destination.exists()
+
+
+def test_test_setup_windows_rename_does_not_retry_other_windows_errors(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "private"
+    destination = tmp_path / "private-old"
+    source.mkdir()
+    attempts = 0
+    delays: list[float] = []
+    final_error = _winerror(32)
+
+    def rename(_source: Path, _destination: Path) -> None:
+        nonlocal attempts
+        attempts += 1
+        raise final_error
+
+    with pytest.raises(PermissionError) as caught:
+        _retry_test_windows_no_replace_rename(
+            source,
+            destination,
+            rename=rename,
+            sleep=delays.append,
+        )
+
+    assert caught.value is final_error
+    assert attempts == 1
+    assert delays == []
+    assert source.is_dir()
+    assert not destination.exists()
 
 
 _REQUIRED_DOCUMENTS = (
@@ -90,6 +236,216 @@ def _plan(
         ),
         "damage_intervals": [],
     }
+    payload["plan_digest"] = make_rescue_plan_digest(payload)
+    return RescuePlan.model_validate(payload)
+
+
+def _perceptual_action(
+    kind: RescueActionKind,
+    index: int,
+    effective_config: RescueEffectiveConfig,
+) -> RescueAction:
+    parameters: dict[str, JsonValue]
+    if kind is RescueActionKind.DEBLUR:
+        parameters = {"algorithm_version": "1", "operations": [{}]}
+    elif kind is RescueActionKind.DENOISE_AUDIO:
+        tonal_config = TonalInterferenceConfig()
+        tone = InterferenceTone(
+            start_seconds=0.0,
+            end_seconds=4.0,
+            center_frequency_hz=880.0,
+            confidence=0.95,
+            baseline_before_dbfs=-60.0,
+            baseline_after_dbfs=-60.0,
+            peak_dbfs=-12.0,
+            local_peak_over_baseline_db=48.0,
+            persistence_window_count=80,
+            frequency_standard_deviation_hz=0.05,
+            channel_indices=(0,),
+            attenuation_target_db=tonal_config.attenuation_db,
+            render_qualification=TonalRenderQualification(
+                boundary_mode="full_interval_v1",
+                notch_q=8.0,
+                complete_window_count=80,
+                minimum_target_reduction_db=25.0,
+                maximum_non_target_attenuation_db=0.1,
+                maximum_boundary_energy_jump_db=0.1,
+                maximum_boundary_crest_jump_db=0.1,
+                maximum_boundary_adjacent_delta=0.01,
+            ),
+        )
+        parameters = {
+            "algorithm_version": effective_config.tonal_algorithm_version,
+            "interference_profiles": [tone.model_dump(mode="json")],
+            "config": tonal_config.model_dump(mode="json"),
+        }
+    else:
+        parameters = {"algorithm_version": "1", "method": "anchor_v1"}
+    parameters["video_encode_contract"] = canonical_video_encode_contract(
+        effective_config
+    ).model_dump(mode="json")
+    return RescueAction(
+        id=make_rescue_action_id(
+            kind=kind,
+            parameters=parameters,
+            source_ranges=((0.0, 4.0),),
+            strategy=RescueStrategy.BALANCED,
+            version="1",
+        ),
+        version="1",
+        kind=kind,
+        description="Apply one confirmed perceptual restoration.",
+        source_ranges=((0.0, 4.0),),
+        changes_content=True,
+        requires_confirmation=True,
+        strategy=RescueStrategy.BALANCED,
+        parameters=parameters,
+    )
+
+
+def _encoded_qualified_tonal_action(
+    action: RescueAction,
+    *,
+    input_hash: str,
+    effective_config: RescueEffectiveConfig,
+) -> RescueAction:
+    config = TonalInterferenceConfig()
+    raw_profiles = cast(Any, action.parameters["interference_profiles"])
+    raw_profile = InterferenceTone.model_validate_json(json.dumps(raw_profiles[0]))
+    thresholds = TonalEncodedThresholdsV2(
+        minimum_target_reduction_db=raw_profile.attenuation_target_db,
+        maximum_non_target_attenuation_db=(config.max_non_target_band_attenuation_db),
+        maximum_boundary_energy_jump_db=config.max_boundary_energy_jump_db,
+        maximum_boundary_crest_jump_db=config.max_boundary_crest_jump_db,
+        maximum_boundary_adjacent_delta=config.max_boundary_adjacent_delta,
+    )
+    metrics = TonalEncodedMetricsV2(
+        range_coverage_ratio=1.0,
+        measured_windows=80,
+        excluded_transition_windows=0,
+        minimum_target_reduction_db=25.0,
+        minimum_target_margin_db=1.0,
+        maximum_non_target_attenuation_db=0.1,
+        maximum_boundary_energy_jump_db=0.1,
+        maximum_boundary_crest_jump_db=0.1,
+        maximum_boundary_adjacent_delta=0.01,
+    )
+    topology = audio_topology_from_ffprobe_stdout(
+        json.dumps(
+            {
+                "streams": [
+                    {
+                        "codec_name": "aac",
+                        "codec_tag_string": "mp4a",
+                        "profile": "LC",
+                        "sample_fmt": "fltp",
+                        "sample_rate": "48000",
+                        "channels": 1,
+                        "channel_layout": "mono",
+                        "time_base": "1/48000",
+                    }
+                ]
+            }
+        )
+    )
+    notch_q = config.render_qualification_notch_q_values[0]
+    attempt = TonalEncodedCandidateAttemptV2(
+        notch_q=notch_q,
+        candidate_sha256="2" * 64,
+        candidate_audio_topology=topology,
+        metrics=metrics,
+        thresholds=thresholds,
+    )
+    timeline_tokens = ["0", "0.021333333"]
+    timeline = TonalAudioTimelineV1(
+        packet_count=2,
+        first_normalized_pts_seconds=0.0,
+        last_normalized_pts_seconds=0.021333333,
+        normalized_pts_sha256=hashlib.sha256(
+            json.dumps(timeline_tokens, separators=(",", ":")).encode("ascii")
+        ).hexdigest(),
+    )
+    evidence = TonalEncodedQualificationEvidenceV3(
+        input_hash=input_hash,
+        draft_action_id=action.id,
+        draft_parameters=dict(action.parameters),
+        source_ranges=action.source_ranges,
+        output_ranges=action.source_ranges,
+        range_mappings=(
+            TonalRangeMappingV2(
+                source_start=0.0,
+                source_end=4.0,
+                output_start=0.0,
+                output_end=4.0,
+            ),
+        ),
+        audio_encode_contract=TonalAudioEncodeContractV2(
+            parent_bitrate_kbps=effective_config.improved_audio_bitrate_kbps,
+            candidate_bitrate_kbps=config.audio_bitrate_kbps,
+        ),
+        parent_sha256="1" * 64,
+        parent_audio_topology=topology,
+        boundary_control_sha256="4" * 64,
+        boundary_control_audio_topology=topology,
+        boundary_control_audio_timeline=timeline,
+        profile_candidate_audio_timelines=((timeline,),),
+        combined_audio_timeline=timeline,
+        profile_qualifications=(
+            TonalEncodedProfileQualificationV2(
+                profile_index=0,
+                attempts=(attempt,),
+                selected_notch_q=notch_q,
+            ),
+        ),
+        combined_candidate_sha256="3" * 64,
+        combined_audio_topology=topology,
+        combined_metrics=(metrics,),
+        combined_thresholds=(thresholds,),
+        selected_profiles=(_qualification_for_q(raw_profile, notch_q, metrics),),
+    )
+    parameters = qualified_tonal_action_parameters(evidence)
+    return action.model_copy(
+        update={
+            "id": make_rescue_action_id(
+                kind=action.kind,
+                parameters=parameters,
+                source_ranges=action.source_ranges,
+                strategy=action.strategy,
+                version=action.version,
+            ),
+            "parameters": parameters,
+        }
+    )
+
+
+def _plan_with_perceptual_actions(
+    kinds: tuple[RescueActionKind, ...],
+) -> RescuePlan:
+    payload = _plan().model_dump(mode="json")
+    effective_config = RescueEffectiveConfig.model_validate(payload["effective_config"])
+    order = {kind: index for index, kind in enumerate(RescueActionKind)}
+    perceptual = sorted(
+        (
+            _perceptual_action(kind, index, effective_config)
+            for index, kind in enumerate(kinds)
+        ),
+        key=lambda action: order[action.kind],
+    )
+    perceptual = [
+        _encoded_qualified_tonal_action(
+            action,
+            input_hash=payload["input_hash"],
+            effective_config=effective_config,
+        )
+        if action.kind is RescueActionKind.DENOISE_AUDIO
+        else action
+        for action in perceptual
+    ]
+    actions = [
+        *payload["actions"],
+        *[action.model_dump(mode="json") for action in perceptual],
+    ]
+    payload["actions"] = actions
     payload["plan_digest"] = make_rescue_plan_digest(payload)
     return RescuePlan.model_validate(payload)
 
@@ -404,6 +760,50 @@ def test_publish_keeps_faithful_when_improved_fails(tmp_path: Path) -> None:
     }
 
 
+def test_publish_does_not_duplicate_faithful_only_restoration_as_improved(
+    tmp_path: Path,
+) -> None:
+    layout = RescueArtifactLayout.create(tmp_path / "job")
+    _stage(layout, "faithful-rescue.mp4", b"restored once")
+    _stage(layout, "improved-viewing.mp4", b"duplicate")
+    plan = _plan(public_artifacts=_public_artifacts())
+    report = _report(
+        layout,
+        improved_status=RescueVerificationStatus.PASSED,
+    ).model_copy(update={"plan_digest": plan.plan_digest})
+
+    published = _publish(layout, report, plan=plan)
+
+    assert [item.relative_path for item in published] == ["faithful-rescue.mp4"]
+    assert not (layout.public_root / "improved-viewing.mp4").exists()
+
+
+@pytest.mark.parametrize(
+    "kinds",
+    [
+        (RescueActionKind.DEBLUR,),
+        (RescueActionKind.DENOISE_AUDIO,),
+        (RescueActionKind.STABILIZE,),
+        (
+            RescueActionKind.DEBLUR,
+            RescueActionKind.DENOISE_AUDIO,
+            RescueActionKind.STABILIZE,
+        ),
+    ],
+)
+def test_publish_recomputes_dynamic_required_policy_from_actual_plan(
+    tmp_path: Path,
+    kinds: tuple[RescueActionKind, ...],
+) -> None:
+    layout = RescueArtifactLayout.create(tmp_path / "dynamic policy")
+    _stage(layout, "faithful-rescue.mp4", b"base-only verification")
+    plan = _plan_with_perceptual_actions(kinds)
+    forged = _report(layout).model_copy(update={"plan_digest": plan.plan_digest})
+
+    with pytest.raises(RescueArtifactError):
+        _publish(layout, forged, plan=plan)
+
+
 def test_publish_allows_needs_review_improved_but_rejects_failed_faithful(
     tmp_path: Path,
 ) -> None:
@@ -556,7 +956,7 @@ def test_publication_rejects_plan_with_extra_or_different_artifacts(
     tmp_path: Path,
 ) -> None:
     for declared in (
-        (*_public_artifacts(), "improved-viewing.mp4"),
+        (*_public_artifacts(), "unexpected.bin"),
         tuple(name for name in _public_artifacts() if name != "report.html"),
     ):
         layout = RescueArtifactLayout.create(
@@ -711,7 +1111,7 @@ def test_destination_race_requires_atomic_no_replace_primitive(
     assert (layout.public_root / "racer.txt").read_text(encoding="utf-8") == "racer"
 
 
-def test_needs_review_improved_candidate_is_in_complete_bundle(tmp_path: Path) -> None:
+def test_needs_review_improved_candidate_is_not_published(tmp_path: Path) -> None:
     layout = RescueArtifactLayout.create(tmp_path / "job")
     _stage(layout, "faithful-rescue.mp4", b"faithful")
     _stage(layout, "improved-viewing.mp4", b"improved")
@@ -719,15 +1119,11 @@ def test_needs_review_improved_candidate_is_in_complete_bundle(tmp_path: Path) -
         layout,
         _report(layout, improved_status=RescueVerificationStatus.NEEDS_REVIEW),
     )
-    assert tuple(item.relative_path for item in published) == (
-        "faithful-rescue.mp4",
-        "improved-viewing.mp4",
-    )
+    assert tuple(item.relative_path for item in published) == ("faithful-rescue.mp4",)
     assert {path.name for path in layout.public_root.iterdir()} == {
         "changes.json",
         "damaged-segments.json",
         "faithful-rescue.mp4",
-        "improved-viewing.mp4",
         "report.html",
         "rescue-plan.json",
         "technical-report.json",
@@ -772,12 +1168,27 @@ def test_publication_rejects_staged_symlink_and_hardlink_alias(tmp_path: Path) -
         _publish(layout, _report(layout))
 
 
-def test_layout_identity_change_is_rejected_before_publication(tmp_path: Path) -> None:
+def test_layout_identity_change_is_rejected_before_publication(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     layout = RescueArtifactLayout.create(tmp_path / "job")
     _stage(layout, "faithful-rescue.mp4", b"faithful")
     original = layout.private_root
     moved = layout.job_root / "private-old"
-    original.rename(moved)
+    original_rename = os.rename
+    attempts = 0
+
+    def rename(observed_source: Path, observed_destination: Path) -> None:
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise _winerror(5)
+        original_rename(observed_source, observed_destination)
+
+    monkeypatch.setattr(os, "rename", rename)
+    _retry_test_windows_no_replace_rename(original, moved)
+    assert attempts == 2
     original.mkdir()
     (original / "staging").mkdir()
     _stage(layout, "faithful-rescue.mp4", b"attacker")

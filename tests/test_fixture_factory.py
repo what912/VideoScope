@@ -502,6 +502,105 @@ def test_run_checked_disables_shell(monkeypatch: pytest.MonkeyPatch) -> None:
     assert result.returncode == 0
 
 
+def test_run_checked_redacts_an_absolute_missing_executable(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    executable = tmp_path / "private tools" / "ffprobe.exe"
+    monkeypatch.setattr(
+        "scripts.generate_test_videos.subprocess.run",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(FileNotFoundError()),
+    )
+
+    with pytest.raises(factory.FixtureFactoryError) as error:
+        factory.run_checked([str(executable), "-version"])
+
+    assert str(error.value) == "Executable not found: ffprobe.exe"
+    assert str(executable.parent) not in str(error.value)
+
+
+def test_fixture_probe_retries_once_after_transient_invalid_json(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    video_path = tmp_path / "freeze 中文.mp4"
+    video_path.write_bytes(b"video")
+    payload = {
+        "streams": [
+            {
+                "codec_type": "video",
+                "width": 320,
+                "height": 180,
+                "avg_frame_rate": "10/1",
+            }
+        ],
+        "format": {"duration": "6.0"},
+    }
+    calls = 0
+
+    def fake_run_checked(args: Sequence[str]) -> subprocess.CompletedProcess[str]:
+        nonlocal calls
+        calls += 1
+        stdout = '{"streams":[' if calls == 1 else json.dumps(payload)
+        return subprocess.CompletedProcess(list(args), 0, stdout, "")
+
+    monkeypatch.setattr(factory, "run_checked", fake_run_checked)
+
+    result = factory.probe_video(ffprobe="fake-ffprobe", video_path=video_path)
+
+    assert calls == 2
+    assert result == factory.ProbeResult(6.0, 320, 180, 10.0, False)
+
+
+def test_fixture_probe_fails_closed_with_specific_safe_reason_after_two_attempts(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    video_path = tmp_path / "私有 fixture" / "freeze_segment.mp4"
+    video_path.parent.mkdir()
+    video_path.write_bytes(b"video")
+    calls = 0
+
+    def fake_run_checked(args: Sequence[str]) -> subprocess.CompletedProcess[str]:
+        nonlocal calls
+        calls += 1
+        return subprocess.CompletedProcess(
+            list(args), 0, '{"streams": [], "format": {}}', ""
+        )
+
+    monkeypatch.setattr(factory, "run_checked", fake_run_checked)
+
+    with pytest.raises(factory.FixtureFactoryError) as error:
+        factory.probe_video(ffprobe="fake-ffprobe", video_path=video_path)
+
+    assert calls == 2
+    assert "after 2 attempts" in str(error.value)
+    assert "missing_video_stream" in str(error.value)
+    assert str(video_path.parent) not in str(error.value)
+
+
+def test_fixture_probe_does_not_retry_a_tool_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    video_path = tmp_path / "tool failure.mp4"
+    video_path.write_bytes(b"video")
+    calls = 0
+
+    def fail_once(args: Sequence[str]) -> subprocess.CompletedProcess[str]:
+        nonlocal calls
+        del args
+        calls += 1
+        raise factory.FixtureFactoryError("ffprobe exited with status 1")
+
+    monkeypatch.setattr(factory, "run_checked", fail_once)
+
+    with pytest.raises(factory.FixtureFactoryError, match="status 1"):
+        factory.probe_video(ffprobe="fake-ffprobe", video_path=video_path)
+
+    assert calls == 1
+
+
 def test_run_checked_bounds_and_redacts_sensitive_paths(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

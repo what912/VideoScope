@@ -18,19 +18,29 @@ from videoscope.processes import (
     pinned_descriptor_path,
     secure_read_open,
 )
-from videoscope.rescue.artifacts import RescueArtifactLayout, publish_verified_rescue
+from videoscope.rescue.action_roles import (
+    REMAINING_IMPROVEMENT_ACTION_KINDS,
+    action_artifact_role,
+)
+from videoscope.rescue.artifacts import (
+    RescueArtifactLayout,
+    project_public_rescue_verification,
+    publish_verified_rescue,
+)
 from videoscope.rescue.assessment import (
     LocalRescueAssessmentService,
     RescueAssessmentBundle,
     RescueAssessmentWarning,
 )
 from videoscope.rescue.errors import (
+    RescueArtifactError,
     RescueCancelledError,
     RescueConfirmationError,
     RescueError,
     RescueInputError,
     RescueMediaError,
     RescuePlanError,
+    RescueQualificationUnavailableError,
     RescueScanError,
 )
 from videoscope.rescue.executor import (
@@ -59,14 +69,29 @@ from videoscope.rescue.models import (
 )
 from videoscope.rescue.planner import build_rescue_plan
 from videoscope.rescue.preview import RescuePreviewBuilder, RescuePreviewSet
+from videoscope.rescue.qualification import (
+    NativeRescueCandidateQualifier,
+    SharpenQualificationEvidenceV1,
+)
 from videoscope.rescue.report import render_rescue_report
 from videoscope.rescue.scanner import RescueScanConfig, RescueScanner
 from videoscope.rescue.serialization import (
     write_damage_map_json,
     write_rescue_change_log_json,
     write_rescue_plan_json,
+    write_tonal_encoded_qualification_json,
+)
+from videoscope.rescue.stabilization import (
+    StabilizationQualificationEvidenceV1,
+    UnavailableStabilizationCandidateQualifier,
+    UnavailableStabilizationImmediateParentProvider,
+    validate_stabilization_immediate_parent_handle,
 )
 from videoscope.rescue.symptoms import RescueSymptomAssessment, classify_symptoms
+from videoscope.rescue.tonal_qualification import (
+    NativeTonalCandidateQualifier,
+    TonalEncodedQualificationEvidenceV3,
+)
 from videoscope.rescue.verification import RescueVerifier
 from videoscope.video.probe import probe_video
 
@@ -94,6 +119,74 @@ _TERMINAL_STATUSES = frozenset(
         RescueStatus.CANCELLED,
     }
 )
+
+
+def _cleanup_verification_controls(
+    private_root: Path, handles: tuple[Any, ...]
+) -> None:
+    """Delete only runtime controls proven to belong to this private workspace."""
+    try:
+        resolved_root = Path(private_root).resolve(strict=True)
+    except OSError:
+        raise RescueArtifactError(
+            "private verification control root is unavailable"
+        ) from None
+    validated: list[Path] = []
+    try:
+        for handle in handles:
+            for raw_path in tuple(handle.cleanup_paths):
+                path = Path(raw_path)
+                if path.is_symlink():
+                    raise ValueError("verification control path is a symlink")
+                path.resolve(strict=False).relative_to(resolved_root)
+                validated.append(path)
+    except (AttributeError, OSError, TypeError, ValueError):
+        raise RescueArtifactError(
+            "private verification control cleanup failed"
+        ) from None
+    cleanup_failed = False
+    for path in tuple(dict.fromkeys(validated)):
+        try:
+            path.unlink(missing_ok=True)
+        except OSError:
+            cleanup_failed = True
+    if cleanup_failed or any(path.exists() for path in validated):
+        raise RescueArtifactError("private verification control cleanup failed")
+
+
+def _cleanup_stabilization_parent_root(private_root: Path, parent_root: Path) -> None:
+    """Remove the complete fixed parent root without following symlinks."""
+    parent_root = Path(parent_root)
+    if not parent_root.exists() and not parent_root.is_symlink():
+        return
+    try:
+        resolved_private = Path(private_root).resolve(strict=True)
+        if parent_root.is_symlink() or not parent_root.is_dir():
+            raise ValueError
+        resolved_parent = parent_root.resolve(strict=True)
+        resolved_parent.relative_to(resolved_private)
+        if resolved_parent == resolved_private:
+            raise ValueError
+
+        def remove_owned(path: Path) -> None:
+            if path.is_symlink():
+                path.unlink()
+                return
+            if path.is_dir():
+                for child in path.iterdir():
+                    remove_owned(child)
+                path.rmdir()
+                return
+            if path.is_file():
+                path.unlink()
+                return
+            raise OSError("unsupported private parent artifact")
+
+        remove_owned(parent_root)
+    except (OSError, ValueError):
+        raise RescueArtifactError(
+            "stabilization immediate-parent cleanup failed"
+        ) from None
 
 
 @dataclass(frozen=True, slots=True)
@@ -193,6 +286,16 @@ class RescuePipelineDependencies:
     scanner: Any = field(default_factory=RescueScanner)
     assessment_service: Any = field(default_factory=LocalRescueAssessmentService)
     planner: Callable[..., RescuePlan] = build_rescue_plan
+    candidate_qualifier: Any = field(default_factory=NativeRescueCandidateQualifier)
+    tonal_candidate_qualifier: Any = field(
+        default_factory=NativeTonalCandidateQualifier
+    )
+    stabilization_candidate_qualifier: Any = field(
+        default_factory=UnavailableStabilizationCandidateQualifier
+    )
+    stabilization_parent_provider: Any = field(
+        default_factory=UnavailableStabilizationImmediateParentProvider
+    )
     preview_builder: Any = field(default_factory=RescuePreviewBuilder)
     executor: Any = field(default_factory=NativeRescueExecutor)
     verifier: Any = field(default_factory=RescueVerifier)
@@ -327,25 +430,150 @@ class VideoRescuePipeline:
                     "locked_ranges": self._config.locked_ranges,
                 }
             )
+            planner_inputs = {
+                "metadata": metadata[0],
+                "damage_map": damage_map,
+                "strategy": self._config.strategy,
+                "config": effective,
+                "locked_ranges": self._config.locked_ranges,
+                "requested_symptoms": self._config.symptoms,
+                "assessment_parameters": dict(assessments.parameters),
+                "assessment_limitations": assessments.limitations,
+                "assessment_warnings": tuple(
+                    warning.message for warning in assessments.warnings
+                ),
+                "visual_assessment": assessments.visual_assessment,
+                "flicker_correction": assessments.flicker_correction,
+                "stabilization_assessment": (assessments.stabilization_assessment),
+                "audio_assessment": assessments.audio_assessment,
+                "fixed_offset_assessment": assessments.fixed_offset_assessment,
+            }
             try:
-                plan = self._dependencies.planner(
-                    metadata=metadata[0],
-                    damage_map=damage_map,
-                    strategy=self._config.strategy,
-                    config=effective,
-                    locked_ranges=self._config.locked_ranges,
-                    requested_symptoms=self._config.symptoms,
-                    assessment_parameters=dict(assessments.parameters),
-                    assessment_limitations=assessments.limitations,
-                    assessment_warnings=tuple(
-                        warning.message for warning in assessments.warnings
-                    ),
-                    visual_assessment=assessments.visual_assessment,
-                    flicker_correction=assessments.flicker_correction,
-                    stabilization_assessment=(assessments.stabilization_assessment),
-                    audio_assessment=assessments.audio_assessment,
-                    fixed_offset_assessment=assessments.fixed_offset_assessment,
+                draft_plan = self._dependencies.planner(**planner_inputs)
+                tonal_qualification: TonalEncodedQualificationEvidenceV3 | None = None
+                had_draft_tonal = any(
+                    action.kind is RescueActionKind.DENOISE_AUDIO
+                    and action.parameters.get("interference_profiles")
+                    for action in draft_plan.actions
                 )
+                tonal_plan = draft_plan
+                if had_draft_tonal:
+                    try:
+                        tonal_qualification = (
+                            self._dependencies.tonal_candidate_qualifier.qualify(
+                                draft_plan,
+                                source_for_io,
+                                layout.private_root / "tonal-qualification",
+                                self._is_cancelled,
+                            )
+                        )
+                        write_tonal_encoded_qualification_json(
+                            tonal_qualification,
+                            layout.private_root
+                            / "tonal-qualification-evidence-private.json",
+                        )
+                    except RescueCancelledError:
+                        raise
+                    except RescueArtifactError:
+                        raise
+                    except OSError as exc:
+                        raise RescueArtifactError(
+                            "tonal qualification private cleanup failed"
+                        ) from exc
+                    except Exception:
+                        tonal_qualification = None
+                    self._check_cancelled()
+                    tonal_plan = self._dependencies.planner(
+                        **planner_inputs,
+                        tonal_qualification=tonal_qualification,
+                        require_tonal_qualification=True,
+                    )
+                sharpen_qualification: SharpenQualificationEvidenceV1 | None = None
+                had_draft_sharpen = any(
+                    action.kind is RescueActionKind.SHARPEN
+                    for action in tonal_plan.actions
+                )
+                if had_draft_sharpen:
+                    try:
+                        sharpen_qualification = (
+                            self._dependencies.candidate_qualifier.qualify(
+                                tonal_plan,
+                                source_for_io,
+                                layout.private_root / "sharpen-qualification",
+                                self._is_cancelled,
+                            )
+                        )
+                    except RescueCancelledError:
+                        raise
+                    except RescueArtifactError:
+                        raise
+                    except OSError as exc:
+                        raise RescueArtifactError(
+                            "sharpen qualification private cleanup failed"
+                        ) from exc
+                    except Exception:
+                        sharpen_qualification = None
+                    self._check_cancelled()
+                    plan = self._dependencies.planner(
+                        **planner_inputs,
+                        sharpen_qualification=sharpen_qualification,
+                        require_sharpen_qualification=True,
+                        tonal_qualification=tonal_qualification,
+                        require_tonal_qualification=had_draft_tonal,
+                    )
+                else:
+                    plan = tonal_plan
+                stabilization_qualification: (
+                    StabilizationQualificationEvidenceV1 | None
+                ) = None
+                if any(
+                    action.kind is RescueActionKind.STABILIZE
+                    and action.parameters.get("method") == "transition_anchor_v1"
+                    for action in plan.actions
+                ):
+                    stabilization_parent = None
+                    stabilization_parent_root = (
+                        layout.private_root / "stabilization-parent"
+                    )
+                    stabilization_parent_root_owned = False
+                    try:
+                        stabilization_parent_root.mkdir(parents=False, exist_ok=False)
+                        stabilization_parent_root_owned = True
+                        stabilization_parent = (
+                            self._dependencies.stabilization_parent_provider.provide(
+                                plan,
+                                source_for_io,
+                                stabilization_parent_root,
+                                self._is_cancelled,
+                            )
+                        )
+                        validate_stabilization_immediate_parent_handle(
+                            stabilization_parent, stabilization_parent_root
+                        )
+                        qualifier = self._dependencies.stabilization_candidate_qualifier
+                        stabilization_qualification = qualifier.qualify(
+                            plan,
+                            stabilization_parent,
+                            layout.private_root / "stabilization-qualification",
+                            self._is_cancelled,
+                        )
+                    except RescueQualificationUnavailableError:
+                        stabilization_qualification = None
+                    finally:
+                        if stabilization_parent_root_owned:
+                            _cleanup_stabilization_parent_root(
+                                layout.private_root, stabilization_parent_root
+                            )
+                    self._check_cancelled()
+                    if stabilization_qualification is not None:
+                        plan = self._dependencies.planner(
+                            **planner_inputs,
+                            sharpen_qualification=sharpen_qualification,
+                            require_sharpen_qualification=had_draft_sharpen,
+                            tonal_qualification=tonal_qualification,
+                            require_tonal_qualification=had_draft_tonal,
+                            stabilization_qualification=stabilization_qualification,
+                        )
             except RescueError:
                 raise
             except Exception as exc:
@@ -457,23 +685,68 @@ class VideoRescuePipeline:
                     self._is_cancelled,
                 )
             )
-            self._check_cancelled()
+            restoration = getattr(
+                self._dependencies.executor, "execute_faithful_restoration", None
+            )
+            if callable(restoration):
+                execution = restoration(
+                    execution_plan,
+                    execution,
+                    issued.layout.private_root,
+                    self._is_cancelled,
+                )
+
+            try:
+                self._check_cancelled()
+            except RescueCancelledError:
+                _cleanup_verification_controls(
+                    issued.layout.private_root,
+                    tuple(execution.verification_controls),
+                )
+                raise
 
             improved_path: Path | None = None
+            improved_verification_controls: tuple[Any, ...] = ()
+            all_verification_controls: list[Any] = list(execution.verification_controls)
             improvement_failure = False
             limitations: list[str] = []
             if confirmation.publish_improved:
                 try:
-                    improved_path = Path(
-                        self._dependencies.executor.execute_improved(
+                    execute_with_controls = getattr(
+                        self._dependencies.executor,
+                        "execute_improved_with_controls",
+                        None,
+                    )
+                    if callable(execute_with_controls):
+                        improved_result = execute_with_controls(
                             execution_plan,
                             execution.output_path,
                             issued.layout.private_root,
                             self._is_cancelled,
                             source_mappings=execution.source_mappings,
+                            inherited_action_ids=execution.applied_action_ids,
                         )
-                    )
+                        improved_path = Path(improved_result.output_path)
+                        improved_verification_controls = tuple(
+                            improved_result.verification_controls
+                        )
+                        all_verification_controls.extend(improved_verification_controls)
+                    else:
+                        improved_path = Path(
+                            self._dependencies.executor.execute_improved(
+                                execution_plan,
+                                execution.output_path,
+                                issued.layout.private_root,
+                                self._is_cancelled,
+                                source_mappings=execution.source_mappings,
+                                inherited_action_ids=execution.applied_action_ids,
+                            )
+                        )
                 except RescueCancelledError:
+                    _cleanup_verification_controls(
+                        issued.layout.private_root,
+                        tuple(execution.verification_controls),
+                    )
                     raise
                 except Exception:
                     improvement_failure = True
@@ -481,7 +754,6 @@ class VideoRescuePipeline:
                         "The supported improved-viewing candidate could not be "
                         "completed; the verified faithful output was retained."
                     )
-                self._check_cancelled()
             elif self._config.strategy is RescueStrategy.BALANCED:
                 limitations.append(
                     "no supported improvement was selected; only a faithful rescue "
@@ -493,23 +765,37 @@ class VideoRescuePipeline:
                     "run."
                 )
 
-            self._emit(RescueStatus.VERIFYING)
-            public_mappings = _public_source_mappings(execution.source_mappings)
-            failed_source_ranges = _complete_failed_source_ranges(
-                public_mappings,
-                issued.preparation.damage_map.duration_seconds,
-                execution.failed_source_ranges,
-            )
-            execution_is_partial = bool(failed_source_ranges)
-            verification = self._dependencies.verifier.verify(
-                source,
-                execution.output_path,
-                improved_path,
-                execution_plan,
-                public_mappings,
-                self._is_cancelled,
-                faithful_render_mode=execution.render_mode,
-            )
+            try:
+                self._emit(RescueStatus.VERIFYING)
+                public_mappings = _public_source_mappings(execution.source_mappings)
+                failed_source_ranges = _complete_failed_source_ranges(
+                    public_mappings,
+                    issued.preparation.damage_map.duration_seconds,
+                    execution.failed_source_ranges,
+                )
+                execution_is_partial = bool(failed_source_ranges)
+                verification_kwargs: dict[str, Any] = {
+                    "faithful_render_mode": execution.render_mode
+                }
+                if all_verification_controls:
+                    verification_kwargs["verification_controls"] = tuple(
+                        all_verification_controls
+                    )
+                self._check_cancelled()
+                verification = self._dependencies.verifier.verify(
+                    source,
+                    execution.output_path,
+                    improved_path,
+                    execution_plan,
+                    public_mappings,
+                    self._is_cancelled,
+                    **verification_kwargs,
+                )
+            finally:
+                _cleanup_verification_controls(
+                    issued.layout.private_root,
+                    tuple(all_verification_controls),
+                )
             self._check_cancelled()
             if improvement_failure:
                 verification = _record_failed_improvement(verification)
@@ -568,6 +854,16 @@ class VideoRescuePipeline:
                 ),
                 manual_review_reasons=tuple(manual_review_reasons),
             )
+            public_verification = project_public_rescue_verification(
+                issued.preparation.plan,
+                verification,
+            )
+            public_technical = technical.model_copy(
+                update={
+                    "verification": public_verification,
+                    "artifacts": public_verification.artifacts,
+                }
+            )
             changes = RescueChangeLog(
                 plan_digest=issued.preparation.plan.plan_digest,
                 processor={"mode": "local_cpu"},
@@ -579,13 +875,13 @@ class VideoRescuePipeline:
                     if action_execution.status is RescueActionExecutionStatus.SUCCEEDED
                 ),
                 action_executions=technical.action_executions,
-                artifacts=verification.artifacts,
+                artifacts=public_verification.artifacts,
             )
             write_rescue_change_log_json(
                 changes, issued.layout.private_root / "changes-private.json"
             )
             html = self._dependencies.report_renderer(
-                issued.preparation.plan, technical, public_mappings
+                issued.preparation.plan, public_technical, public_mappings
             )
             artifacts = self._dependencies.publisher(
                 issued.layout,
@@ -595,7 +891,7 @@ class VideoRescuePipeline:
                 damaged_ranges=failed_source_ranges,
                 public_documents={
                     "changes.json": changes.model_dump(mode="json"),
-                    "technical-report.json": technical.model_dump(mode="json"),
+                    "technical-report.json": public_technical.model_dump(mode="json"),
                     "report.html": html,
                 },
                 cancellation_callback=self._is_cancelled,
@@ -769,31 +1065,9 @@ def _execution_plan(
 
 
 def _has_supported_improvement(plan: RescuePlan) -> bool:
-    kinds = {
-        RescueActionKind.ADJUST_LUMA,
-        RescueActionKind.DENOISE_VIDEO,
-        RescueActionKind.SHARPEN,
-        RescueActionKind.DEFLICKER,
-        RescueActionKind.STABILIZE,
-        RescueActionKind.NORMALIZE_AUDIO,
-        RescueActionKind.DENOISE_AUDIO,
-    }
     return plan.strategy is RescueStrategy.BALANCED and any(
-        action.kind in kinds for action in plan.actions
+        action.kind in REMAINING_IMPROVEMENT_ACTION_KINDS for action in plan.actions
     )
-
-
-_IMPROVEMENT_ACTION_KINDS = frozenset(
-    {
-        RescueActionKind.ADJUST_LUMA,
-        RescueActionKind.DENOISE_VIDEO,
-        RescueActionKind.SHARPEN,
-        RescueActionKind.DEFLICKER,
-        RescueActionKind.STABILIZE,
-        RescueActionKind.NORMALIZE_AUDIO,
-        RescueActionKind.DENOISE_AUDIO,
-    }
-)
 
 
 def _action_execution_ledger(
@@ -805,7 +1079,12 @@ def _action_execution_ledger(
     records: list[RescueActionExecution] = []
     for action in plan.actions:
         role: Literal["faithful", "improved", "document"]
-        if action.kind in _IMPROVEMENT_ACTION_KINDS:
+        artifact_role = action_artifact_role(action.kind)
+        if artifact_role == "faithful":
+            status = RescueActionExecutionStatus.SUCCEEDED
+            reason = None
+            role = "faithful"
+        elif artifact_role == "improved":
             if improvement_failure:
                 status = RescueActionExecutionStatus.FAILED
                 reason = "The improved candidate could not be completed."

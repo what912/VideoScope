@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import hmac
 import json
+import os
 import re
 import threading
+import time
 from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -45,6 +47,7 @@ from videoscope.web.storage import LocalJobStore
 
 _JOB_ID = re.compile(r"^[0-9a-f]{32}$")
 _STATE_NAME = "content-job-state.json"
+_WINDOWS_REPLACE_RETRY_DELAYS_SECONDS = (0.01, 0.02, 0.04, 0.08, 0.16)
 _STATUS_PROGRESS: dict[ContentJobStatus, int] = {
     ContentJobStatus.QUEUED: 0,
     ContentJobStatus.PROBING: 10,
@@ -119,8 +122,36 @@ class ContentPipeline(Protocol):
 ContentPipelineFactory: TypeAlias = Callable[..., ContentPipeline]
 
 
+def _retry_windows_replace(
+    source: Path,
+    destination: Path,
+    *,
+    replace: Callable[[Path, Path], None] | None = None,
+    sleep: Callable[[float], None] | None = None,
+) -> None:
+    replace_file = replace or os.replace
+    sleep_for = sleep or time.sleep
+    for delay in (*_WINDOWS_REPLACE_RETRY_DELAYS_SECONDS, None):
+        try:
+            replace_file(source, destination)
+        except OSError as error:
+            if (
+                delay is None
+                or getattr(error, "winerror", None) != 5
+                or not os.path.lexists(source)
+            ):
+                raise
+            sleep_for(delay)
+        else:
+            return
+
+
 class ContentJobStateError(RuntimeError):
     """The operation is not valid for the current local job state."""
+
+
+class ContentJobPersistenceError(RuntimeError):
+    """A local content-job state snapshot could not be persisted."""
 
 
 class ContentRevisionConflictError(ContentJobStateError):
@@ -823,11 +854,17 @@ class ContentJobManager:
                 "events": [item.model_dump(mode="json") for item in record.events],
             }
         temporary = record.directory / f".{_STATE_NAME}.tmp"
-        temporary.write_text(
-            json.dumps(payload, ensure_ascii=False, sort_keys=True),
-            encoding="utf-8",
-        )
-        temporary.replace(record.directory / _STATE_NAME)
+        destination = record.directory / _STATE_NAME
+        try:
+            temporary.write_text(
+                json.dumps(payload, ensure_ascii=False, sort_keys=True),
+                encoding="utf-8",
+            )
+            _retry_windows_replace(temporary, destination)
+        except OSError as exc:
+            raise ContentJobPersistenceError(
+                "The local content job state could not be persisted."
+            ) from exc
 
     def _restore_records(self) -> None:
         if not self.job_root.is_dir():
@@ -955,6 +992,7 @@ __all__ = [
     "ContentArtifactUnavailableError",
     "ContentConfirmationMismatchError",
     "ContentJobManager",
+    "ContentJobPersistenceError",
     "ContentJobRecord",
     "ContentJobStateError",
     "ContentPipelineFactory",

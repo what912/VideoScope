@@ -1,0 +1,293 @@
+{
+  "actions": [
+    {
+      "actionId": "transcode",
+      "description": {
+        "en": "Encode streams to the selected compatibility profile.",
+        "zh-CN": "执行已确认的 transcode 本地处理。"
+      },
+      "kind": "transcode",
+      "parameters": {
+        "audio_codec": "aac",
+        "container": "mp4",
+        "maximum_fps": 60.0,
+        "pixel_format": "yuv420p",
+        "video_codec": "h264"
+      },
+      "version": "1.0.0",
+      "workflow": "publish-ready"
+    },
+    {
+      "actionId": "scale_pad",
+      "description": {
+        "en": "Fit the complete source image and pad the target canvas.",
+        "zh-CN": "执行已确认的 scale_pad 本地处理。"
+      },
+      "kind": "scale_pad",
+      "parameters": {
+        "height": 1920,
+        "mode": "fit",
+        "pad_color": "black",
+        "width": 1080
+      },
+      "version": "1.0.0",
+      "workflow": "publish-ready"
+    },
+    {
+      "actionId": "strip_metadata",
+      "description": {
+        "en": "Remove nonessential source metadata from the output.",
+        "zh-CN": "执行已确认的 strip_metadata 本地处理。"
+      },
+      "kind": "strip_metadata",
+      "parameters": {},
+      "version": "1.0.0",
+      "workflow": "publish-ready"
+    },
+    {
+      "actionId": "faststart",
+      "description": {
+        "en": "Place MP4 playback metadata at the start of the file.",
+        "zh-CN": "执行已确认的 faststart 本地处理。"
+      },
+      "kind": "faststart",
+      "parameters": {},
+      "version": "1.0.0",
+      "workflow": "publish-ready"
+    },
+    {
+      "actionId": "extract_cover",
+      "description": {
+        "en": "Extract one representative cover image.",
+        "zh-CN": "执行已确认的 extract_cover 本地处理。"
+      },
+      "kind": "extract_cover",
+      "parameters": {},
+      "version": "1.0.0",
+      "workflow": "publish-ready"
+    }
+  ],
+  "case_id": "growth-no-crop-vertical-v1",
+  "comparison": {
+    "endSeconds": 9.0,
+    "startSeconds": 3.0
+  },
+  "limitations": [
+    {
+      "en": "This is project-authored procedural media, not real-user footage.",
+      "zh-CN": "这是项目原创的程序化媒体，并非真实用户视频。"
+    },
+    {
+      "en": "Results demonstrate this controlled source and current local toolchain only.",
+      "zh-CN": "结果仅演示该受控来源与当前本地工具链。"
+    }
+  ],
+  "output_sha256": {
+    "afterVideo": "2804883f2288b8c46ba07eefc1b189f1aedcc58db447e4c6ab7dd31fa9b81188",
+    "beforeVideo": "a3d43cd46b492b2d42c77908afa83343e9e3b299e341e10c369e4f6659699bf3",
+    "poster": "0985cad5ef9d6b352402e372a262165662a703305582bc4e25701de5eda4020a"
+  },
+  "schema_version": "1.0",
+  "verification": {
+    "checks": [
+      {
+        "checkId": "publish:decodable",
+        "measured": {
+          "output_metadata_available": true
+        },
+        "status": "passed",
+        "summary": {
+          "en": "The output was independently probed as decodable media.",
+          "zh-CN": "本地验证检查 publish:decodable：passed。"
+        }
+      },
+      {
+        "checkId": "publish:duration",
+        "measured": {
+          "drift_seconds": 0.0,
+          "output_seconds": 12.0,
+          "source_seconds": 12.0,
+          "tolerance_seconds": 0.5
+        },
+        "status": "passed",
+        "summary": {
+          "en": "Output duration is within the source-relative tolerance.",
+          "zh-CN": "本地验证检查 publish:duration：passed。"
+        }
+      },
+      {
+        "checkId": "publish:dimensions",
+        "measured": {
+          "expected_height": 1920,
+          "expected_width": 1080,
+          "output_height": 1920,
+          "output_width": 1080
+        },
+        "status": "passed",
+        "summary": {
+          "en": "Output dimensions match the selected profile canvas.",
+          "zh-CN": "本地验证检查 publish:dimensions：passed。"
+        }
+      },
+      {
+        "checkId": "publish:container",
+        "measured": {
+          "output_container": "mov,mp4,m4a,3gp,3g2,mj2",
+          "required_container": "mp4"
+        },
+        "status": "passed",
+        "summary": {
+          "en": "Output container is compatible with the selected profile.",
+          "zh-CN": "本地验证检查 publish:container：passed。"
+        }
+      },
+      {
+        "checkId": "publish:video_codec",
+        "measured": {
+          "output_video_codec": "h264",
+          "required_video_codec": "h264"
+        },
+        "status": "passed",
+        "summary": {
+          "en": "Output video codec matches the selected profile.",
+          "zh-CN": "本地验证检查 publish:video_codec：passed。"
+        }
+      },
+      {
+        "checkId": "publish:pixel_format",
+        "measured": {
+          "output_pixel_format": "yuv420p",
+          "required_pixel_format": "yuv420p"
+        },
+        "status": "passed",
+        "summary": {
+          "en": "Output pixel format matches the selected profile.",
+          "zh-CN": "本地验证检查 publish:pixel_format：passed。"
+        }
+      },
+      {
+        "checkId": "publish:frame_rate",
+        "measured": {
+          "maximum_fps": 60.0,
+          "output_fps": 24.0
+        },
+        "status": "passed",
+        "summary": {
+          "en": "Output frame rate is within the selected profile limit.",
+          "zh-CN": "本地验证检查 publish:frame_rate：passed。"
+        }
+      },
+      {
+        "checkId": "publish:audio_stream",
+        "measured": {
+          "output_has_audio": true,
+          "source_has_audio": true
+        },
+        "status": "passed",
+        "summary": {
+          "en": "Output preserves the source audio-stream requirement.",
+          "zh-CN": "本地验证检查 publish:audio_stream：passed。"
+        }
+      },
+      {
+        "checkId": "publish:audio_codec",
+        "measured": {
+          "audio_required": true,
+          "output_audio_codec": "aac",
+          "required_audio_codec": "aac"
+        },
+        "status": "passed",
+        "summary": {
+          "en": "Output audio codec satisfies the selected profile.",
+          "zh-CN": "本地验证检查 publish:audio_codec：passed。"
+        }
+      },
+      {
+        "checkId": "publish:near_black_regression",
+        "measured": {
+          "after_execution": "ok",
+          "after_high_critical_count": 0,
+          "after_high_critical_duration_seconds": 0,
+          "before_execution": "ok",
+          "before_high_critical_count": 0,
+          "before_high_critical_duration_seconds": 0
+        },
+        "status": "passed",
+        "summary": {
+          "en": "The near_black high/critical event summary did not increase.",
+          "zh-CN": "本地验证检查 publish:near_black_regression：passed。"
+        }
+      },
+      {
+        "checkId": "publish:possible_freeze_regression",
+        "measured": {
+          "after_execution": "ok",
+          "after_high_critical_count": 0,
+          "after_high_critical_duration_seconds": 0,
+          "before_execution": "ok",
+          "before_high_critical_count": 0,
+          "before_high_critical_duration_seconds": 0
+        },
+        "status": "passed",
+        "summary": {
+          "en": "The possible_freeze high/critical event summary did not increase.",
+          "zh-CN": "本地验证检查 publish:possible_freeze_regression：passed。"
+        }
+      },
+      {
+        "checkId": "same-source-range",
+        "measured": {
+          "durationSeconds": 6.0,
+          "endSeconds": 9.0,
+          "startSeconds": 3.0
+        },
+        "status": "passed",
+        "summary": {
+          "en": "Before and after clips use the identical declared source range.",
+          "zh-CN": "本地验证检查 same-source-range：passed。"
+        }
+      },
+      {
+        "checkId": "public-media-decode",
+        "measured": {
+          "afterVideoDurationSeconds": 6.0,
+          "afterVideoHeight": 720,
+          "afterVideoWidth": 406,
+          "beforeVideoDurationSeconds": 6.0,
+          "beforeVideoHeight": 360,
+          "beforeVideoWidth": 640
+        },
+        "status": "passed",
+        "summary": {
+          "en": "Both public comparison clips decoded and matched the bounded duration.",
+          "zh-CN": "本地验证检查 public-media-decode：passed。"
+        }
+      },
+      {
+        "checkId": "vertical-scale-and-pad",
+        "measured": {
+          "bottomEdgeMarkerVisible": true,
+          "leftEdgeMarkerVisible": true,
+          "operation": "scale-and-pad",
+          "publicOutputHeight": 720,
+          "publicOutputWidth": 406,
+          "rightEdgeMarkerVisible": true,
+          "sourceAspectRatio": "16:9",
+          "topEdgeMarkerVisible": true
+        },
+        "status": "passed",
+        "summary": {
+          "en": "The verified Publish Ready output uses scale-and-pad; the public comparison retains 9:16 within its media budget.",
+          "zh-CN": "本地验证检查 vertical-scale-and-pad：passed。"
+        }
+      }
+    ],
+    "status": "completed"
+  },
+  "versions": {
+    "configuration": "growth-case-generator-v1",
+    "ffmpeg": "ffmpeg version 8.1.2-essentials_build-www.gyan.dev Copyright (c) 2000-2026 the FFmpeg developers",
+    "platform": "Windows-AMD64",
+    "videoscope": "0.8.0"
+  }
+}

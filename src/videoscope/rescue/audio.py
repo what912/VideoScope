@@ -55,6 +55,9 @@ class LoudnessConfig(_AudioModel):
     minimum_loudness_deviation_lu: float = Field(
         default=1.0, gt=0.0, le=12.0, allow_inf_nan=False
     )
+    verification_tolerance_lu: float = Field(
+        default=1.5, gt=0.0, le=3.0, allow_inf_nan=False
+    )
     clipping_peak_threshold_dbtp: float = Field(
         default=-0.1, ge=-1.0, le=0.0, allow_inf_nan=False
     )
@@ -74,6 +77,50 @@ class AudioDenoiseConfig(_AudioModel):
     maximum_reduction_db: float = Field(
         default=12.0, gt=0.0, le=18.0, allow_inf_nan=False
     )
+    analysis_window_seconds: float = Field(
+        default=0.5, ge=0.1, le=2.0, allow_inf_nan=False
+    )
+    minimum_interval_seconds: float = Field(
+        default=1.0, ge=0.2, le=10.0, allow_inf_nan=False
+    )
+    merge_gap_seconds: float = Field(default=0.5, ge=0.0, le=3.0, allow_inf_nan=False)
+    relative_level_increase_db: float = Field(
+        default=4.0, ge=1.0, le=18.0, allow_inf_nan=False
+    )
+    maximum_stationary_centroid_hz: float = Field(
+        default=2000.0, ge=50.0, le=4000.0, allow_inf_nan=False
+    )
+    minimum_noise_reduction_db: float = Field(
+        default=3.0, ge=1.0, le=12.0, allow_inf_nan=False
+    )
+    boundary_guard_seconds: float = Field(
+        default=0.25, ge=0.0, le=1.0, allow_inf_nan=False
+    )
+
+
+class AudioNoiseInterval(_AudioModel):
+    """One locally measured, sustained noise-like interval."""
+
+    start_seconds: float = Field(ge=0.0, allow_inf_nan=False)
+    end_seconds: float = Field(gt=0.0, allow_inf_nan=False)
+    rms_dbfs: float = Field(ge=-120.0, le=0.0, allow_inf_nan=False)
+    spectral_centroid_hz: float = Field(ge=0.0, allow_inf_nan=False)
+    tone_frequencies_hz: tuple[float, ...] = Field(max_length=2)
+    relative_level_delta_db: float = Field(
+        default=0.0, ge=0.0, le=120.0, allow_inf_nan=False
+    )
+    confidence: float = Field(ge=0.0, le=1.0, allow_inf_nan=False)
+
+    @model_validator(mode="after")
+    def validate_interval(self) -> Self:
+        if self.end_seconds <= self.start_seconds:
+            raise ValueError("audio noise interval must have positive duration")
+        if any(
+            not math.isfinite(value) or not 20.0 <= value <= 4000.0
+            for value in self.tone_frequencies_hz
+        ):
+            raise ValueError("audio noise frequencies must be finite audible tones")
+        return self
 
 
 class FixedOffsetConfig(_AudioModel):
@@ -103,6 +150,18 @@ class LoudnessMeasurement(_AudioModel):
     noise_floor_dbfs: float | None = Field(default=None, allow_inf_nan=False)
     noise_confidence: float = Field(default=0.0, ge=0.0, le=1.0, allow_inf_nan=False)
     noise_event_count: int = Field(default=0, ge=0, le=100000)
+    noise_intervals: tuple[AudioNoiseInterval, ...] = ()
+
+    @model_validator(mode="after")
+    def validate_noise_evidence(self) -> Self:
+        if self.noise_intervals != tuple(
+            sorted(
+                self.noise_intervals,
+                key=lambda item: (item.start_seconds, item.end_seconds),
+            )
+        ):
+            raise ValueError("audio noise intervals must use stable timeline order")
+        return self
 
 
 class AudioAssessment(_AudioModel):
@@ -183,6 +242,7 @@ def parse_loudnorm_measurement(
         "noise_floor_dbfs",
         "noise_confidence",
         "noise_event_count",
+        "noise_intervals",
     ):
         if key in raw:
             values[key] = raw[key]
@@ -212,11 +272,21 @@ def assess_audio(
         "true_peak_limit_dbtp": loudness_config.true_peak_limit_dbtp,
         "loudness_deviation_lu": deviation,
         "minimum_loudness_deviation_lu": loudness_config.minimum_loudness_deviation_lu,
+        "loudness_tolerance_lu": loudness_config.verification_tolerance_lu,
         "clipping_peak_threshold_dbtp": loudness_config.clipping_peak_threshold_dbtp,
         "clipping_ratio_threshold": loudness_config.clipping_ratio_threshold,
         "noise_floor_threshold_dbfs": denoise.noise_floor_threshold_dbfs,
         "minimum_noise_confidence": denoise.minimum_confidence,
         "minimum_noise_event_count": denoise.minimum_event_count,
+        "minimum_noise_reduction_db": denoise.minimum_noise_reduction_db,
+        "noise_analysis_window_seconds": denoise.analysis_window_seconds,
+        "noise_minimum_interval_seconds": denoise.minimum_interval_seconds,
+        "noise_merge_gap_seconds": denoise.merge_gap_seconds,
+        "noise_boundary_guard_seconds": denoise.boundary_guard_seconds,
+        "noise_relative_level_increase_db": denoise.relative_level_increase_db,
+        "noise_maximum_stationary_centroid_hz": (
+            denoise.maximum_stationary_centroid_hz
+        ),
     }
     limitations: list[str] = []
     if abs(deviation) >= loudness_config.minimum_loudness_deviation_lu or clipping:
@@ -236,8 +306,19 @@ def assess_audio(
             {
                 "noise_floor_dbfs": noise_floor,
                 "maximum_reduction_db": denoise.maximum_reduction_db,
+                "minimum_noise_confidence": denoise.minimum_confidence,
+                "minimum_noise_reduction_db": denoise.minimum_noise_reduction_db,
             }
         )
+        tones = tuple(
+            frequency
+            for interval in measurement.noise_intervals
+            for frequency in interval.tone_frequencies_hz
+        )
+        if tones:
+            parameters["noise_tone_1_hz"] = tones[0]
+        if len(tones) > 1:
+            parameters["noise_tone_2_hz"] = tones[1]
     elif measurement.noise_floor_dbfs is not None and (
         measurement.noise_floor_dbfs >= denoise.noise_floor_threshold_dbfs
     ):
@@ -310,18 +391,27 @@ def loudnorm_apply_filter(
 
 
 def denoise_filter_fragment(
-    noise_floor_dbfs: float, maximum_reduction_db: float
+    noise_floor_dbfs: float,
+    maximum_reduction_db: float,
+    tone_frequencies_hz: Sequence[float] = (),
 ) -> str:
     """Return a finite, capped ``afftdn`` filter fragment."""
     config = AudioDenoiseConfig(maximum_reduction_db=maximum_reduction_db)
     if not math.isfinite(noise_floor_dbfs) or not -90.0 <= noise_floor_dbfs <= -10.0:
         raise ValueError("noise floor must be finite and within configured bounds")
-    return (
+    notches = []
+    for frequency in tone_frequencies_hz:
+        if not math.isfinite(frequency) or not 20.0 <= frequency <= 4000.0:
+            raise ValueError("noise tone frequency is outside configured bounds")
+        notches.append(f"bandreject=f={_number(frequency)}:t=q:w=12")
+    spectral = (
         "afftdn=nr="
         + _number(config.maximum_reduction_db)
         + ":nf="
         + _number(noise_floor_dbfs)
+        + ":tn=1:gs=8"
     )
+    return ",".join((*notches, spectral))
 
 
 def fixed_offset_filter_fragment(
@@ -370,10 +460,17 @@ def audio_filter_fragment_from_actions(
             )
             fragments.append(loudnorm_apply_filter(measurement, config))
         if RescueActionKind.DENOISE_AUDIO in actions:
+            tones = tuple(
+                value
+                for key in ("noise_tone_1_hz", "noise_tone_2_hz")
+                if key in parameters
+                for value in (_float_parameter(parameters, key),)
+            )
             fragments.append(
                 denoise_filter_fragment(
                     _float_parameter(parameters, "noise_floor_dbfs"),
                     _float_parameter(parameters, "maximum_reduction_db"),
+                    tones,
                 )
             )
         if RescueActionKind.CORRECT_FIXED_AV_OFFSET in actions:

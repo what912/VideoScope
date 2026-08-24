@@ -26,7 +26,10 @@ describe("HomeUploadLab", () => {
     render(
       <MemoryRouter>
         <I18nProvider initialLocale="en">
-          <HomeUploadLab resolveReportStore={() => storeResolution} />
+          <HomeUploadLab
+            atmosphereLabel="Procedural fluid spectrum"
+            resolveReportStore={() => storeResolution}
+          />
         </I18nProvider>
       </MemoryRouter>,
     );

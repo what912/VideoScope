@@ -10,9 +10,6 @@ import pytest
 from scripts import generate_test_videos as fixture_factory
 from videoscope.analysis import AnalysisConfig, AnalysisPipeline
 
-FIXTURE_ROOT = Path(__file__).parents[1] / "fixtures"
-GENERATED_ROOT = FIXTURE_ROOT / "generated"
-
 
 def test_all_generated_fixtures_run_end_to_end(tmp_path: Path) -> None:
     ffmpeg = shutil.which("ffmpeg")
@@ -21,15 +18,20 @@ def test_all_generated_fixtures_run_end_to_end(tmp_path: Path) -> None:
         pytest.skip("FFmpeg and ffprobe are required for full pipeline fixture tests")
     assert ffmpeg is not None
     assert ffprobe is not None
-    fixture_factory.generate_fixtures(
-        output_directory=GENERATED_ROOT,
-        manifest_path=FIXTURE_ROOT / "manifest.json",
+    fixture_root = tmp_path / "fixtures"
+    generated_root = fixture_root / "generated"
+    manifest_path = fixture_root / "manifest.json"
+    generated = fixture_factory.generate_fixtures(
+        output_directory=generated_root,
+        manifest_path=manifest_path,
         ffmpeg=ffmpeg,
         ffprobe=ffprobe,
         force=True,
     )
+    assert generated
+    assert manifest_path.is_file()
 
-    for input_path in sorted(GENERATED_ROOT.glob("*.mp4")):
+    for input_path in generated:
         output = tmp_path / input_path.stem
         result = AnalysisPipeline(
             AnalysisConfig(output_directory=output),

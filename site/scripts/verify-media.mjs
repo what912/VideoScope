@@ -6,6 +6,7 @@ import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 
 import { auditBuiltRuntimeUrls } from "./build-safety.mjs";
+import { validateCaseManifest } from "./case-media-verifier.mjs";
 import { validateManifest } from "./media-safety.mjs";
 import { verifyOriginalMedia } from "./original-media-verifier.mjs";
 
@@ -17,6 +18,12 @@ const defaultDistributionDirectory = path.join(siteDirectory, "dist");
 const defaultManifestPath = path.join(
   defaultMediaDirectory,
   "media-sources.json",
+);
+const defaultCaseManifestPath = path.join(
+  siteDirectory,
+  "src",
+  "data",
+  "case-studies.json",
 );
 const bundleBudgets = Object.freeze({
   initialJavaScript: 450 * 1024,
@@ -153,6 +160,55 @@ export async function auditBuiltMediaOutputs(
   return { fileCount: files.length };
 }
 
+async function builtCaseFiles(directory, prefix = "") {
+  let entries;
+  try {
+    entries = await readdir(path.join(directory, prefix), { withFileTypes: true });
+  } catch (error) {
+    if (
+      typeof error === "object" && error !== null && "code" in error &&
+      error.code === "ENOENT"
+    ) {
+      throw new Error("Production case directory is missing; run npm run build first.");
+    }
+    throw new Error("Production case directory could not be read.");
+  }
+  const files = [];
+  for (const entry of entries) {
+    const relative = prefix === "" ? entry.name : `${prefix}/${entry.name}`;
+    if (entry.isFile()) {
+      files.push(relative);
+    } else if (entry.isDirectory()) {
+      files.push(...await builtCaseFiles(directory, relative));
+    } else {
+      throw new Error("Built case media does not match the exact manifest allowlist.");
+    }
+  }
+  return files;
+}
+
+export async function auditBuiltCaseOutputs(
+  distributionDirectory = defaultDistributionDirectory,
+  manifest,
+) {
+  const validated = validateCaseManifest(manifest);
+  const expected = validated.cases
+    .flatMap((item) => Object.values(item.assets))
+    .sort((left, right) => left.localeCompare(right, "en"));
+  const files = (await builtCaseFiles(path.join(distributionDirectory, "cases")))
+    .sort((left, right) => left.localeCompare(right, "en"));
+  const expectedSet = new Set(expected);
+  const actualSet = new Set(files);
+  if (
+    files.length !== expected.length ||
+    files.some((file) => !expectedSet.has(file)) ||
+    expected.some((file) => !actualSet.has(file))
+  ) {
+    throw new Error("Built case media does not match the exact manifest allowlist.");
+  }
+  return { fileCount: files.length };
+}
+
 function bundleSummary(measurements) {
   return (
     `Bundle budgets: initial JS ${measurements.initialJavaScript.toLocaleString("en-US")}/${bundleBudgets.initialJavaScript.toLocaleString("en-US")} bytes, ` +
@@ -164,18 +220,20 @@ function bundleSummary(measurements) {
 
 export async function verifyMedia({
   manifestPath = defaultManifestPath,
+  caseManifestPath = defaultCaseManifestPath,
   mediaDirectory = defaultMediaDirectory,
   distributionDirectory = defaultDistributionDirectory,
   runner = createFfprobeRunner(),
   verify = verifyOriginalMedia,
   auditMedia = auditBuiltMediaOutputs,
+  auditCaseMedia = auditBuiltCaseOutputs,
   auditRuntime = auditBuiltRuntimeUrls,
   auditBundles = auditBundleBudgets,
   output = process.stdout,
 } = {}) {
   if (
     typeof verify !== "function" ||
-    typeof auditMedia !== "function" ||
+    typeof auditMedia !== "function" || typeof auditCaseMedia !== "function" ||
     typeof auditRuntime !== "function" ||
     typeof auditBundles !== "function"
   ) {
@@ -183,9 +241,12 @@ export async function verifyMedia({
   }
 
   const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+  const caseManifest = JSON.parse(await readFile(caseManifestPath, "utf8"));
   validateManifest(manifest);
+  validateCaseManifest(caseManifest);
   await verify({ manifest, mediaDirectory, runner });
   const deployedMediaAudit = await auditMedia(distributionDirectory, manifest);
+  const deployedCaseAudit = await auditCaseMedia(distributionDirectory, caseManifest);
   const runtimeAudit = await auditRuntime(distributionDirectory);
   const bundleMeasurements = await auditBundles(distributionDirectory);
 
@@ -195,12 +256,15 @@ export async function verifyMedia({
       `Audited ${deployedMediaAudit.fileCount} deployed media files against the exact manifest allowlist.\n`,
     );
     output.write(
+      `Audited ${deployedCaseAudit.fileCount} deployed case files against the canonical case manifest.\n`,
+    );
+    output.write(
       `Audited ${runtimeAudit.checkedFiles} built files and ${runtimeAudit.urlCount} documented remote references.\n`,
     );
     output.write(bundleSummary(bundleMeasurements));
   }
 
-  return { deployedMediaAudit, runtimeAudit, bundleMeasurements };
+  return { deployedMediaAudit, deployedCaseAudit, runtimeAudit, bundleMeasurements };
 }
 
 function isDirectExecution() {

@@ -8,10 +8,15 @@ import { afterEach, describe, expect, it } from "vitest";
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const mediaDirectory = path.resolve(scriptDirectory, "..", "public", "media");
 const manifestPath = path.join(mediaDirectory, "media-sources.json");
+const caseManifestPath = path.resolve(scriptDirectory, "..", "src", "data", "case-studies.json");
 const temporaryDirectories = [];
 
 async function activeManifest() {
   return JSON.parse(await readFile(manifestPath, "utf8"));
+}
+
+async function activeCaseManifest() {
+  return JSON.parse(await readFile(caseManifestPath, "utf8"));
 }
 
 async function writeTemporaryManifest(manifest) {
@@ -123,11 +128,13 @@ describe("active original-media entry points", () => {
   it("verification delegates media checks before retained runtime and bundle audits", async () => {
     const { verifyMedia } = await importActiveEntrypoint("verify-media.mjs");
     const manifest = await activeManifest();
+    const caseManifest = await activeCaseManifest();
     const subprocessRunner = async () => undefined;
     const calls = [];
 
     await verifyMedia({
       manifestPath,
+      caseManifestPath,
       mediaDirectory,
       distributionDirectory: "dist-integration",
       runner: subprocessRunner,
@@ -137,6 +144,10 @@ describe("active original-media entry points", () => {
       auditMedia: async (directory, receivedManifest) => {
         calls.push(["deployed-media", directory, receivedManifest]);
         return { fileCount: 15 };
+      },
+      auditCaseMedia: async (directory, receivedManifest) => {
+        calls.push(["deployed-cases", directory, receivedManifest]);
+        return { fileCount: 12 };
       },
       auditRuntime: async (directory) => {
         calls.push(["runtime", directory]);
@@ -157,6 +168,7 @@ describe("active original-media entry points", () => {
     expect(calls).toEqual([
       ["media", { manifest, mediaDirectory, runner: subprocessRunner }],
       ["deployed-media", "dist-integration", manifest],
+      ["deployed-cases", "dist-integration", caseManifest],
       ["runtime", "dist-integration"],
       ["bundles", "dist-integration"],
     ]);

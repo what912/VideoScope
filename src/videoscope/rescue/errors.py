@@ -52,6 +52,12 @@ class RescueArtifactError(RescueError):
     public_message = "A Video Rescue artifact could not be handled safely."
 
 
+class RescueQualificationUnavailableError(RescueError):
+    """An optional local qualification provider is explicitly unavailable."""
+
+    public_message = "Optional local Video Rescue qualification was unavailable."
+
+
 class RescueCancelledError(RescueError):
     """The user cancelled Video Rescue before completion."""
 

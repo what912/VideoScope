@@ -1,0 +1,102 @@
+{
+  "id": "fixture-case-001",
+  "slug": "fixture-case",
+  "featured": true,
+  "provenance": "synthetic-regression",
+  "authorizationSummary": {
+    "en": "Synthetic regression material with no personal source footage.",
+    "zh-CN": "合成回归素材，不含个人来源视频。"
+  },
+  "title": {
+    "en": "Fixture comparison",
+    "zh-CN": "测试对比"
+  },
+  "summary": {
+    "en": "A deterministic public fixture for manifest validation.",
+    "zh-CN": "用于清单校验的确定性公开测试素材。"
+  },
+  "observableSymptom": {
+    "en": "A short synthetic artifact is visible in the comparison range.",
+    "zh-CN": "对比区间内可见短暂的合成伪影。"
+  },
+  "actions": [
+    {
+      "workflow": "video-rescue",
+      "actionId": "fixture-rescue",
+      "version": "1.0.0",
+      "kind": "fixture-action",
+      "description": {
+        "en": "Runs the deterministic fixture workflow.",
+        "zh-CN": "运行确定性的测试工作流。"
+      },
+      "parameters": {
+        "enabled": true,
+        "passes": 1,
+        "mode": "fixture",
+        "limit": null
+      }
+    }
+  ],
+  "unresolved": [
+    {
+      "en": "This fixture does not represent production media.",
+      "zh-CN": "此测试素材不代表生产媒体。"
+    }
+  ],
+  "limitations": [
+    {
+      "en": "Only manifest validation is demonstrated.",
+      "zh-CN": "仅演示清单校验。"
+    }
+  ],
+  "comparison": {
+    "startSeconds": 2,
+    "endSeconds": 8
+  },
+  "media": {
+    "durationSeconds": 10,
+    "width": 1280,
+    "height": 720,
+    "frameRate": 30
+  },
+  "versions": {
+    "videoscope": "0.8.0-test",
+    "ffmpeg": "fixture",
+    "platform": "fixture",
+    "configuration": "fixture"
+  },
+  "verification": {
+    "status": "completed",
+    "checks": [
+      {
+        "checkId": "fixture-check",
+        "status": "passed",
+        "summary": {
+          "en": "Fixture validation completed.",
+          "zh-CN": "测试素材校验已完成。"
+        },
+        "measured": {
+          "durationSeconds": 10,
+          "decode": true,
+          "note": "fixture",
+          "difference": null
+        }
+      }
+    ]
+  },
+  "assets": {
+    "beforeVideo": "/VideoScope/cases/fixture-before.mp4",
+    "afterVideo": "/VideoScope/cases/fixture-after.mp4",
+    "poster": "/VideoScope/cases/fixture-poster.webp",
+    "publicReport": "/VideoScope/cases/fixture-report.json"
+  },
+  "sha256": {
+    "beforeVideo": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "afterVideo": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "poster": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "publicReport": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+  },
+  "reproduction": [
+    "npm test -- src/data/case-studies.test.ts"
+  ]
+}

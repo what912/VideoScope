@@ -16,7 +16,10 @@ from videoscope.rescue.timeline import (
     mappings_for_ranges,
     mappings_match_retained_ranges,
     retained_source_ranges,
+    timestamp_in_half_open_range,
 )
+
+_MINIMUM_PRIVATE_PREVIEW_SECONDS: Final = 1e-6
 
 
 class ActionCapabilityReason(StrEnum):
@@ -78,9 +81,7 @@ _ACTION_CAPABILITY_PROFILES: Final[
         ),
         RescueActionKind.SHARPEN: _ActionCapabilityProfile(True, "native", "local"),
         RescueActionKind.DEFLICKER: _ActionCapabilityProfile(True, "native", "local"),
-        RescueActionKind.STABILIZE: _ActionCapabilityProfile(
-            False, "needs_review", "local"
-        ),
+        RescueActionKind.STABILIZE: _ActionCapabilityProfile(True, "native", "local"),
         RescueActionKind.NORMALIZE_AUDIO: _ActionCapabilityProfile(
             True, "native", "local"
         ),
@@ -88,6 +89,9 @@ _ACTION_CAPABILITY_PROFILES: Final[
             True, "native", "local"
         ),
         RescueActionKind.VERIFY: _ActionCapabilityProfile(True, "native", "local"),
+        RescueActionKind.DEBLUR: _ActionCapabilityProfile(
+            True, "needs_review", "local"
+        ),
     }
 )
 
@@ -131,11 +135,36 @@ def evaluate_action_capabilities(
             continue
 
         preview_supported = profile.preview_supported
-        preview_covered = _ranges_intersect(action.source_ranges, preview_ranges)
+        correction_timestamps = _anchor_correction_timestamps(action)
+        if correction_timestamps is not None:
+            preview_covered = _anchor_ranges_have_private_preview(
+                action.source_ranges,
+                preview_ranges,
+                correction_timestamps,
+            )
+        elif action.kind in {
+            RescueActionKind.SALVAGE_SEGMENTS,
+            RescueActionKind.TRIM_DAMAGED_EDGES,
+        }:
+            preview_covered = _structural_ranges_have_retained_preview(
+                action.source_ranges, preview_ranges
+            )
+        else:
+            preview_covered = bool(action.source_ranges) and all(
+                _range_has_private_preview(source_range, preview_ranges)
+                for source_range in action.source_ranges
+            )
         range_exact = bool(action.source_ranges) and all(
             start_seconds < end_seconds <= duration_seconds
             for start_seconds, end_seconds in action.source_ranges
         )
+        if correction_timestamps is not None and not (
+            _anchor_ranges_have_corrections(
+                action.source_ranges,
+                correction_timestamps,
+            )
+        ):
+            range_exact = False
         range_reason = ActionCapabilityReason.RANGE_MAPPING_UNAVAILABLE
         if locked_ranges and (
             profile.range_mode == "full_duration_unlocked"
@@ -182,6 +211,16 @@ def capability_review_warning(
     return (
         f"Automatic {action.kind.value} action needs review: {decision.reason.value}."
     )
+
+
+def action_verification_mode(
+    kind: RescueActionKind,
+) -> Literal["native", "needs_review"]:
+    """Return the explicit preview-allocation priority class for an action kind."""
+    profile = _ACTION_CAPABILITY_PROFILES.get(kind)
+    if profile is None:
+        return "needs_review"
+    return profile.verification_mode
 
 
 def require_executable_action_scopes(
@@ -278,23 +317,130 @@ def _mappings_cover_retained_ranges(
     retained_ranges: Sequence[tuple[float, float]],
 ) -> bool:
     """Compatibility wrapper for the shared plan-bound mapping predicate."""
-    return mappings_match_retained_ranges(mappings, retained_ranges)
+    return bool(mappings_match_retained_ranges(mappings, retained_ranges))
 
 
 def _ranges_intersect(
     first: Sequence[tuple[float, float]],
     second: Sequence[tuple[float, float]],
 ) -> bool:
-    return any(
-        first_start < second_end and second_start < first_end
-        for first_start, first_end in first
-        for second_start, second_end in second
+    return bool(
+        any(
+            first_start < second_end and second_start < first_end
+            for first_start, first_end in first
+            for second_start, second_end in second
+        )
     )
+
+
+def _range_has_private_preview(
+    source_range: tuple[float, float],
+    preview_ranges: Sequence[tuple[float, float]],
+) -> bool:
+    """Require positive representative coverage for one half-open operation range."""
+    source_start, source_end = source_range
+    return any(
+        min(source_end, preview_end) - max(source_start, preview_start)
+        >= _MINIMUM_PRIVATE_PREVIEW_SECONDS
+        for preview_start, preview_end in preview_ranges
+    )
+
+
+def _anchor_correction_timestamps(action: RescueAction) -> tuple[float, ...] | None:
+    if action.kind is not RescueActionKind.STABILIZE or (
+        action.parameters.get("method") not in {"anchor_v1", "transition_anchor_v1"}
+    ):
+        return None
+    raw_transforms = action.parameters.get("motion_transforms")
+    if not isinstance(raw_transforms, list):
+        return ()
+    timestamps: list[float] = []
+    for transform in raw_transforms:
+        if not isinstance(transform, dict):
+            return ()
+        timestamp = transform.get("timestamp_seconds")
+        if (
+            isinstance(timestamp, bool)
+            or not isinstance(timestamp, (int, float))
+            or not math.isfinite(float(timestamp))
+        ):
+            return ()
+        timestamps.append(float(timestamp))
+    return tuple(timestamps)
+
+
+def _anchor_ranges_have_corrections(
+    source_ranges: Sequence[tuple[float, float]],
+    correction_timestamps: Sequence[float],
+) -> bool:
+    return bool(source_ranges) and all(
+        any(
+            timestamp_in_half_open_range(
+                timestamp,
+                start,
+                end,
+            )
+            for timestamp in correction_timestamps
+        )
+        for start, end in source_ranges
+    )
+
+
+def _anchor_ranges_have_private_preview(
+    source_ranges: Sequence[tuple[float, float]],
+    preview_ranges: Sequence[tuple[float, float]],
+    correction_timestamps: Sequence[float],
+) -> bool:
+    return bool(source_ranges) and all(
+        any(
+            timestamp_in_half_open_range(
+                timestamp,
+                source_start,
+                source_end,
+            )
+            and timestamp_in_half_open_range(
+                timestamp,
+                preview_start,
+                preview_end,
+            )
+            for timestamp in correction_timestamps
+            for preview_start, preview_end in preview_ranges
+        )
+        for source_start, source_end in source_ranges
+    )
+
+
+def _structural_ranges_have_retained_preview(
+    source_ranges: Sequence[tuple[float, float]],
+    preview_ranges: Sequence[tuple[float, float]],
+) -> bool:
+    if not source_ranges:
+        return False
+    for source_range in source_ranges:
+        represented = False
+        for preview_range in preview_ranges:
+            if not _range_has_private_preview(source_range, (preview_range,)):
+                continue
+            preview_start, preview_end = preview_range
+            removed_overlap = sum(
+                max(0.0, min(preview_end, end) - max(preview_start, start))
+                for start, end in source_ranges
+            )
+            if (
+                preview_end - preview_start - removed_overlap
+                >= _MINIMUM_PRIVATE_PREVIEW_SECONDS
+            ):
+                represented = True
+                break
+        if not represented:
+            return False
+    return True
 
 
 __all__ = [
     "ActionCapabilityDecision",
     "ActionCapabilityReason",
+    "action_verification_mode",
     "capability_review_warning",
     "evaluate_action_capabilities",
     "require_executable_action_scopes",

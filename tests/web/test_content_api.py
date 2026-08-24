@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import threading
 import time
 from datetime import UTC, datetime, timedelta
@@ -13,6 +14,7 @@ from typing import Any, ClassVar, cast
 import pytest
 from fastapi.testclient import TestClient
 
+import videoscope.web.content_jobs as content_jobs_module
 from videoscope.content import (
     ContentCancelledError,
     ContentConfirmation,
@@ -276,6 +278,197 @@ def _upload(client: TestClient, *, body: bytes = b"video") -> dict[str, Any]:
     )
     assert response.status_code == 202
     return cast(dict[str, Any], response.json())
+
+
+def _winerror(code: int) -> PermissionError:
+    error = PermissionError("injected Windows replace failure")
+    error.winerror = code  # type: ignore[attr-defined]
+    return error
+
+
+def test_content_job_windows_replace_retries_transient_access_denial(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "content-job-state.json.tmp"
+    destination = tmp_path / "content-job-state.json"
+    source.write_bytes(b"new")
+    destination.write_bytes(b"old")
+    attempts = 0
+    delays: list[float] = []
+
+    def replace(observed_source: Path, observed_destination: Path) -> None:
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise _winerror(5)
+        os.replace(observed_source, observed_destination)
+
+    content_jobs_module._retry_windows_replace(
+        source,
+        destination,
+        replace=replace,
+        sleep=delays.append,
+    )
+
+    assert attempts == 2
+    assert delays == [0.01]
+    assert destination.read_bytes() == b"new"
+    assert not source.exists()
+
+
+def test_content_job_windows_replace_surfaces_exhausted_access_denial(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "content-job-state.json.tmp"
+    destination = tmp_path / "content-job-state.json"
+    source.write_bytes(b"new")
+    destination.write_bytes(b"old")
+    attempts = 0
+    delays: list[float] = []
+    final_error = _winerror(5)
+
+    def replace(_source: Path, _destination: Path) -> None:
+        nonlocal attempts
+        attempts += 1
+        raise final_error
+
+    with pytest.raises(PermissionError) as caught:
+        content_jobs_module._retry_windows_replace(
+            source,
+            destination,
+            replace=replace,
+            sleep=delays.append,
+        )
+
+    assert caught.value is final_error
+    assert attempts == 6
+    assert delays == [0.01, 0.02, 0.04, 0.08, 0.16]
+    assert source.read_bytes() == b"new"
+    assert destination.read_bytes() == b"old"
+
+
+def test_content_job_windows_replace_does_not_retry_other_errors(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "content-job-state.json.tmp"
+    destination = tmp_path / "content-job-state.json"
+    source.write_bytes(b"new")
+    destination.write_bytes(b"old")
+    attempts = 0
+    delays: list[float] = []
+    final_error = _winerror(32)
+
+    def replace(_source: Path, _destination: Path) -> None:
+        nonlocal attempts
+        attempts += 1
+        raise final_error
+
+    with pytest.raises(PermissionError) as caught:
+        content_jobs_module._retry_windows_replace(
+            source,
+            destination,
+            replace=replace,
+            sleep=delays.append,
+        )
+
+    assert caught.value is final_error
+    assert attempts == 1
+    assert delays == []
+    assert source.read_bytes() == b"new"
+    assert destination.read_bytes() == b"old"
+
+
+def test_content_job_windows_replace_does_not_retry_after_source_disappears(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "content-job-state.json.tmp"
+    destination = tmp_path / "content-job-state.json"
+    source.write_bytes(b"new")
+    destination.write_bytes(b"old")
+    attempts = 0
+    delays: list[float] = []
+    final_error = _winerror(5)
+
+    def replace(observed_source: Path, _destination: Path) -> None:
+        nonlocal attempts
+        attempts += 1
+        observed_source.unlink()
+        raise final_error
+
+    with pytest.raises(PermissionError) as caught:
+        content_jobs_module._retry_windows_replace(
+            source,
+            destination,
+            replace=replace,
+            sleep=delays.append,
+        )
+
+    assert caught.value is final_error
+    assert attempts == 1
+    assert delays == []
+    assert not source.exists()
+    assert destination.read_bytes() == b"old"
+
+
+def test_content_prepare_recovers_from_transient_state_replace_denial(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original_replace = os.replace
+    state_attempts = 0
+
+    def replace(source: Path, destination: Path) -> None:
+        nonlocal state_attempts
+        if Path(destination).name == "content-job-state.json":
+            state_attempts += 1
+            if state_attempts == 3:
+                raise _winerror(5)
+        original_replace(source, destination)
+
+    monkeypatch.setattr(os, "replace", replace)
+    config = _config(tmp_path)
+    with TestClient(create_app(config, content_manager=_manager(config))) as client:
+        job_id = cast(str, _upload(client)["job_id"])
+        prepared = _wait(client, job_id, {"awaiting_review", "failed"})
+
+    assert prepared["status"] == "awaiting_review"
+    assert state_attempts >= 4
+
+
+def test_content_persistent_state_replace_denial_is_path_free_and_preserves_state(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original_replace = os.replace
+    state_attempts = 0
+    final_error = _winerror(5)
+
+    def replace(source: Path, destination: Path) -> None:
+        nonlocal state_attempts
+        if Path(destination).name == "content-job-state.json":
+            state_attempts += 1
+            if state_attempts >= 3:
+                raise final_error
+        original_replace(source, destination)
+
+    monkeypatch.setattr(os, "replace", replace)
+    config = _config(tmp_path)
+    manager = _manager(config)
+    with TestClient(create_app(config, content_manager=manager)) as client:
+        job_id = cast(str, _upload(client)["job_id"])
+        failed = _wait(client, job_id, {"failed"})
+        record = manager.require(job_id)
+        persisted = json.loads(
+            (record.directory / "content-job-state.json").read_text(encoding="utf-8")
+        )
+
+    assert (
+        failed["error"] == "Internal useful-content failure: ContentJobPersistenceError"
+    )
+    assert "\\" not in failed["error"]
+    assert "/" not in failed["error"]
+    assert persisted["status"] == "queued"
+    assert state_attempts >= 14
 
 
 def _revise_preview(client: TestClient, job_id: str) -> dict[str, Any]:

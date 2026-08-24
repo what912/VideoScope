@@ -7,23 +7,33 @@ always require a same-range preview before they can be accepted.
 
 from __future__ import annotations
 
+import json
 import math
 import os
+import statistics
+import struct
 import tempfile
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal, cast
 
 import numpy as np
 from numpy.typing import NDArray
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
 
+from videoscope.rescue.encoding import canonical_video_encode_arguments
 from videoscope.rescue.errors import (
     RescueArtifactError,
     RescueCancelledError,
     RescueMediaError,
 )
-from videoscope.rescue.models import RescueActionKind, RescueVerificationStatus
+from videoscope.rescue.models import (
+    RescueActionKind,
+    RescueEffectiveConfig,
+    RescuePlan,
+    RescueVerificationStatus,
+    make_rescue_action_id,
+)
 from videoscope.rescue.stabilization import (
     require_cfr_source_timestamps,
     validate_source_frame_timestamps,
@@ -35,6 +45,7 @@ if TYPE_CHECKING:
     from videoscope.scenes.models import VideoScene
 
 _MAXIMUM_SAFE_FLICKER_GAIN = 1.25
+_VIDEO_CODE_VALUE_MAXIMUM = 255
 
 
 class _VisualModel(BaseModel):
@@ -58,12 +69,79 @@ class LumaAdjustmentConfig(_VisualModel):
     )
     brightness: float = Field(default=0.04, ge=0, le=0.08, allow_inf_nan=False)
     contrast: float = Field(default=1.02, ge=1, le=1.08, allow_inf_nan=False)
+    contrast_noise_guard_threshold: float = Field(
+        default=0.02, gt=0, le=0.2, allow_inf_nan=False
+    )
+    target_shadow_luma: float = Field(
+        default=0.10, gt=0.04, le=0.20, allow_inf_nan=False
+    )
+    minimum_brightness: float = Field(default=0.02, ge=0, le=0.08, allow_inf_nan=False)
+    maximum_brightness: float = Field(
+        default=0.08, ge=0.02, le=0.16, allow_inf_nan=False
+    )
+    minimum_gamma: float = Field(default=1.0, ge=1, le=1.5, allow_inf_nan=False)
+    maximum_gamma: float = Field(default=1.5, ge=1, le=2.2, allow_inf_nan=False)
+    gamma_weight: float = Field(default=0.85, ge=0, le=1, allow_inf_nan=False)
+    minimum_perceptible_luma_delta: float = Field(
+        default=0.04, gt=0, le=0.2, allow_inf_nan=False
+    )
+    maximum_luma_improvement_delta: float = Field(
+        default=0.08, gt=0, le=0.25, allow_inf_nan=False
+    )
+    maximum_noise_increase: float = Field(default=0.0, ge=0, le=0, allow_inf_nan=False)
+    maximum_chroma_shift: float = Field(
+        default=0.01, ge=0, le=0.05, allow_inf_nan=False
+    )
+    noise_guard_luma_lift_scale: float = Field(
+        default=2.0, ge=1.0, le=4.0, allow_inf_nan=False
+    )
+    noise_guard_video_crf: int = Field(default=23, ge=1, le=30, strict=True)
+    noise_guard_chroma_qp_offset: int = Field(default=-6, ge=-12, le=0, strict=True)
 
     @model_validator(mode="after")
     def validate_clip_levels(self) -> LumaAdjustmentConfig:
         if self.low_clip_level >= self.high_clip_level:
             raise ValueError("low_clip_level must be below high_clip_level")
+        if self.minimum_brightness > self.maximum_brightness:
+            raise ValueError("minimum_brightness must not exceed maximum_brightness")
+        if self.minimum_gamma > self.maximum_gamma:
+            raise ValueError("minimum_gamma must not exceed maximum_gamma")
+        if self.minimum_perceptible_luma_delta > self.maximum_luma_improvement_delta:
+            raise ValueError(
+                "minimum_perceptible_luma_delta must not exceed "
+                "maximum_luma_improvement_delta"
+            )
         return self
+
+
+class LumaActionWire(_VisualModel):
+    """Strict executable ADJUST_LUMA contract bound into action identity."""
+
+    derivation_version: Literal["5"] = "5"
+    luma_config: LumaAdjustmentConfig
+    brightness: float = Field(ge=0, le=0.16, allow_inf_nan=False)
+    contrast: float = Field(ge=1, le=1.08, allow_inf_nan=False)
+    gamma: float = Field(ge=1, le=2.2, allow_inf_nan=False)
+    gamma_weight: float = Field(ge=0, le=1, allow_inf_nan=False)
+    filter_mode: Literal["eq", "noise_guarded_y_offset"]
+    contrast_noise_guard_threshold: float = Field(gt=0, le=0.2, allow_inf_nan=False)
+    observed_noise_residual: float = Field(ge=0, allow_inf_nan=False)
+    contrast_derivation: Literal["configured", "noise_guarded"]
+    maximum_clip_ratio: float = Field(ge=0, le=0.1, allow_inf_nan=False)
+    maximum_clip_increase: float = Field(ge=0, le=0.02, allow_inf_nan=False)
+    minimum_perceptible_luma_delta: float = Field(gt=0, le=0.2, allow_inf_nan=False)
+    maximum_luma_improvement_delta: float = Field(gt=0, le=0.25, allow_inf_nan=False)
+    maximum_residual_increase: float = Field(ge=0, le=0, allow_inf_nan=False)
+    maximum_chroma_shift: float = Field(ge=0, le=0.05, allow_inf_nan=False)
+    observed_luma_p10: float = Field(ge=0, le=1, allow_inf_nan=False)
+    observed_luma_p50: float = Field(ge=0, le=1, allow_inf_nan=False)
+    target_shadow_luma: float = Field(gt=0.04, le=0.2, allow_inf_nan=False)
+    noise_guard_luma_lift_scale: float = Field(ge=1, le=4, allow_inf_nan=False)
+    luma_lift_steps: int | None
+    noise_guard_video_crf: int | None
+    noise_guard_chroma_qp_offset: int | None = Field(
+        default=None, ge=-12, le=0, strict=True
+    )
 
 
 class VideoDenoiseConfig(_VisualModel):
@@ -77,6 +155,16 @@ class VideoDenoiseConfig(_VisualModel):
     chroma_spatial: float = Field(default=1.0, ge=0, le=4, allow_inf_nan=False)
     luma_temporal: float = Field(default=2.0, ge=0, le=4, allow_inf_nan=False)
     chroma_temporal: float = Field(default=1.5, ge=0, le=4, allow_inf_nan=False)
+    minimum_strength_ratio: float = Field(default=0.5, gt=0, le=1, allow_inf_nan=False)
+    full_strength_residual: float = Field(
+        default=0.08, gt=0, le=0.4, allow_inf_nan=False
+    )
+
+    @model_validator(mode="after")
+    def validate_residual_strength_range(self) -> VideoDenoiseConfig:
+        if self.full_strength_residual <= self.residual_threshold:
+            raise ValueError("full_strength_residual must exceed residual_threshold")
+        return self
 
 
 class SharpenConfig(_VisualModel):
@@ -92,7 +180,70 @@ class SharpenConfig(_VisualModel):
         default=0.1, ge=0, lt=1, allow_inf_nan=False
     )
     radius: int = Field(default=2, ge=1, le=3)
-    amount: float = Field(default=0.4, ge=0, le=1, allow_inf_nan=False)
+    adaptive_strength: float = Field(default=0.32, ge=0, le=0.5, allow_inf_nan=False)
+    amount: float = Field(default=1.0, ge=0, le=1.5, allow_inf_nan=False)
+    minimum_amount: float = Field(default=0.8, ge=0, le=1.5, allow_inf_nan=False)
+    maximum_amount: float = Field(default=1.5, ge=0.4, le=1.5, allow_inf_nan=False)
+    maximum_detail_passes: int = Field(default=3, ge=1, le=3)
+    detail_passes: int = Field(default=1, ge=1, le=3)
+    minimum_perceptible_sharpness_gain_ratio: float = Field(
+        default=0.01, gt=0, le=0.5, allow_inf_nan=False
+    )
+    maximum_noise_increase: float = Field(
+        default=0.02, ge=0, le=0.1, allow_inf_nan=False
+    )
+    minimum_recovered_baseline_ratio: float = Field(
+        default=0.8, gt=0, le=1, allow_inf_nan=False
+    )
+    minimum_improved_frame_fraction: float = Field(
+        default=0.8, gt=0, le=1, allow_inf_nan=False
+    )
+    edge_gradient_threshold: float = Field(
+        default=0.02, gt=0, le=1, allow_inf_nan=False
+    )
+    edge_neighborhood_radius: int = Field(default=8, ge=1, le=32)
+    edge_overshoot_minimum_amplitude: float = Field(
+        default=0.01, ge=0, le=1, allow_inf_nan=False
+    )
+    maximum_edge_overshoot_ratio: float = Field(
+        default=0.05, ge=0, le=1, allow_inf_nan=False
+    )
+    maximum_edge_overshoot_amplitude: float = Field(
+        default=0.05, ge=0, le=1, allow_inf_nan=False
+    )
+    ringing_minimum_amplitude: float = Field(
+        default=0.02, gt=0, le=1, allow_inf_nan=False
+    )
+    maximum_ringing_ratio: float = Field(default=0.08, ge=0, le=1, allow_inf_nan=False)
+    visibility_target_luma: float = Field(
+        default=0.18, ge=0.05, le=0.5, allow_inf_nan=False
+    )
+    visibility_brightness: float = Field(
+        default=0.0, ge=0, le=0.25, allow_inf_nan=False
+    )
+    maximum_visibility_brightness: float = Field(
+        default=0.15, ge=0, le=0.25, allow_inf_nan=False
+    )
+    boundary_transition_seconds: float = Field(
+        default=0.25, ge=0.05, le=1.0, allow_inf_nan=False
+    )
+
+    @model_validator(mode="after")
+    def validate_amount_bounds(self) -> SharpenConfig:
+        if self.minimum_amount > self.maximum_amount:
+            raise ValueError("minimum_amount must not exceed maximum_amount")
+        if self.visibility_brightness > self.maximum_visibility_brightness:
+            raise ValueError("visibility brightness exceeds its configured cap")
+        if self.detail_passes > self.maximum_detail_passes:
+            raise ValueError("detail_passes exceeds its configured cap")
+        if (
+            self.edge_overshoot_minimum_amplitude
+            > self.maximum_edge_overshoot_amplitude
+        ):
+            raise ValueError(
+                "edge overshoot detection amplitude exceeds the configured cap"
+            )
+        return self
 
 
 class FlickerConfig(_VisualModel):
@@ -263,7 +414,7 @@ def _remap_flicker_ranges(
                 scale = output_duration / source_duration
 
                 def map_timestamp(timestamp: float) -> float:
-                    return (
+                    return float(
                         mapping.output_start
                         + (timestamp - mapping.source_start) * scale
                     )
@@ -347,6 +498,26 @@ class VisualEvidence(_VisualModel):
     metric: str = Field(min_length=1)
     observed: float = Field(allow_inf_nan=False)
     threshold: float = Field(allow_inf_nan=False)
+    context_luma_p50: float | None = Field(
+        default=None, ge=0, le=1, allow_inf_nan=False
+    )
+    scene_baseline_sharpness: float | None = Field(
+        default=None, ge=0, allow_inf_nan=False
+    )
+
+
+class VisualActionInterval(_VisualModel):
+    """Full contiguous interval measured for one bounded visual action."""
+
+    action: RescueActionKind
+    start_seconds: float = Field(ge=0, allow_inf_nan=False)
+    end_seconds: float = Field(gt=0, allow_inf_nan=False)
+
+    @model_validator(mode="after")
+    def validate_interval(self) -> VisualActionInterval:
+        if self.end_seconds <= self.start_seconds:
+            raise ValueError("visual action interval must have positive duration")
+        return self
 
 
 class VisualAssessment(_VisualModel):
@@ -355,6 +526,7 @@ class VisualAssessment(_VisualModel):
     metrics: VisualMetrics
     recommended_actions: tuple[RescueActionKind, ...] = ()
     evidence: tuple[VisualEvidence, ...] = ()
+    action_intervals: tuple[VisualActionInterval, ...] = ()
     limitations: tuple[str, ...] = ()
     preview_required: bool = False
     public_explanation: str = Field(min_length=1)
@@ -375,35 +547,61 @@ def assess_visual_samples(
     config: VisualAssessmentConfig,
 ) -> VisualAssessment:
     """Assess bounded luma samples and return only evidence-supported actions."""
-    ordered = tuple(sorted(samples, key=lambda sample: sample.timestamp_seconds))
+    ordered_candidates = sorted(samples, key=_canonical_visual_sample_key)
+    ordered = tuple(
+        sample
+        for index, sample in enumerate(ordered_candidates)
+        if index == 0
+        or _canonical_visual_sample_key(sample)
+        != _canonical_visual_sample_key(ordered_candidates[index - 1])
+    )
     if not ordered:
         raise ValueError("at least one visual sample is required")
     metrics_by_sample = tuple(_sample_metrics(sample, config) for sample in ordered)
     metrics = _aggregate_metrics(metrics_by_sample)
     actions: list[RescueActionKind] = []
     evidence: list[VisualEvidence] = []
+    action_intervals: list[VisualActionInterval] = []
     limitations: list[str] = []
 
-    dark = (
+    dark_indexes = tuple(
+        index
+        for index, item in enumerate(metrics_by_sample)
+        if item.luma_p10 < config.luma.dark_percentile_threshold
+        and item.high_clip_ratio <= config.luma.maximum_clip_ratio
+    )
+    dark = bool(dark_indexes) and (
         metrics.luma_p10 < config.luma.dark_percentile_threshold
         and metrics.high_clip_ratio <= config.luma.maximum_clip_ratio
     )
     if dark:
-        actions.append(RescueActionKind.ADJUST_LUMA)
-        evidence.extend(
-            _evidence_for_lowest(
-                ordered,
-                metrics_by_sample,
-                RescueActionKind.ADJUST_LUMA,
-                "luma_p10",
-                config.luma.dark_percentile_threshold,
-                config.max_evidence_samples,
-            )
+        dark_intervals = _action_intervals_from_indexes(
+            ordered,
+            dark_indexes,
+            RescueActionKind.ADJUST_LUMA,
         )
+        luma_evidence, retained_dark_intervals = _range_aware_evidence_for_lowest(
+            ordered,
+            metrics_by_sample,
+            dark_indexes,
+            dark_intervals,
+            RescueActionKind.ADJUST_LUMA,
+            "luma_p10",
+            config.luma.dark_percentile_threshold,
+            config.max_evidence_samples,
+        )
+        actions.append(RescueActionKind.ADJUST_LUMA)
+        evidence.extend(luma_evidence)
         limitations.append(
             "Whole-scene darkness may be intentional; preview is required before "
             "using the luma adjustment."
         )
+        if len(retained_dark_intervals) < len(dark_intervals):
+            limitations.append(
+                "Some measured dark intervals were omitted because the bounded "
+                "luma evidence budget could not cover every interval."
+            )
+        action_intervals.extend(retained_dark_intervals)
 
     noisy = metrics.noise_residual > config.denoise.residual_threshold
     if noisy:
@@ -416,6 +614,17 @@ def assess_visual_samples(
                 "noise_residual",
                 config.denoise.residual_threshold,
                 config.max_evidence_samples,
+            )
+        )
+        action_intervals.extend(
+            _action_intervals_from_indexes(
+                ordered,
+                tuple(
+                    index
+                    for index, item in enumerate(metrics_by_sample)
+                    if item.noise_residual > config.denoise.residual_threshold
+                ),
+                RescueActionKind.DENOISE_VIDEO,
             )
         )
 
@@ -431,8 +640,20 @@ def assess_visual_samples(
                 metric="scene_relative_sharpness",
                 observed=metrics_by_sample[index].sharpness,
                 threshold=config.sharpen.absolute_sharpness_floor,
+                context_luma_p50=metrics_by_sample[index].luma_p50,
+                scene_baseline_sharpness=_scene_sharpness_baseline(
+                    ordered[index].timestamp_seconds,
+                    ordered,
+                    metrics_by_sample,
+                    scenes,
+                ),
             )
             for index in soft_indices[: config.max_evidence_samples]
+        )
+        action_intervals.extend(
+            _action_intervals_from_indexes(
+                ordered, soft_indices, RescueActionKind.SHARPEN
+            )
         )
     elif metrics.sharpness < config.sharpen.absolute_sharpness_floor:
         limitations.append(
@@ -445,6 +666,16 @@ def assess_visual_samples(
         metrics=metrics,
         recommended_actions=recommended,
         evidence=tuple(evidence),
+        action_intervals=tuple(
+            sorted(
+                action_intervals,
+                key=lambda item: (
+                    item.start_seconds,
+                    item.end_seconds,
+                    item.action.value,
+                ),
+            )
+        ),
         limitations=tuple(limitations),
         preview_required=bool(recommended),
         public_explanation=_public_explanation(recommended),
@@ -580,7 +811,12 @@ def luma_filter_fragment(config: LumaAdjustmentConfig) -> str:
     """Return a deterministic FFmpeg luma fragment with explicit parameters."""
     brightness = _number(config.brightness)
     contrast = _number(config.contrast)
-    return f"eq=brightness={brightness}:contrast={contrast}"
+    gamma = _number(config.maximum_gamma)
+    gamma_weight = _number(config.gamma_weight)
+    return (
+        f"eq=brightness={brightness}:contrast={contrast}:gamma={gamma}:"
+        f"gamma_weight={gamma_weight}"
+    )
 
 
 def denoise_filter_fragment(config: VideoDenoiseConfig) -> str:
@@ -599,18 +835,387 @@ def denoise_filter_fragment(config: VideoDenoiseConfig) -> str:
 def sharpen_filter_fragment(config: SharpenConfig) -> str:
     """Return a deterministic, capped FFmpeg ``unsharp`` fragment."""
     size = config.radius * 2 + 1
-    return f"unsharp={size}:{size}:{_number(config.amount)}:{size}:{size}:0"
+    fragments: list[str] = []
+    if config.visibility_brightness > 0:
+        fragments.append(
+            "eq=brightness="
+            + _number(config.visibility_brightness)
+            + ":contrast=1.08:gamma=1.2:gamma_weight=0.85"
+        )
+    fragments.append(f"cas=strength={_number(config.adaptive_strength)}")
+    for pass_index in range(config.detail_passes):
+        pass_amount = config.amount / (1.0 + 0.45 * pass_index)
+        fragments.append(
+            f"unsharp={size}:{size}:{_number(pass_amount)}:{size}:{size}:0"
+        )
+    return ",".join(fragments)
 
 
-def visual_action_parameters(kind: RescueActionKind) -> dict[str, float | int]:
+def _derive_luma_action_wire(
+    metrics: VisualMetrics,
+    config: LumaAdjustmentConfig,
+    *,
+    strength_limit: float = 1.0,
+) -> LumaActionWire:
+    if not math.isfinite(strength_limit) or not 0 < strength_limit <= 1:
+        raise ValueError("luma strength limit is invalid")
+    deficit = max(0.0, config.target_shadow_luma - metrics.luma_p10)
+    base_brightness = min(
+        config.maximum_brightness,
+        max(config.minimum_brightness, deficit),
+    )
+    severity = min(1.0, deficit / config.target_shadow_luma)
+    base_gamma = (
+        config.minimum_gamma + (config.maximum_gamma - config.minimum_gamma) * severity
+    )
+    guarded = metrics.noise_residual >= config.contrast_noise_guard_threshold
+    brightness = base_brightness * strength_limit
+    contrast = 1.0 if guarded else 1.0 + (config.contrast - 1.0) * strength_limit
+    gamma = 1.0 if guarded else 1.0 + (base_gamma - 1.0) * strength_limit
+    lift_steps = (
+        max(
+            1,
+            round(
+                max(brightness, config.minimum_perceptible_luma_delta)
+                * _VIDEO_CODE_VALUE_MAXIMUM
+                * config.noise_guard_luma_lift_scale
+            ),
+        )
+        if guarded
+        else None
+    )
+    return LumaActionWire(
+        luma_config=config,
+        brightness=brightness,
+        contrast=contrast,
+        gamma=gamma,
+        gamma_weight=0.0 if guarded else config.gamma_weight,
+        filter_mode="noise_guarded_y_offset" if guarded else "eq",
+        contrast_noise_guard_threshold=config.contrast_noise_guard_threshold,
+        observed_noise_residual=metrics.noise_residual,
+        contrast_derivation="noise_guarded" if guarded else "configured",
+        maximum_clip_ratio=config.maximum_clip_ratio,
+        maximum_clip_increase=config.maximum_clip_increase,
+        minimum_perceptible_luma_delta=config.minimum_perceptible_luma_delta,
+        maximum_luma_improvement_delta=config.maximum_luma_improvement_delta,
+        maximum_residual_increase=config.maximum_noise_increase,
+        maximum_chroma_shift=config.maximum_chroma_shift,
+        observed_luma_p10=metrics.luma_p10,
+        observed_luma_p50=metrics.luma_p50,
+        target_shadow_luma=config.target_shadow_luma,
+        noise_guard_luma_lift_scale=config.noise_guard_luma_lift_scale,
+        luma_lift_steps=lift_steps,
+        noise_guard_video_crf=config.noise_guard_video_crf if guarded else None,
+        noise_guard_chroma_qp_offset=(
+            config.noise_guard_chroma_qp_offset if guarded else None
+        ),
+    )
+
+
+def luma_action_wire_from_parameters(
+    parameters: Mapping[str, object],
+) -> LumaActionWire:
+    """Parse and semantically rederive one versioned ADJUST_LUMA action wire."""
+    try:
+        raw = {key: parameters[key] for key in LumaActionWire.model_fields}
+        wire = LumaActionWire.model_validate(raw)
+        strength = parameters.get("strength_limit", 1.0)
+        if (
+            isinstance(strength, bool)
+            or not isinstance(strength, (int, float))
+            or not math.isfinite(float(strength))
+            or not 0 < float(strength) <= 1
+        ):
+            raise ValueError("luma strength limit is invalid")
+        expected = _derive_luma_action_wire(
+            VisualMetrics(
+                luma_p10=wire.observed_luma_p10,
+                luma_p50=wire.observed_luma_p50,
+                luma_p90=wire.observed_luma_p50,
+                low_clip_ratio=0.0,
+                high_clip_ratio=0.0,
+                noise_residual=wire.observed_noise_residual,
+                sharpness=0.0,
+            ),
+            wire.luma_config,
+            strength_limit=float(strength),
+        )
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError("ADJUST_LUMA action wire is invalid") from exc
+    if wire != expected:
+        raise ValueError("ADJUST_LUMA action wire is internally inconsistent")
+    return wire
+
+
+def apply_luma_strength_limit(
+    parameters: dict[str, JsonValue], strength_limit: float
+) -> None:
+    """Rebind every derived luma field after the Balanced strength cap."""
+    try:
+        wire = LumaActionWire.model_validate(
+            {key: parameters[key] for key in LumaActionWire.model_fields}
+        )
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError("ADJUST_LUMA action wire is invalid") from exc
+    adjusted = _derive_luma_action_wire(
+        VisualMetrics(
+            luma_p10=wire.observed_luma_p10,
+            luma_p50=wire.observed_luma_p50,
+            luma_p90=wire.observed_luma_p50,
+            low_clip_ratio=0.0,
+            high_clip_ratio=0.0,
+            noise_residual=wire.observed_noise_residual,
+            sharpness=0.0,
+        ),
+        wire.luma_config,
+        strength_limit=strength_limit,
+    )
+    parameters.update(adjusted.model_dump(mode="json"))
+
+
+def validate_luma_action_evidence(
+    evidence: Sequence[VisualEvidence],
+    config: LumaAdjustmentConfig,
+    source_ranges: Sequence[tuple[float, float]],
+) -> tuple[float, float]:
+    """Validate range-bound luma provenance and return its measured medians."""
+    selected = tuple(evidence)
+    ranges = tuple(source_ranges)
+    if (
+        not selected
+        or not ranges
+        or any(
+            item.action is not RescueActionKind.ADJUST_LUMA
+            or item.metric != "luma_p10"
+            or item.threshold != config.dark_percentile_threshold
+            or item.observed >= item.threshold
+            or item.context_luma_p50 is None
+            for item in selected
+        )
+    ):
+        raise ValueError("ADJUST_LUMA assessment evidence is invalid")
+    timestamps = tuple(item.timestamp_seconds for item in selected)
+    if len(set(timestamps)) != len(timestamps):
+        raise ValueError("ADJUST_LUMA assessment evidence is invalid")
+    range_indexes: list[int] = []
+    for item in selected:
+        matching_ranges = tuple(
+            index
+            for index, (start, end) in enumerate(ranges)
+            if start <= item.timestamp_seconds < end
+        )
+        if len(matching_ranges) != 1:
+            raise ValueError("ADJUST_LUMA assessment evidence is invalid")
+        range_indexes.append(matching_ranges[0])
+    if set(range_indexes) != set(range(len(ranges))):
+        raise ValueError("ADJUST_LUMA assessment evidence is invalid")
+    contexts = tuple(cast(float, item.context_luma_p50) for item in selected)
+    return (
+        float(statistics.median(item.observed for item in selected)),
+        float(statistics.median(contexts)),
+    )
+
+
+def validate_plan_luma_action_contracts(plan: RescuePlan) -> None:
+    """Recheck luma assessment provenance at preview/final trust boundaries."""
+    actions = tuple(
+        action for action in plan.actions if action.kind is RescueActionKind.ADJUST_LUMA
+    )
+    if not actions:
+        return
+    if len(actions) != 1:
+        raise ValueError("ADJUST_LUMA action inventory is ambiguous")
+    action = actions[0]
+    if "strength_limit" not in action.parameters:
+        raise ValueError("ADJUST_LUMA action strength limit is missing")
+    raw_visual = plan.assessment_parameters.get("visual_config")
+    if raw_visual is None:
+        assessment_config = VisualAssessmentConfig()
+    else:
+        if not isinstance(raw_visual, Mapping):
+            raise ValueError("assessment visual config is invalid")
+        raw_luma = raw_visual.get("luma")
+        if not isinstance(raw_luma, Mapping) or set(raw_luma) != set(
+            LumaAdjustmentConfig.model_fields
+        ):
+            raise ValueError("assessment LUMA config fields are incomplete")
+        assessment_config = VisualAssessmentConfig.model_validate(raw_visual)
+    wire = luma_action_wire_from_parameters(action.parameters)
+    if wire.luma_config != assessment_config.luma:
+        raise ValueError("ADJUST_LUMA wire does not match assessment config")
+    metrics = VisualMetrics.model_validate(action.parameters.get("assessment_metrics"))
+    raw_evidence = action.parameters.get("assessment_evidence")
+    if not isinstance(raw_evidence, (list, tuple)):
+        raise ValueError("ADJUST_LUMA assessment evidence is invalid")
+    try:
+        evidence = tuple(
+            VisualEvidence.model_validate_json(
+                json.dumps(
+                    item,
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                )
+            )
+            for item in raw_evidence
+        )
+    except (TypeError, ValueError) as exc:
+        raise ValueError("ADJUST_LUMA assessment evidence is invalid") from exc
+    expected_p10, expected_p50 = validate_luma_action_evidence(
+        evidence,
+        wire.luma_config,
+        action.source_ranges,
+    )
+    if (
+        wire.observed_luma_p10 != expected_p10
+        or metrics.luma_p10 != expected_p10
+        or wire.observed_luma_p50 != expected_p50
+        or metrics.luma_p50 != expected_p50
+        or wire.observed_noise_residual != metrics.noise_residual
+    ):
+        raise ValueError("ADJUST_LUMA assessment evidence does not match its wire")
+    expected_id = make_rescue_action_id(
+        kind=action.kind,
+        parameters=action.parameters,
+        source_ranges=action.source_ranges,
+        strategy=action.strategy,
+        version=action.version,
+    )
+    if action.id != expected_id:
+        raise ValueError("ADJUST_LUMA action ID does not match its wire")
+
+
+def derive_visual_action_parameters(
+    kind: RescueActionKind,
+    metrics: VisualMetrics,
+    *,
+    luma_config: LumaAdjustmentConfig | None = None,
+    denoise_config: VideoDenoiseConfig | None = None,
+    sharpen_config: SharpenConfig | None = None,
+    scene_baseline_sharpness: float | None = None,
+) -> dict[str, JsonValue]:
+    """Derive deterministic bounded filters from measured visual evidence."""
+    if kind is RescueActionKind.ADJUST_LUMA:
+        luma = luma_config or LumaAdjustmentConfig()
+        return _derive_luma_action_wire(metrics, luma).model_dump(mode="json")
+    if kind is RescueActionKind.DENOISE_VIDEO:
+        denoise = denoise_config or VideoDenoiseConfig()
+        residual_span = denoise.full_strength_residual - denoise.residual_threshold
+        residual_severity = min(
+            1.0,
+            max(
+                0.0,
+                (metrics.noise_residual - denoise.residual_threshold) / residual_span,
+            ),
+        )
+        strength_ratio = (
+            denoise.minimum_strength_ratio
+            + (1.0 - denoise.minimum_strength_ratio) * residual_severity
+        )
+        return {
+            "luma_spatial": denoise.luma_spatial * strength_ratio,
+            "chroma_spatial": denoise.chroma_spatial * strength_ratio,
+            "luma_temporal": denoise.luma_temporal * strength_ratio,
+            "chroma_temporal": denoise.chroma_temporal * strength_ratio,
+            "maximum_residual_increase": denoise.maximum_residual_increase,
+            "minimum_strength_ratio": denoise.minimum_strength_ratio,
+            "full_strength_residual": denoise.full_strength_residual,
+            "residual_threshold": denoise.residual_threshold,
+            "observed_noise_residual": metrics.noise_residual,
+            "strength_ratio": strength_ratio,
+            "derivation_version": "2",
+        }
+    if kind is RescueActionKind.SHARPEN:
+        sharpen = sharpen_config or SharpenConfig()
+        if metrics.sharpness <= 0:
+            severity = 1.0
+        else:
+            absolute_severity = min(
+                1.0,
+                max(
+                    0.0,
+                    (sharpen.absolute_sharpness_floor - metrics.sharpness)
+                    / sharpen.absolute_sharpness_floor,
+                ),
+            )
+            relative_severity = 0.0
+            if (
+                scene_baseline_sharpness is not None
+                and math.isfinite(scene_baseline_sharpness)
+                and scene_baseline_sharpness > 0
+            ):
+                relative_severity = min(
+                    1.0,
+                    max(0.0, 1.0 - metrics.sharpness / scene_baseline_sharpness),
+                )
+            severity = max(absolute_severity, relative_severity)
+        relative_severity = locals().get("relative_severity", 1.0)
+        # Use a concave response so severely soft intervals get enough bounded
+        # edge recovery to clear the perceptibility gate without oversharpening
+        # mild anomalies.
+        amount = sharpen.minimum_amount + (
+            sharpen.maximum_amount - sharpen.minimum_amount
+        ) * math.sqrt(severity)
+        detail_passes = min(
+            sharpen.maximum_detail_passes,
+            1
+            + int(relative_severity >= 0.35 or severity >= 0.70)
+            + int(relative_severity >= 0.70 or severity >= 0.95),
+        )
+        visibility_brightness = min(
+            sharpen.maximum_visibility_brightness,
+            max(0.0, sharpen.visibility_target_luma - metrics.luma_p50),
+        )
+        return {
+            "radius": sharpen.radius,
+            "adaptive_strength": sharpen.adaptive_strength,
+            "amount": amount,
+            "detail_passes": detail_passes,
+            "visibility_brightness": visibility_brightness,
+            "maximum_visibility_brightness": sharpen.maximum_visibility_brightness,
+            "boundary_transition_seconds": sharpen.boundary_transition_seconds,
+            "maximum_sharpness_loss_ratio": (sharpen.maximum_sharpness_loss_ratio),
+            "minimum_perceptible_sharpness_gain_ratio": (
+                sharpen.minimum_perceptible_sharpness_gain_ratio
+            ),
+            "maximum_noise_increase": sharpen.maximum_noise_increase,
+            "observed_sharpness": metrics.sharpness,
+            "scene_baseline_sharpness": metrics.sharpness,
+            "minimum_recovered_baseline_ratio": (
+                sharpen.minimum_recovered_baseline_ratio
+            ),
+            "minimum_improved_frame_fraction": (
+                sharpen.minimum_improved_frame_fraction
+            ),
+            "edge_gradient_threshold": sharpen.edge_gradient_threshold,
+            "edge_neighborhood_radius": sharpen.edge_neighborhood_radius,
+            "edge_overshoot_minimum_amplitude": (
+                sharpen.edge_overshoot_minimum_amplitude
+            ),
+            "maximum_edge_overshoot_ratio": (sharpen.maximum_edge_overshoot_ratio),
+            "maximum_edge_overshoot_amplitude": (
+                sharpen.maximum_edge_overshoot_amplitude
+            ),
+            "ringing_minimum_amplitude": sharpen.ringing_minimum_amplitude,
+            "maximum_ringing_ratio": sharpen.maximum_ringing_ratio,
+            "derivation_version": "2",
+        }
+    return {}
+
+
+def visual_action_parameters(kind: RescueActionKind) -> dict[str, JsonValue]:
     """Expose only bounded numeric defaults for planner action records."""
     if kind is RescueActionKind.ADJUST_LUMA:
-        luma_config = LumaAdjustmentConfig()
-        return {
-            "brightness": luma_config.brightness,
-            "contrast": luma_config.contrast,
-            "maximum_clip_ratio": luma_config.maximum_clip_ratio,
-        }
+        default_metrics = VisualMetrics(
+            luma_p10=LumaAdjustmentConfig().dark_percentile_threshold,
+            luma_p50=LumaAdjustmentConfig().dark_percentile_threshold,
+            luma_p90=0.5,
+            low_clip_ratio=0.0,
+            high_clip_ratio=0.0,
+            noise_residual=0.0,
+            sharpness=0.0,
+        )
+        return derive_visual_action_parameters(kind, default_metrics)
     if kind is RescueActionKind.DENOISE_VIDEO:
         denoise_config = VideoDenoiseConfig()
         return {
@@ -631,14 +1236,21 @@ def filter_fragment_from_action(
     """Revalidate numeric plan fields before they become an FFmpeg filter string."""
     try:
         if kind is RescueActionKind.ADJUST_LUMA:
-            return luma_filter_fragment(
-                LumaAdjustmentConfig.model_validate(
-                    {
-                        "brightness": parameters["brightness"],
-                        "contrast": parameters["contrast"],
+            wire = luma_action_wire_from_parameters(parameters)
+            if wire.filter_mode == "eq":
+                render_config = wire.luma_config.model_copy(
+                    update={
+                        "brightness": wire.brightness,
+                        "contrast": wire.contrast,
+                        "minimum_gamma": wire.gamma,
+                        "maximum_gamma": wire.gamma,
+                        "gamma_weight": wire.gamma_weight,
                     }
                 )
-            )
+                return luma_filter_fragment(render_config)
+            if wire.luma_lift_steps is None:
+                return None
+            return "lutyuv=y='val+" + str(wire.luma_lift_steps) + "'"
         if kind is RescueActionKind.DENOISE_VIDEO:
             return denoise_filter_fragment(
                 VideoDenoiseConfig.model_validate(
@@ -656,7 +1268,21 @@ def filter_fragment_from_action(
         if kind is RescueActionKind.SHARPEN:
             return sharpen_filter_fragment(
                 SharpenConfig.model_validate(
-                    {"radius": parameters["radius"], "amount": parameters["amount"]}
+                    {
+                        "radius": parameters["radius"],
+                        "adaptive_strength": parameters["adaptive_strength"],
+                        "amount": parameters["amount"],
+                        "detail_passes": parameters.get("detail_passes", 1),
+                        "visibility_brightness": parameters.get(
+                            "visibility_brightness", 0.0
+                        ),
+                        "maximum_visibility_brightness": parameters.get(
+                            "maximum_visibility_brightness", 0.15
+                        ),
+                        "boundary_transition_seconds": parameters.get(
+                            "boundary_transition_seconds", 0.25
+                        ),
+                    }
                 )
             )
         if kind is RescueActionKind.DEFLICKER:
@@ -710,6 +1336,7 @@ def render_deflickered_video(
     ffmpeg: str = "ffmpeg",
     timeout_seconds: float = 3600.0,
     frame_timestamps: Sequence[float] | None = None,
+    encode_config: RescueEffectiveConfig | None = None,
 ) -> None:
     """Apply the accepted luma curve frame-by-frame and atomically preserve audio."""
     if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
@@ -813,14 +1440,13 @@ def render_deflickered_video(
                 "0:v:0",
                 "-map",
                 "1:a?",
-                "-c:v",
-                "libx264",
+                *canonical_video_encode_arguments(
+                    encode_config or RescueEffectiveConfig()
+                ),
                 "-c:a",
                 "copy",
                 "-movflags",
                 "+faststart",
-                "-fps_mode",
-                "passthrough",
                 str(muxed),
             ),
             timeout_seconds=timeout_seconds,
@@ -942,31 +1568,178 @@ def _scene_relative_soft_indices(
     )
 
 
-def _evidence_for_lowest(
+def _scene_sharpness_baseline(
+    timestamp: float,
     samples: Sequence[VisualSample],
     metrics: Sequence[VisualMetrics],
+    scenes: Sequence[VideoScene],
+) -> float:
+    for scene in scenes:
+        if scene.start_seconds <= timestamp <= scene.end_seconds:
+            values = [
+                metrics[index].sharpness
+                for index, sample in enumerate(samples)
+                if scene.start_seconds <= sample.timestamp_seconds <= scene.end_seconds
+            ]
+            if values:
+                return float(np.median(values))
+    return 0.0
+
+
+def _action_intervals_from_indexes(
+    samples: Sequence[VisualSample],
+    indexes: Sequence[int],
+    action: RescueActionKind,
+) -> tuple[VisualActionInterval, ...]:
+    """Convert every qualifying sample, not only evidence thumbnails, to ranges."""
+    ordered_indexes = sorted(
+        set(indexes), key=lambda index: samples[index].timestamp_seconds
+    )
+    if not ordered_indexes:
+        return ()
+    timestamps = [samples[index].timestamp_seconds for index in ordered_indexes]
+    all_timestamps = sorted(sample.timestamp_seconds for sample in samples)
+    positive_steps = [
+        right - left
+        for left, right in zip(all_timestamps, all_timestamps[1:], strict=False)
+        if right > left
+    ]
+    step = float(np.median(positive_steps)) if positive_steps else 0.5
+    groups: list[list[float]] = []
+    for timestamp in timestamps:
+        if groups and timestamp - groups[-1][-1] <= step * 1.5 + 1e-9:
+            groups[-1].append(timestamp)
+        else:
+            groups.append([timestamp])
+    return tuple(
+        VisualActionInterval(
+            action=action,
+            start_seconds=max(0.0, group[0] - step / 2),
+            end_seconds=group[-1] + step / 2,
+        )
+        for group in groups
+    )
+
+
+def _range_aware_evidence_for_lowest(
+    samples: Sequence[VisualSample],
+    metrics: Sequence[VisualMetrics],
+    eligible_indexes: Sequence[int],
+    eligible_ranges: Sequence[VisualActionInterval],
     action: RescueActionKind,
     metric: str,
     threshold: float,
     limit: int,
-) -> tuple[VisualEvidence, ...]:
-    indexes = sorted(
-        range(len(samples)),
+) -> tuple[tuple[VisualEvidence, ...], tuple[VisualActionInterval, ...]]:
+    ranked_indexes = sorted(
+        set(eligible_indexes),
         key=lambda index: (
             getattr(metrics[index], metric),
-            samples[index].timestamp_seconds,
+            _canonical_visual_sample_key(samples[index]),
+        ),
+    )
+    unique_indexes: list[int] = []
+    seen_timestamps: set[float] = set()
+    for index in ranked_indexes:
+        timestamp = samples[index].timestamp_seconds
+        if timestamp not in seen_timestamps:
+            unique_indexes.append(index)
+            seen_timestamps.add(timestamp)
+
+    range_candidates = tuple(
+        (
+            item,
+            tuple(
+                index
+                for index in unique_indexes
+                if item.start_seconds
+                <= samples[index].timestamp_seconds
+                < item.end_seconds
+            ),
+        )
+        for item in eligible_ranges
+    )
+    ranked_ranges = sorted(
+        [(item, indexes) for item, indexes in range_candidates if indexes],
+        key=lambda pair: (
+            getattr(metrics[pair[1][0]], metric),
+            _canonical_visual_sample_key(samples[pair[1][0]]),
+            pair[0].start_seconds,
+            pair[0].end_seconds,
         ),
     )[:limit]
-    return tuple(
+    retained_ranges = tuple(
+        sorted(
+            (item for item, _indexes in ranked_ranges),
+            key=lambda item: (item.start_seconds, item.end_seconds),
+        )
+    )
+    reserved = {indexes[0] for _item, indexes in ranked_ranges}
+    retained_indexes = tuple(
+        index
+        for index in unique_indexes
+        if any(
+            item.start_seconds <= samples[index].timestamp_seconds < item.end_seconds
+            for item in retained_ranges
+        )
+    )
+    indexes = tuple(
+        sorted(
+            reserved,
+            key=lambda index: (
+                getattr(metrics[index], metric),
+                _canonical_visual_sample_key(samples[index]),
+            ),
+        )
+    )
+    indexes += tuple(index for index in retained_indexes if index not in reserved)[
+        : max(0, limit - len(indexes))
+    ]
+    indexes = tuple(
+        sorted(
+            indexes,
+            key=lambda index: (
+                getattr(metrics[index], metric),
+                _canonical_visual_sample_key(samples[index]),
+            ),
+        )
+    )
+    evidence = tuple(
         VisualEvidence(
             action=action,
             timestamp_seconds=samples[index].timestamp_seconds,
             metric=metric,
             observed=getattr(metrics[index], metric),
             threshold=threshold,
+            context_luma_p50=metrics[index].luma_p50,
         )
         for index in indexes
     )
+    return evidence, retained_ranges
+
+
+def _canonical_visual_sample_key(
+    sample: VisualSample,
+) -> tuple[
+    tuple[float, bytes],
+    int,
+    int,
+    tuple[tuple[float, bytes], ...],
+]:
+    """Return a total order over every finite field in a visual sample."""
+    return (
+        _finite_float_order_key(sample.timestamp_seconds),
+        len(sample.luma),
+        len(sample.luma[0]),
+        tuple(_finite_float_order_key(value) for row in sample.luma for value in row),
+    )
+
+
+def _finite_float_order_key(value: float) -> tuple[float, bytes]:
+    """Preserve numeric ordering and break equal-value ties by binary64 bits."""
+    if not math.isfinite(value):
+        raise ValueError("canonical float ordering requires a finite value")
+    return value, struct.pack(">d", value)
 
 
 def _evidence_for_highest(
@@ -1175,6 +1948,7 @@ __all__ = [
     "SharpenConfig",
     "VideoDenoiseConfig",
     "VisualAssessment",
+    "VisualActionInterval",
     "VisualAssessmentConfig",
     "VisualComparison",
     "VisualEvidence",

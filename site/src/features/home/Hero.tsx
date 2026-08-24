@@ -1,45 +1,41 @@
-import { useI18n } from "../../i18n/I18nProvider";
+import { Link } from "react-router";
+
+import type { PublicFunnelLocaleCopy } from "../growth/growth-copy-runtime";
 import { HomeMedia } from "./HomeMedia";
-import { repositoryUrl } from "./home-data";
 
 interface HeroProps {
-  intervalCount: number;
-  onAnalyze(): void;
-  onDemo(): void;
+  copy: PublicFunnelLocaleCopy;
+  onQuickCheck(): void;
 }
-export function Hero({ intervalCount, onAnalyze, onDemo }: HeroProps) {
-  const { t } = useI18n();
+
+export function Hero({ copy, onQuickCheck }: HeroProps) {
+  const labels = copy.home.hero;
+
   return (
     <section className="home-hero" data-testid="home-hero">
       <HomeMedia
         className="home-hero__atmosphere"
         eager
-        label={t.home.hero.mediaLabel}
+        label={labels.media}
         role="hero"
       />
       <div className="home-hero__grid" aria-hidden="true" />
       <div className="home-hero__copy">
-        <p className="eyebrow">{t.home.hero.eyebrow}</p>
-        <h1>{t.home.hero.title}</h1>
-        <p className="home-hero__description">{t.home.hero.description}</p>
+        <p className="eyebrow">{labels.eyebrow}</p>
+        <h1>{copy.positioning}</h1>
+        <p className="home-hero__description">{copy.localBoundary}</p>
         <div className="home-actions">
-          <button className="button button--primary" onClick={onAnalyze} type="button">
-            {t.home.hero.analyze}
+          <Link className="button button--primary" to="/rescue">
+            {labels.primaryAction}
+          </Link>
+          <button className="button button--quiet" onClick={onQuickCheck} type="button">
+            {labels.quickCheck}
           </button>
-          <button className="button button--quiet" onClick={onDemo} type="button">
-            {t.home.hero.demo}
-          </button>
-          <a className="text-link" href={repositoryUrl}>
-            {t.home.hero.github}
-          </a>
+          <Link className="text-link" to="/examples">
+            {labels.examples}
+          </Link>
         </div>
-        <div className="home-hero__trust">
-          <span>{t.home.hero.local}</span>
-          <strong className="numeric">
-            {intervalCount} {t.home.hero.intervals}
-          </strong>
-          <span className="demo-label">{t.home.demoLabel}</span>
-        </div>
+        <p className="home-hero__trust">{copy.sourcePreserved}</p>
       </div>
       <div aria-hidden="true" className="home-hero__scan" data-decorative-motion />
     </section>

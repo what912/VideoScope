@@ -8,6 +8,7 @@ import { useI18n } from "../../i18n/I18nProvider";
 import type { Finding } from "../../types/analysis";
 import type { DemoBrowserReport } from "../../types/report";
 import { HomeMedia } from "./HomeMedia";
+import { legacyHomeCopy } from "./legacy-home-copy";
 
 interface ProductProofWindowProps {
   currentTime: number;
@@ -24,13 +25,14 @@ export function ProductProofWindow({
   onSelectFinding,
   onSeek,
 }: ProductProofWindowProps) {
-  const { t } = useI18n();
+  const { locale } = useI18n();
+  const copy = legacyHomeCopy[locale];
   return (
     <section className="product-proof">
       <div className="product-proof__toolbar">
         <div>
-          <p className="eyebrow">{t.home.demoLabel}</p>
-          <h2>{t.home.proof.title}</h2>
+          <p className="eyebrow">{copy.demoLabel}</p>
+          <h2>{copy.proof.title}</h2>
         </div>
         <div className="product-proof__meta numeric">
           <span>1280 × 720</span>
@@ -38,12 +40,12 @@ export function ProductProofWindow({
           <span>00:18.000</span>
         </div>
       </div>
-      <p>{t.home.proof.description}</p>
+      <p>{copy.proof.description}</p>
       <div className="product-proof__layout">
         <div className="product-proof__stage">
           <HomeMedia
             className="product-proof__video"
-            label={t.home.proof.mediaLabel}
+            label={copy.proof.mediaLabel}
             role="product-proof"
           />
           <DiagnosticOverlay finding={selectedFinding} />
@@ -51,7 +53,7 @@ export function ProductProofWindow({
             className="product-proof__time numeric"
             data-testid="home-demo-time"
           >
-            {t.home.proof.currentTime} {formatTimestamp(currentTime)}
+            {copy.proof.currentTime} {formatTimestamp(currentTime)}
           </span>
         </div>
         <DetectorStatusList executions={report.detector_executions} />

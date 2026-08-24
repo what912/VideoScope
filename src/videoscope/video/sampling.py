@@ -9,7 +9,7 @@ import shutil
 import subprocess
 import tempfile
 import threading
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from queue import Empty, Full, Queue
@@ -67,6 +67,8 @@ class FrameSamplingResult(BaseModel):
     )
     decode_passes: int = Field(default=1, ge=1, le=1)
     truncated: bool = False
+    motion_samples: tuple[FrameSample, ...] = ()
+    motion_truncated: bool = False
 
 
 @dataclass(frozen=True)
@@ -98,12 +100,16 @@ class _StoredPngFrame:
 @dataclass(frozen=True)
 class _TimelineStreamResult:
     selected: tuple[_StoredPngFrame, ...]
+    motion_selected: tuple[_StoredPngFrame, ...]
     actual_end_seconds: float
     truncated: bool
+    motion_truncated: bool
     decoded_frames: int
     retained_payload_high_water: int
     target_advances: int
+    motion_target_advances: int
     distance_comparisons: int
+    motion_distance_comparisons: int
     finalization_visits: int
 
 
@@ -334,28 +340,43 @@ def _stream_timeline_candidates_unchecked(
     duration_seconds: float,
     sample_rate: float,
     maximum_count: int,
+    motion_sample_rate: float | None,
+    maximum_motion_count: int | None,
     max_edge: int,
     ffmpeg: str,
     timeout_seconds: float,
     work_directory: Path,
     candidate_directory: Path,
     enforce_duration_match: bool,
+    cancellation_check: Callable[[], None] | None,
 ) -> _TimelineStreamResult:
     """Decode once and persist target candidates without retaining their payloads."""
-    requested_count = max(1, math.ceil(duration_seconds * sample_rate - 1e-9))
-    truncated = requested_count > maximum_count
-    target_count = min(maximum_count, requested_count)
-    if truncated:
-        targets = (
-            (0.0,)
-            if target_count == 1
-            else tuple(
-                position * duration_seconds / (target_count - 1)
-                for position in range(target_count)
+
+    def bounded_targets(rate: float, maximum: int) -> tuple[tuple[float, ...], bool]:
+        requested_count = max(1, math.ceil(duration_seconds * rate - 1e-9))
+        truncated_result = requested_count > maximum
+        target_count = min(maximum, requested_count)
+        if truncated_result:
+            targets_result = (
+                (0.0,)
+                if target_count == 1
+                else tuple(
+                    position * duration_seconds / (target_count - 1)
+                    for position in range(target_count)
+                )
             )
-        )
+        else:
+            targets_result = tuple(position / rate for position in range(target_count))
+        return targets_result, truncated_result
+
+    targets, truncated = bounded_targets(sample_rate, maximum_count)
+    if motion_sample_rate is None or maximum_motion_count is None:
+        motion_targets: tuple[float, ...] = ()
+        motion_truncated = False
     else:
-        targets = tuple(position / sample_rate for position in range(target_count))
+        motion_targets, motion_truncated = bounded_targets(
+            motion_sample_rate, maximum_motion_count
+        )
     arguments = [
         ffmpeg,
         "-hide_banner",
@@ -458,10 +479,14 @@ def _stream_timeline_candidates_unchecked(
 
     selected_by_index: dict[int, _StoredPngFrame] = {}
     target_frame_indices: list[int] = []
+    motion_target_frame_indices: list[int] = []
     previous_frame: _PngFrame | None = None
     target_index = 0
     target_advances = 0
+    motion_target_index = 0
+    motion_target_advances = 0
     distance_comparisons = 0
+    motion_distance_comparisons = 0
     retained_payload_high_water = 0
     previous_timestamp: float | None = None
     previous_to_last_timestamp: float | None = None
@@ -483,16 +508,24 @@ def _stream_timeline_candidates_unchecked(
         target: float,
         previous: _PngFrame | None,
         current: _PngFrame,
+        *,
+        motion: bool = False,
     ) -> _PngFrame:
-        nonlocal distance_comparisons
-        distance_comparisons += 1
+        nonlocal distance_comparisons, motion_distance_comparisons
+        if motion:
+            motion_distance_comparisons += 1
+        else:
+            distance_comparisons += 1
         current_key = (
             abs(current.timing.timestamp_seconds - target),
             current.timing.frame_index,
         )
         if previous is None:
             return current
-        distance_comparisons += 1
+        if motion:
+            motion_distance_comparisons += 1
+        else:
+            distance_comparisons += 1
         previous_key = (
             abs(previous.timing.timestamp_seconds - target),
             previous.timing.frame_index,
@@ -502,6 +535,8 @@ def _stream_timeline_candidates_unchecked(
     deadline = monotonic() + timeout_seconds
     try:
         while True:
+            if cancellation_check is not None:
+                cancellation_check()
             remaining = deadline - monotonic()
             if remaining <= 0:
                 raise subprocess.TimeoutExpired(arguments, timeout_seconds)
@@ -556,11 +591,27 @@ def _stream_timeline_candidates_unchecked(
                 target_frame_indices.append(selected_frame.timing.frame_index)
                 target_index += 1
                 target_advances += 1
+            while (
+                motion_target_index < len(motion_targets)
+                and motion_targets[motion_target_index] <= timing.timestamp_seconds
+            ):
+                selected_frame = select_nearest(
+                    motion_targets[motion_target_index],
+                    previous_frame,
+                    frame,
+                    motion=True,
+                )
+                persist(selected_frame)
+                motion_target_frame_indices.append(selected_frame.timing.frame_index)
+                motion_target_index += 1
+                motion_target_advances += 1
             previous_frame = frame
             paired_count += 1
         process.wait(timeout=max(0.0, deadline - monotonic()))
-    except (ValueError, OSError, subprocess.TimeoutExpired) as exc:
+    except BaseException as exc:
         _stop_process(process)
+        if not isinstance(exc, (ValueError, OSError, subprocess.TimeoutExpired)):
+            raise
         message = (
             "FFmpeg timed out while sampling"
             if isinstance(exc, subprocess.TimeoutExpired)
@@ -605,9 +656,25 @@ def _stream_timeline_candidates_unchecked(
         target_index += 1
         target_advances += 1
 
-    if truncated and target_count > 1:
+    while motion_target_index < len(motion_targets):
+        persist(
+            select_nearest(
+                motion_targets[motion_target_index],
+                None,
+                previous_frame,
+                motion=True,
+            )
+        )
+        motion_target_frame_indices.append(previous_frame.timing.frame_index)
+        motion_target_index += 1
+        motion_target_advances += 1
+
+    if truncated and len(targets) > 1:
         persist(previous_frame)
         target_frame_indices[-1] = previous_frame.timing.frame_index
+    if motion_truncated and len(motion_targets) > 1:
+        persist(previous_frame)
+        motion_target_frame_indices[-1] = previous_frame.timing.frame_index
 
     tail_duration = previous_frame.timing.duration_seconds
     if tail_duration <= 0 and previous_to_last_timestamp is not None:
@@ -633,28 +700,41 @@ def _stream_timeline_candidates_unchecked(
             stderr_summary="decoded timeline end did not match stream/container timing",
         )
 
-    selected_frames: list[_StoredPngFrame] = []
-    last_selected_index: int | None = None
-    finalization_visits = 0
-    for selected_index in target_frame_indices:
-        finalization_visits += 1
-        if last_selected_index is not None and selected_index < last_selected_index:
-            raise FrameSamplingError(
-                f"FFmpeg produced invalid target mappings for: {input_path.name}",
-                work_directory=work_directory,
-                stderr_summary="sample target mappings were out of order",
-            )
-        if selected_index != last_selected_index:
-            selected_frames.append(selected_by_index[selected_index])
-        last_selected_index = selected_index
+    def finalize_selection(
+        frame_indices: list[int],
+    ) -> tuple[tuple[_StoredPngFrame, ...], int]:
+        selected_frames: list[_StoredPngFrame] = []
+        last_selected_index: int | None = None
+        visits = 0
+        for selected_index in frame_indices:
+            visits += 1
+            if last_selected_index is not None and selected_index < last_selected_index:
+                raise FrameSamplingError(
+                    f"FFmpeg produced invalid target mappings for: {input_path.name}",
+                    work_directory=work_directory,
+                    stderr_summary="sample target mappings were out of order",
+                )
+            if selected_index != last_selected_index:
+                selected_frames.append(selected_by_index[selected_index])
+            last_selected_index = selected_index
+        return tuple(selected_frames), visits
+
+    selected_frames, finalization_visits = finalize_selection(target_frame_indices)
+    motion_selected_frames, _motion_finalization_visits = finalize_selection(
+        motion_target_frame_indices
+    )
     return _TimelineStreamResult(
-        selected=tuple(selected_frames),
+        selected=selected_frames,
+        motion_selected=motion_selected_frames,
         actual_end_seconds=actual_end,
         truncated=truncated,
+        motion_truncated=motion_truncated,
         decoded_frames=paired_count,
         retained_payload_high_water=retained_payload_high_water,
         target_advances=target_advances,
+        motion_target_advances=motion_target_advances,
         distance_comparisons=distance_comparisons,
+        motion_distance_comparisons=motion_distance_comparisons,
         finalization_visits=finalization_visits,
     )
 
@@ -665,11 +745,14 @@ def _stream_timeline_candidates(
     duration_seconds: float,
     sample_rate: float,
     maximum_count: int,
+    motion_sample_rate: float | None,
+    maximum_motion_count: int | None,
     max_edge: int,
     ffmpeg: str,
     timeout_seconds: float,
     work_directory: Path,
     enforce_duration_match: bool,
+    cancellation_check: Callable[[], None] | None,
 ) -> _TimelineStreamResult:
     """Stage capped samples and remove every staged payload on audit failure."""
     candidate_directory = work_directory / ".timeline-candidates"
@@ -680,12 +763,15 @@ def _stream_timeline_candidates(
             duration_seconds=duration_seconds,
             sample_rate=sample_rate,
             maximum_count=maximum_count,
+            motion_sample_rate=motion_sample_rate,
+            maximum_motion_count=maximum_motion_count,
             max_edge=max_edge,
             ffmpeg=ffmpeg,
             timeout_seconds=timeout_seconds,
             work_directory=work_directory,
             candidate_directory=candidate_directory,
             enforce_duration_match=enforce_duration_match,
+            cancellation_check=cancellation_check,
         )
     except Exception:
         shutil.rmtree(candidate_directory, ignore_errors=True)
@@ -705,6 +791,9 @@ def sample_frames(
     max_samples: int | None = None,
     frame_indices: tuple[int, ...] | None = None,
     timeline_duration_seconds: float | None = None,
+    motion_sample_rate: float | None = None,
+    maximum_motion_samples: int | None = None,
+    cancellation_check: Callable[[], None] | None = None,
 ) -> FrameSamplingResult:
     """Extract fixed-rate frames into a caller-owned temporary directory."""
     input_path = Path(path)
@@ -722,6 +811,20 @@ def sample_frames(
         or max_samples <= 0
     ):
         raise ValueError("max_samples must be a positive integer when provided")
+    if (motion_sample_rate is None) != (maximum_motion_samples is None):
+        raise ValueError(
+            "motion_sample_rate and maximum_motion_samples must be provided together"
+        )
+    if motion_sample_rate is not None and (
+        not math.isfinite(motion_sample_rate) or motion_sample_rate <= 0
+    ):
+        raise ValueError("motion_sample_rate must be finite and greater than zero")
+    if maximum_motion_samples is not None and (
+        isinstance(maximum_motion_samples, bool)
+        or not isinstance(maximum_motion_samples, int)
+        or maximum_motion_samples <= 0
+    ):
+        raise ValueError("maximum_motion_samples must be a positive integer")
     if frame_indices is not None:
         if not frame_indices:
             raise ValueError("frame_indices must not be empty when provided")
@@ -746,6 +849,8 @@ def sample_frames(
             )
         if max_samples is None:
             raise ValueError("timeline sampling requires max_samples")
+    elif motion_sample_rate is not None:
+        raise ValueError("motion sampling requires timeline_duration_seconds")
     if image_format not in ("jpeg", "png"):
         raise ValueError("image_format must be 'jpeg' or 'png'")
 
@@ -781,11 +886,14 @@ def sample_frames(
             duration_seconds=probe.duration_seconds,
             sample_rate=sample_rate,
             maximum_count=capped_count,
+            motion_sample_rate=motion_sample_rate,
+            maximum_motion_count=maximum_motion_samples,
             max_edge=max_edge,
             ffmpeg=ffmpeg,
             timeout_seconds=timeout_seconds,
             work_directory=work_directory,
             enforce_duration_match=probe.deferred_duration_error is None,
+            cancellation_check=cancellation_check,
         )
         if probe.deferred_duration_error is not None:
             shutil.rmtree(work_directory / ".timeline-candidates", ignore_errors=True)
@@ -801,6 +909,7 @@ def sample_frames(
             )
         suffix = _output_suffix(image_format)
         timeline_samples: list[FrameSample] = []
+        motion_samples: list[FrameSample] = []
         try:
             for sample_index, frame in enumerate(stream_result.selected):
                 frame_path = frames_directory / f"frame_{sample_index:06d}.{suffix}"
@@ -809,8 +918,28 @@ def sample_frames(
                     if image_format == "jpeg":
                         image.convert("RGB").save(frame_path, quality=95)
                 if image_format == "png":
-                    frame.path.replace(frame_path)
+                    shutil.copyfile(frame.path, frame_path)
                 timeline_samples.append(
+                    FrameSample(
+                        timestamp_seconds=frame.timing.timestamp_seconds,
+                        sample_index=sample_index,
+                        relative_path=frame_path.relative_to(work_directory).as_posix(),
+                        width=width,
+                        height=height,
+                    )
+                )
+            motion_directory = work_directory / "motion_frames"
+            if stream_result.motion_selected:
+                motion_directory.mkdir()
+            for sample_index, frame in enumerate(stream_result.motion_selected):
+                frame_path = motion_directory / f"frame_{sample_index:06d}.{suffix}"
+                with Image.open(frame.path) as image:
+                    width, height = image.size
+                    if image_format == "jpeg":
+                        image.convert("RGB").save(frame_path, quality=95)
+                    else:
+                        image.save(frame_path, format="PNG")
+                motion_samples.append(
                     FrameSample(
                         timestamp_seconds=frame.timing.timestamp_seconds,
                         sample_index=sample_index,
@@ -831,6 +960,11 @@ def sample_frames(
         if (
             len(timeline_samples) != len(stream_result.selected)
             or len(timeline_samples) > max_samples
+            or len(motion_samples) != len(stream_result.motion_selected)
+            or (
+                maximum_motion_samples is not None
+                and len(motion_samples) > maximum_motion_samples
+            )
         ):
             shutil.rmtree(frames_directory, ignore_errors=True)
             frames_directory.mkdir()
@@ -845,6 +979,8 @@ def sample_frames(
             timeline_duration_seconds=stream_result.actual_end_seconds,
             decode_passes=1,
             truncated=stream_result.truncated,
+            motion_samples=tuple(motion_samples),
+            motion_truncated=stream_result.motion_truncated,
         )
     suffix = _output_suffix(image_format)
     output_pattern = frames_directory / f"frame_%06d.{suffix}"

@@ -12,6 +12,7 @@ from videoscope.video import (
     NoVideoStreamError,
     VideoDecodeError,
     VideoNotFoundError,
+    VideoProbeError,
     metadata_from_ffprobe,
     parse_frame_rate,
     probe_video,
@@ -39,6 +40,7 @@ def ffprobe_payload() -> dict[str, object]:
                 "index": 1,
                 "codec_type": "audio",
                 "codec_name": "aac",
+                "sample_rate": "48000",
             },
         ],
         "format": {
@@ -100,8 +102,101 @@ def test_probe_normal_video_and_unicode_path(
     assert metadata.file_size_bytes == len(b"synthetic-video")
     assert metadata.creation_time is not None
     assert metadata.raw_probe["audio_codec"] == "aac"
+    assert metadata.raw_probe["audio_sample_rate_hz"] == 48000
     assert "filename" not in metadata.raw_probe
     assert "tags" not in metadata.raw_probe
+
+
+def test_probe_retries_once_after_successful_ffprobe_returns_invalid_json(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    input_path = tmp_path / "中文 transient.mp4"
+    input_path.write_bytes(b"synthetic-video")
+    payload = ffprobe_payload()
+    calls = 0
+
+    def fake_run(
+        args: list[str],
+        **kwargs: object,
+    ) -> subprocess.CompletedProcess[str]:
+        nonlocal calls
+        calls += 1
+        stdout = '{"streams":[' if calls == 1 else json.dumps(payload)
+        return subprocess.CompletedProcess(args, 0, stdout, "")
+
+    monkeypatch.setattr("videoscope.video.probe.subprocess.run", fake_run)
+
+    metadata = probe_video(input_path, ffprobe="fake-ffprobe")
+
+    assert calls == 2
+    assert metadata.filename == input_path.name
+    assert metadata.duration_seconds == pytest.approx(6.006)
+
+
+@pytest.mark.parametrize(  # type: ignore[untyped-decorator]
+    "unusable_payload",
+    (
+        {"streams": "truncated", "format": {}},
+        {"streams": [None], "format": {}},
+        {"streams": [], "format": []},
+    ),
+)
+def test_probe_retries_once_after_successful_ffprobe_returns_unusable_structure(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    unusable_payload: dict[str, object],
+) -> None:
+    input_path = tmp_path / "中文 structural transient.mp4"
+    input_path.write_bytes(b"synthetic-video")
+    payload = ffprobe_payload()
+    calls = 0
+
+    def fake_run(
+        args: list[str],
+        **kwargs: object,
+    ) -> subprocess.CompletedProcess[str]:
+        nonlocal calls
+        calls += 1
+        stdout = json.dumps(unusable_payload) if calls == 1 else json.dumps(payload)
+        return subprocess.CompletedProcess(args, 0, stdout, "")
+
+    monkeypatch.setattr("videoscope.video.probe.subprocess.run", fake_run)
+
+    metadata = probe_video(input_path, ffprobe="fake-ffprobe")
+
+    assert calls == 2
+    assert metadata.filename == input_path.name
+    assert metadata.duration_seconds == pytest.approx(6.006)
+
+
+def test_probe_fails_closed_after_two_invalid_json_results_without_path_leak(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    input_path = tmp_path / "私有 目录" / "broken.mp4"
+    input_path.parent.mkdir()
+    input_path.write_bytes(b"synthetic-video")
+    calls = 0
+
+    def fake_run(
+        args: list[str],
+        **kwargs: object,
+    ) -> subprocess.CompletedProcess[str]:
+        nonlocal calls
+        calls += 1
+        return subprocess.CompletedProcess(args, 0, '{"streams":[', "")
+
+    monkeypatch.setattr("videoscope.video.probe.subprocess.run", fake_run)
+
+    with pytest.raises(VideoProbeError) as error:
+        probe_video(input_path, ffprobe="fake-ffprobe")
+
+    assert calls == 2
+    assert "after 2 attempts" in str(error.value)
+    assert "line 1" in str(error.value)
+    assert "column" in str(error.value)
+    assert str(input_path.parent) not in str(error.value)
 
 
 def test_probe_summary_omits_missing_audio_codec_and_sensitive_metadata(
@@ -127,6 +222,24 @@ def test_probe_summary_omits_missing_audio_codec_and_sensitive_metadata(
     assert "author" not in metadata.raw_probe
     assert "location" not in metadata.raw_probe
     assert input_path.name not in str(metadata.raw_probe)
+
+
+@pytest.mark.parametrize(  # type: ignore[untyped-decorator]
+    "value", [None, "", "invalid", "0", "99999999"]
+)
+def test_probe_summary_omits_invalid_audio_sample_rate(
+    value: object, tmp_path: Path
+) -> None:
+    input_path = tmp_path / "audio rate.mp4"
+    input_path.write_bytes(b"video")
+    payload = ffprobe_payload()
+    audio_stream = payload["streams"][1]  # type: ignore[index]
+    assert isinstance(audio_stream, dict)
+    audio_stream["sample_rate"] = value
+
+    metadata = metadata_from_ffprobe(payload, input_path=input_path)
+
+    assert "audio_sample_rate_hz" not in metadata.raw_probe
 
 
 def test_missing_duration_and_frame_count_are_tolerated(tmp_path: Path) -> None:
@@ -197,11 +310,14 @@ def test_non_video_file_has_sanitized_decode_error(
     input_path = tmp_path / "隐私 目录" / "不是视频.txt"
     input_path.parent.mkdir()
     input_path.write_text("not video", encoding="utf-8")
+    calls = 0
 
     def fake_run(
         args: list[str],
         **kwargs: object,
     ) -> subprocess.CompletedProcess[str]:
+        nonlocal calls
+        calls += 1
         return subprocess.CompletedProcess(
             args=args,
             returncode=1,
@@ -219,6 +335,7 @@ def test_non_video_file_has_sanitized_decode_error(
     assert "<input>" in error.value.stderr_summary
     assert str(input_path) not in error.value.stderr_summary
     assert str(input_path.parent) not in str(error.value)
+    assert calls == 1
 
 
 def test_audio_only_media_has_no_video_stream_error(tmp_path: Path) -> None:

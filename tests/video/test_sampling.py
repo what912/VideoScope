@@ -7,6 +7,7 @@ import shutil
 import subprocess
 from io import BytesIO
 from pathlib import Path
+from typing import Any
 
 import pytest
 from PIL import Image
@@ -19,6 +20,7 @@ from videoscope.video import (
     probe_video,
     sample_frames,
 )
+from videoscope.video import sampling as sampling_module
 
 
 def _write_mock_frames(output_pattern: Path, count: int) -> None:
@@ -244,6 +246,8 @@ def test_timeline_sampling_fails_closed_when_frame_and_timestamp_counts_differ(
             sample_rate=3.0,
             max_samples=2,
             timeline_duration_seconds=1.0,
+            motion_sample_rate=10.0,
+            maximum_motion_samples=10,
         )
 
     assert not list(error.value.work_directory.rglob("*.png"))
@@ -315,6 +319,167 @@ def test_uncapped_timeline_uses_fixed_rate_targets_in_one_streaming_decode(
     )
     assert result.truncated is False
     assert result.decode_passes == 1
+
+
+def test_timeline_sampling_uses_one_decode_for_independently_bounded_consumers(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    input_path = tmp_path / "dual consumer video.mp4"
+    input_path.write_bytes(b"video")
+    payloads = BytesIO()
+    timing_lines: list[bytes] = []
+    for frame_index in range(20):
+        Image.new("RGB", (16, 16), color=(frame_index, 20, 40)).save(
+            payloads, format="PNG"
+        )
+        timestamp = frame_index / 10.0
+        timing_lines.append(
+            f"[Parsed_showinfo_2] n:{frame_index} pts:{frame_index} "
+            f"pts_time:{timestamp:g} duration:1 duration_time:0.1\n".encode()
+        )
+
+    def fake_run(args: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        del kwargs
+        payload = {
+            "streams": [{"start_time": "0", "duration": "2"}],
+            "format": {"start_time": "0", "duration": "2"},
+        }
+        return subprocess.CompletedProcess(args, 0, json.dumps(payload), "")
+
+    class FakeProcess:
+        def __init__(self) -> None:
+            self.stdout = BytesIO(payloads.getvalue())
+            self.stderr = BytesIO(b"".join(timing_lines))
+            self.returncode: int | None = None
+
+        def poll(self) -> int | None:
+            return self.returncode
+
+        def terminate(self) -> None:
+            self.returncode = 1
+
+        def kill(self) -> None:
+            self.returncode = 1
+
+        def wait(self, timeout: float | None = None) -> int:
+            del timeout
+            self.returncode = 0 if self.returncode is None else self.returncode
+            return self.returncode
+
+    popen_count = 0
+
+    def recording_popen(args: list[str], **kwargs: object) -> FakeProcess:
+        nonlocal popen_count
+        del args, kwargs
+        popen_count += 1
+        return FakeProcess()
+
+    audits: list[sampling_module._TimelineStreamResult] = []
+    original_stream = sampling_module._stream_timeline_candidates_unchecked
+
+    def recording_stream(*args: Any, **kwargs: Any) -> Any:
+        result = original_stream(*args, **kwargs)
+        audits.append(result)
+        return result
+
+    monkeypatch.setattr("videoscope.video.sampling.subprocess.run", fake_run)
+    monkeypatch.setattr("videoscope.video.sampling.subprocess.Popen", recording_popen)
+    monkeypatch.setattr(
+        sampling_module, "_stream_timeline_candidates_unchecked", recording_stream
+    )
+
+    result = sample_frames(
+        input_path,
+        sample_rate=10.0,
+        image_format="png",
+        max_samples=6,
+        timeline_duration_seconds=2.0,
+        motion_sample_rate=10.0,
+        maximum_motion_samples=20,
+    )
+
+    assert popen_count == 1
+    assert len(result.samples) == 6
+    assert len(result.motion_samples) == 20
+    assert result.truncated is True
+    assert result.motion_truncated is False
+    assert audits[0].target_advances == 6
+    assert audits[0].motion_target_advances == 20
+    assert audits[0].distance_comparisons <= 2 * audits[0].target_advances
+    assert audits[0].motion_distance_comparisons <= (
+        2 * audits[0].motion_target_advances
+    )
+    assert audits[0].retained_payload_high_water <= 2
+
+
+def test_dual_consumer_cancellation_stops_decode_and_removes_candidates(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    input_path = tmp_path / "cancel video.mp4"
+    input_path.write_bytes(b"video")
+    payload = BytesIO()
+    Image.new("RGB", (16, 16), color=(20, 40, 60)).save(payload, format="PNG")
+
+    def fake_run(args: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        del kwargs
+        probe = {
+            "streams": [{"start_time": "0", "duration": "1"}],
+            "format": {"start_time": "0", "duration": "1"},
+        }
+        return subprocess.CompletedProcess(args, 0, json.dumps(probe), "")
+
+    class FakeProcess:
+        def __init__(self) -> None:
+            self.stdout = BytesIO(payload.getvalue())
+            self.stderr = BytesIO(
+                b"[Parsed_showinfo_2] n:0 pts:0 pts_time:0 duration:1 duration_time:1\n"
+            )
+            self.returncode: int | None = None
+            self.was_stopped = False
+
+        def poll(self) -> int | None:
+            return self.returncode
+
+        def terminate(self) -> None:
+            self.was_stopped = True
+            self.returncode = 1
+
+        def kill(self) -> None:
+            self.was_stopped = True
+            self.returncode = 1
+
+        def wait(self, timeout: float | None = None) -> int:
+            del timeout
+            self.returncode = 0 if self.returncode is None else self.returncode
+            return self.returncode
+
+    process = FakeProcess()
+    monkeypatch.setattr("videoscope.video.sampling.subprocess.run", fake_run)
+    monkeypatch.setattr(
+        "videoscope.video.sampling.subprocess.Popen",
+        lambda args, **kwargs: process,
+    )
+
+    def cancel() -> None:
+        raise RuntimeError("cancelled")
+
+    with pytest.raises(RuntimeError, match="cancelled"):
+        sample_frames(
+            input_path,
+            sample_rate=2.0,
+            max_samples=2,
+            timeline_duration_seconds=1.0,
+            motion_sample_rate=10.0,
+            maximum_motion_samples=10,
+            workspace_parent=tmp_path,
+            cancellation_check=cancel,
+        )
+
+    assert process.was_stopped is True
+    assert not list(tmp_path.rglob(".timeline-candidates"))
+    assert not list(tmp_path.rglob("*.png"))
 
 
 def test_capped_timeline_deduplicates_source_frames_and_publishes_contiguous_names(

@@ -244,6 +244,8 @@ print("privacy-status=completed")
 RESCUE_SMOKE_DRIVER = r"""from __future__ import annotations
 
 import hashlib
+import json
+import re
 import sys
 from pathlib import Path
 
@@ -266,6 +268,61 @@ IMPROVEMENT_KINDS = {
     RescueActionKind.DENOISE_AUDIO,
     RescueActionKind.CORRECT_FIXED_AV_OFFSET,
 }
+
+
+def safe_measurement(value: object) -> object:
+    if isinstance(value, dict):
+        items = sorted(value.items(), key=lambda item: str(item[0]))[:32]
+        return {str(key): safe_measurement(item) for key, item in items}
+    if isinstance(value, (list, tuple)):
+        return [safe_measurement(item) for item in value[:32]]
+    if isinstance(value, str):
+        bounded = value[:200] + ("..." if len(value) > 200 else "")
+        normalized = bounded.replace("\\", "/")
+        for pattern in (
+            re.compile(r"(?i)(?<![A-Za-z0-9._-])[A-Z]:/[^,\r\n\"']+"),
+            re.compile(r"(?<![A-Za-z0-9._-])//[^,\r\n\"']+"),
+            re.compile(r"(?<![A-Za-z0-9._/-])/[^,\r\n\"']+"),
+        ):
+            normalized = pattern.sub("<absolute-path>", normalized)
+        return normalized
+    if value is None or isinstance(value, (bool, int, float)):
+        return value
+    return f"<unsupported-{type(value).__name__}>"
+
+
+def verification_diagnostic(report: object, artifact: str) -> str:
+    selected = [
+        {
+            "check_id": check.check_id,
+            "status": check.status.value,
+            "required": check.required,
+            "measured": safe_measurement(check.measured),
+        }
+        for check in report.checks
+        if check.artifact == artifact
+    ][:32]
+    payload = {"artifact": artifact, "checks": selected}
+    encoded = json.dumps(
+        payload, sort_keys=True, ensure_ascii=True, separators=(",", ":")
+    )
+    if len(encoded) <= 8000:
+        return encoded
+    fallback = {
+        "artifact": artifact,
+        "checks": [
+            {
+                "check_id": check["check_id"],
+                "status": check["status"],
+                "required": check["required"],
+            }
+            for check in selected
+        ],
+        "measurements_omitted": True,
+    }
+    return json.dumps(
+        fallback, sort_keys=True, ensure_ascii=True, separators=(",", ":")
+    )
 
 
 def digest(path: Path) -> str:
@@ -308,14 +365,20 @@ def run(source: Path, output: Path, strategy: RescueStrategy) -> None:
     if result.verification is None:
         raise RuntimeError("Rescue did not return verification")
     if result.verification.faithful_status is not RescueVerificationStatus.PASSED:
-        raise RuntimeError("faithful Rescue verification did not pass")
+        diagnostic = verification_diagnostic(result.verification, "faithful")
+        raise RuntimeError(
+            f"faithful Rescue verification did not pass; verification={diagnostic}"
+        )
     if strategy is RescueStrategy.BALANCED:
         if not publish_improved:
             raise RuntimeError(
                 "Balanced fixture produced no evidence-backed improvement"
             )
         if result.verification.improved_status is not RescueVerificationStatus.PASSED:
-            raise RuntimeError("improved Rescue verification did not pass")
+            diagnostic = verification_diagnostic(result.verification, "improved")
+            raise RuntimeError(
+                f"improved Rescue verification did not pass; verification={diagnostic}"
+            )
 
 
 source = Path(sys.argv[1])
@@ -768,14 +831,46 @@ def prepare_smoke_inputs(
             "-i",
             "sine=frequency=440:sample_rate=48000:duration=6",
             "-vf",
-            "eq=brightness=-0.35,noise=alls=20:allf=t",
+            # Keep the guarded lift clear of both luma qualification bounds
+            # across one-code-value differences between FFmpeg builds.
+            "eq=brightness=-0.47,noise=alls=22:allf=t:all_seed=42",
+            "-map",
+            "0:v:0",
+            "-map",
+            "1:a:0",
             "-c:v",
             "mpeg4",
+            "-q:v",
+            "3",
             "-c:a",
             "aac",
+            "-b:a",
+            "128k",
+            "-flags:a",
+            "+bitexact",
             "-pix_fmt",
             "yuv420p",
+            "-r",
+            "10",
+            "-t",
+            "6",
+            "-g",
+            "1",
             "-shortest",
+            "-threads",
+            "1",
+            "-fflags",
+            "+bitexact",
+            "-flags:v",
+            "+bitexact",
+            "-map_metadata",
+            "-1",
+            "-metadata",
+            "creation_time=1970-01-01T00:00:00Z",
+            "-movflags",
+            "+faststart",
+            "-video_track_timescale",
+            "10000",
             "-y",
             str(rescue_video),
         ],
