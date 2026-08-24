@@ -785,7 +785,9 @@ def run_checked(
             timeout=timeout_seconds,
         )
     except FileNotFoundError as exc:
-        raise FixtureFactoryError(f"Executable not found: {args[0]}") from exc
+        raise FixtureFactoryError(
+            f"Executable not found: {Path(args[0]).name}"
+        ) from exc
     except subprocess.TimeoutExpired as exc:
         raise FixtureFactoryError(
             f"{Path(args[0]).name} timed out after {timeout_seconds:g} seconds"
@@ -950,43 +952,83 @@ def generate_privacy_one(
 
 def probe_video(*, ffprobe: str, video_path: Path) -> ProbeResult:
     """Read the stable metadata needed to validate one fixture."""
-    completed = run_checked(
-        [
-            ffprobe,
-            "-v",
-            "error",
-            "-show_entries",
-            "stream=codec_type,width,height,avg_frame_rate:format=duration",
-            "-of",
-            "json",
-            str(video_path),
-        ]
-    )
-    try:
-        raw_payload: object = json.loads(completed.stdout)
-        payload = cast(dict[str, object], raw_payload)
-        raw_streams = cast(list[object], payload["streams"])
-        streams = [cast(dict[str, object], item) for item in raw_streams]
-        stream = next(item for item in streams if item.get("codec_type") == "video")
-        media_format = cast(dict[str, object], payload["format"])
-        return ProbeResult(
-            duration_seconds=float(str(media_format["duration"])),
-            width=int(str(stream["width"])),
-            height=int(str(stream["height"])),
-            frame_rate=float(Fraction(str(stream["avg_frame_rate"]))),
-            has_audio=any(item.get("codec_type") == "audio" for item in streams),
-        )
-    except (
-        KeyError,
-        IndexError,
-        StopIteration,
-        TypeError,
-        ValueError,
-        ZeroDivisionError,
-    ) as exc:
-        raise FixtureFactoryError(
-            f"ffprobe returned unexpected metadata for {video_path.name}"
-        ) from exc
+    arguments = [
+        ffprobe,
+        "-v",
+        "error",
+        "-show_entries",
+        "stream=codec_type,width,height,avg_frame_rate:format=duration",
+        "-of",
+        "json",
+        str(video_path),
+    ]
+    maximum_attempts = 2
+    for attempt in range(1, maximum_attempts + 1):
+        completed = run_checked(arguments)
+        try:
+            raw_payload: object = json.loads(completed.stdout)
+            if not isinstance(raw_payload, dict):
+                raise TypeError("invalid_root")
+            payload = cast(dict[str, object], raw_payload)
+            raw_streams = payload["streams"]
+            if not isinstance(raw_streams, list):
+                raise TypeError("invalid_streams")
+            if not all(isinstance(item, dict) for item in raw_streams):
+                raise TypeError("invalid_stream_entry")
+            streams = [cast(dict[str, object], item) for item in raw_streams]
+            stream = next(item for item in streams if item.get("codec_type") == "video")
+            raw_format = payload["format"]
+            if not isinstance(raw_format, dict):
+                raise TypeError("invalid_format")
+            media_format = cast(dict[str, object], raw_format)
+            return ProbeResult(
+                duration_seconds=float(str(media_format["duration"])),
+                width=int(str(stream["width"])),
+                height=int(str(stream["height"])),
+                frame_rate=float(Fraction(str(stream["avg_frame_rate"]))),
+                has_audio=any(item.get("codec_type") == "audio" for item in streams),
+            )
+        except (
+            KeyError,
+            IndexError,
+            StopIteration,
+            TypeError,
+            ValueError,
+            ZeroDivisionError,
+        ) as exc:
+            if isinstance(exc, json.JSONDecodeError):
+                reason = f"invalid_json(line={exc.lineno},column={exc.colno})"
+            elif isinstance(exc, StopIteration):
+                reason = "missing_video_stream"
+            elif isinstance(exc, KeyError):
+                missing = str(exc.args[0]) if exc.args else "unknown"
+                allowed = {
+                    "streams",
+                    "format",
+                    "duration",
+                    "width",
+                    "height",
+                    "avg_frame_rate",
+                }
+                reason = f"missing_{missing}" if missing in allowed else "missing_key"
+            elif isinstance(exc, ZeroDivisionError):
+                reason = "invalid_frame_rate"
+            elif isinstance(exc, TypeError):
+                reason = (
+                    str(exc) if str(exc).startswith("invalid_") else "invalid_shape"
+                )
+            elif isinstance(exc, IndexError):
+                reason = "invalid_streams"
+            else:
+                reason = "invalid_value"
+            if attempt < maximum_attempts:
+                continue
+            raise FixtureFactoryError(
+                "ffprobe returned unexpected metadata after "
+                f"{attempt} attempts for {video_path.name}: {reason}"
+            ) from exc
+
+    raise AssertionError("fixture ffprobe metadata retry loop exhausted unexpectedly")
 
 
 def validate_video(

@@ -9,6 +9,7 @@ import os
 import re
 import stat
 import threading
+import time
 from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -61,6 +62,7 @@ from videoscope.web.storage import LocalJobStore
 
 _JOB_ID = re.compile(r"^[0-9a-f]{32}$")
 _STATE_NAME = "rescue-web-job.json"
+_WINDOWS_REPLACE_RETRY_DELAYS_SECONDS = (0.01, 0.02, 0.04, 0.08, 0.16)
 _PRIVATE_ROOT = "rescue-review-private"
 _PUBLIC_ROOT = "rescue-output"
 _EVENT_LIMIT = 128
@@ -69,6 +71,30 @@ _TERMINAL_SOURCE_PREVIEW = re.compile(r"^source-[0-9]+\.mp4$")
 
 def _os_name() -> str:
     return os.name
+
+
+def _retry_windows_replace(
+    source: Path,
+    destination: Path,
+    *,
+    replace: Callable[[Path, Path], None] | None = None,
+    sleep: Callable[[float], None] | None = None,
+) -> None:
+    replace_file = replace or os.replace
+    sleep_for = sleep or time.sleep
+    for delay in (*_WINDOWS_REPLACE_RETRY_DELAYS_SECONDS, None):
+        try:
+            replace_file(source, destination)
+        except OSError as error:
+            if (
+                delay is None
+                or getattr(error, "winerror", None) != 5
+                or not os.path.lexists(source)
+            ):
+                raise
+            sleep_for(delay)
+        else:
+            return
 
 
 class _SnapshotState(BaseModel):
@@ -1226,7 +1252,7 @@ class RescueJobManager:
             separators=(",", ":"),
         )
         temporary.write_text(content + "\n", encoding="utf-8", newline="\n")
-        temporary.replace(target)
+        _retry_windows_replace(temporary, target)
 
     def _restore_records(self) -> None:
         if not self.job_root.is_dir():

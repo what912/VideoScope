@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import ast
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -12,6 +14,84 @@ from types import SimpleNamespace
 import pytest
 
 from scripts import smoke_test
+
+
+def _embedded_rescue_diagnostic() -> object:
+    tree = ast.parse(smoke_test.RESCUE_SMOKE_DRIVER)
+    selected: list[ast.stmt] = [
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef)
+        and node.name in {"safe_measurement", "verification_diagnostic"}
+    ]
+    namespace: dict[str, object] = {"json": json, "re": re}
+    exec(
+        compile(ast.Module(body=selected, type_ignores=[]), "<rescue-driver>", "exec"),
+        namespace,
+    )
+    return namespace["verification_diagnostic"]
+
+
+def test_rescue_smoke_diagnostic_is_structured_bounded_and_path_safe() -> None:
+    diagnostic = _embedded_rescue_diagnostic()
+    report = SimpleNamespace(
+        checks=(
+            SimpleNamespace(
+                check_id="tonal_improvement",
+                artifact="improved",
+                status=SimpleNamespace(value="needs_review"),
+                required=True,
+                measured={
+                    "delta": 0.0125,
+                    "source": r"C:\Users\Alice\private\source.mp4",
+                    "inline_windows": (r"failed at C:\Users\Alice\private\source.mp4"),
+                    "inline_unc": r"source=\\server\share\private.mp4",
+                    "inline_posix": "source=/home/alice/private/source.mp4",
+                    "samples": [1, 2, 3],
+                },
+            ),
+        )
+    )
+
+    payload = json.loads(diagnostic(report, "improved"))  # type: ignore[operator]
+
+    assert payload == {
+        "artifact": "improved",
+        "checks": [
+            {
+                "check_id": "tonal_improvement",
+                "measured": {
+                    "delta": 0.0125,
+                    "inline_posix": "source=<absolute-path>",
+                    "inline_unc": "source=<absolute-path>",
+                    "inline_windows": "failed at <absolute-path>",
+                    "samples": [1, 2, 3],
+                    "source": "<absolute-path>",
+                },
+                "required": True,
+                "status": "needs_review",
+            }
+        ],
+    }
+
+    oversized_report = SimpleNamespace(
+        checks=tuple(
+            SimpleNamespace(
+                check_id=f"check_{index}",
+                artifact="improved",
+                status=SimpleNamespace(value="needs_review"),
+                required=True,
+                measured={f"metric_{item}": "x" * 500 for item in range(40)},
+            )
+            for index in range(40)
+        )
+    )
+    oversized = diagnostic(oversized_report, "improved")  # type: ignore[operator]
+    oversized_payload = json.loads(oversized)
+
+    assert len(oversized) <= 8000
+    assert oversized_payload["measurements_omitted"] is True
+    assert len(oversized_payload["checks"]) == 32
 
 
 def test_offline_install_command_denies_index_and_dependency_resolution(
@@ -114,7 +194,21 @@ def test_smoke_inputs_are_mode_specific_and_offline_generated(
         "Generate Video Rescue smoke fixture",
     ]
     assert "-an" in observed[1][0]
-    assert any("eq=brightness=-0.35,noise=" in value for value in observed[2][0])
+    rescue_command = observed[2][0]
+    assert any("eq=brightness=-0.35,noise=" in value for value in rescue_command)
+    assert any("all_seed=42" in value for value in rescue_command)
+    for option, expected in (
+        ("-q:v", "3"),
+        ("-r", "10"),
+        ("-t", "6"),
+        ("-g", "1"),
+        ("-b:a", "128k"),
+        ("-threads", "1"),
+        ("-video_track_timescale", "10000"),
+    ):
+        assert rescue_command[rescue_command.index(option) + 1] == expected
+    assert rescue_command.count("+bitexact") == 3
+    assert rescue_command[rescue_command.index("-map_metadata") + 1] == "-1"
 
 
 def test_run_command_maps_a_bounded_timeout_to_smoke_error(

@@ -774,6 +774,169 @@ def _upload(client: TestClient) -> dict[str, Any]:
     return cast(dict[str, Any], response.json())
 
 
+def _winerror(code: int) -> PermissionError:
+    error = PermissionError("injected Windows replace failure")
+    error.winerror = code  # type: ignore[attr-defined]
+    return error
+
+
+def test_rescue_job_windows_replace_retries_transient_access_denial(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "rescue-web-job.json.tmp"
+    destination = tmp_path / "rescue-web-job.json"
+    source.write_bytes(b"new")
+    destination.write_bytes(b"old")
+    attempts = 0
+    delays: list[float] = []
+
+    def replace(observed_source: Path, observed_destination: Path) -> None:
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise _winerror(5)
+        os.replace(observed_source, observed_destination)
+
+    rescue_jobs_module._retry_windows_replace(
+        source,
+        destination,
+        replace=replace,
+        sleep=delays.append,
+    )
+
+    assert attempts == 2
+    assert delays == [0.01]
+    assert destination.read_bytes() == b"new"
+    assert not source.exists()
+
+
+def test_rescue_job_windows_replace_surfaces_exhausted_access_denial(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "rescue-web-job.json.tmp"
+    destination = tmp_path / "rescue-web-job.json"
+    source.write_bytes(b"new")
+    destination.write_bytes(b"old")
+    attempts = 0
+    delays: list[float] = []
+    final_error = _winerror(5)
+
+    def replace(_source: Path, _destination: Path) -> None:
+        nonlocal attempts
+        attempts += 1
+        raise final_error
+
+    with pytest.raises(PermissionError) as caught:
+        rescue_jobs_module._retry_windows_replace(
+            source,
+            destination,
+            replace=replace,
+            sleep=delays.append,
+        )
+
+    assert caught.value is final_error
+    assert attempts == 6
+    assert delays == [0.01, 0.02, 0.04, 0.08, 0.16]
+    assert source.read_bytes() == b"new"
+    assert destination.read_bytes() == b"old"
+
+
+def test_rescue_job_windows_replace_does_not_retry_other_errors(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "rescue-web-job.json.tmp"
+    destination = tmp_path / "rescue-web-job.json"
+    source.write_bytes(b"new")
+    destination.write_bytes(b"old")
+    attempts = 0
+    delays: list[float] = []
+    final_error = _winerror(32)
+
+    def replace(_source: Path, _destination: Path) -> None:
+        nonlocal attempts
+        attempts += 1
+        raise final_error
+
+    with pytest.raises(PermissionError) as caught:
+        rescue_jobs_module._retry_windows_replace(
+            source,
+            destination,
+            replace=replace,
+            sleep=delays.append,
+        )
+
+    assert caught.value is final_error
+    assert attempts == 1
+    assert delays == []
+    assert source.read_bytes() == b"new"
+    assert destination.read_bytes() == b"old"
+
+
+def test_rescue_job_windows_replace_does_not_retry_after_source_disappears(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "rescue-web-job.json.tmp"
+    destination = tmp_path / "rescue-web-job.json"
+    source.write_bytes(b"new")
+    destination.write_bytes(b"old")
+    attempts = 0
+    delays: list[float] = []
+    final_error = _winerror(5)
+
+    def replace(observed_source: Path, _destination: Path) -> None:
+        nonlocal attempts
+        attempts += 1
+        observed_source.unlink()
+        raise final_error
+
+    with pytest.raises(PermissionError) as caught:
+        rescue_jobs_module._retry_windows_replace(
+            source,
+            destination,
+            replace=replace,
+            sleep=delays.append,
+        )
+
+    assert caught.value is final_error
+    assert attempts == 1
+    assert delays == []
+    assert not source.exists()
+    assert destination.read_bytes() == b"old"
+
+
+def test_rescue_reserve_recovers_from_transient_state_replace_denial(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original_replace = os.replace
+    state_attempts = 0
+
+    def replace(source: Path, destination: Path) -> None:
+        nonlocal state_attempts
+        if Path(destination).name == "rescue-web-job.json":
+            state_attempts += 1
+            if state_attempts == 1:
+                raise _winerror(5)
+        original_replace(source, destination)
+
+    monkeypatch.setattr(os, "replace", replace)
+    manager = RescueJobManager(_config(tmp_path), pipeline_factory=FakeRescuePipeline)
+    try:
+        record = manager.reserve_job(
+            original_filename="clip.mp4",
+            strategy=RescueStrategy.CONSERVATIVE,
+        )
+        persisted = json.loads(
+            (record.directory / "rescue-web-job.json").read_text(encoding="utf-8")
+        )
+        reserve_attempts = state_attempts
+    finally:
+        manager.shutdown()
+
+    assert reserve_attempts == 2
+    assert persisted["status"] == "queued"
+
+
 def _awaiting_fake_job(
     manager: RescueJobManager,
 ) -> tuple[Any, FakeRescuePipeline, int]:
