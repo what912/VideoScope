@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import math
-import os
 import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -39,6 +38,7 @@ from videoscope.rescue.models import (
 from videoscope.rescue.qualification import (
     validate_plan_sharpen_output_range_contracts,
 )
+from videoscope.rescue.serialization import _retry_windows_replace
 from videoscope.rescue.stabilization import render_stabilized_video
 from videoscope.rescue.timeline import (
     SourceMapping,
@@ -352,7 +352,7 @@ class RescuePreviewBuilder:
                     raise RescueMediaError(
                         "private restoration preview was not created"
                     )
-                os.replace(temporary, target_path)
+                _retry_windows_replace(temporary, target_path)
                 rendered_action_ids.add(action.id)
             finally:
                 temporary.unlink(missing_ok=True)

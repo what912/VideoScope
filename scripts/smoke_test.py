@@ -831,7 +831,9 @@ def prepare_smoke_inputs(
             "-i",
             "sine=frequency=440:sample_rate=48000:duration=6",
             "-vf",
-            "eq=brightness=-0.35,noise=alls=20:allf=t:all_seed=42",
+            # Keep the guarded lift clear of both luma qualification bounds
+            # across one-code-value differences between FFmpeg builds.
+            "eq=brightness=-0.47,noise=alls=22:allf=t:all_seed=42",
             "-map",
             "0:v:0",
             "-map",

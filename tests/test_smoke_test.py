@@ -195,8 +195,10 @@ def test_smoke_inputs_are_mode_specific_and_offline_generated(
     ]
     assert "-an" in observed[1][0]
     rescue_command = observed[2][0]
-    assert any("eq=brightness=-0.35,noise=" in value for value in rescue_command)
-    assert any("all_seed=42" in value for value in rescue_command)
+    assert any(
+        "eq=brightness=-0.47,noise=alls=22:allf=t:all_seed=42" in value
+        for value in rescue_command
+    )
     for option, expected in (
         ("-q:v", "3"),
         ("-r", "10"),

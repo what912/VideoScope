@@ -159,15 +159,13 @@ def test_privacy_windows_replace_retries_transient_access_denial(
     destination = tmp_path / "result.json"
     source.write_bytes(b"new")
     destination.write_bytes(b"old")
-    attempts = 0
+    calls: list[tuple[Path, Path]] = []
     delays: list[float] = []
 
     def replace(observed_source: Path, observed_destination: Path) -> None:
-        nonlocal attempts
-        attempts += 1
-        if attempts == 1:
+        calls.append((observed_source, observed_destination))
+        if len(calls) == 1:
             raise _winerror(5)
-        os.replace(observed_source, observed_destination)
 
     serialization_module._retry_windows_replace(
         source,
@@ -176,10 +174,10 @@ def test_privacy_windows_replace_retries_transient_access_denial(
         sleep=delays.append,
     )
 
-    assert attempts == 2
+    assert calls == [(source, destination), (source, destination)]
     assert delays == [0.01]
-    assert destination.read_bytes() == b"new"
-    assert not source.exists()
+    assert source.read_bytes() == b"new"
+    assert destination.read_bytes() == b"old"
 
 
 def test_privacy_windows_replace_surfaces_exhausted_access_denial(

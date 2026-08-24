@@ -13,6 +13,7 @@ from typing import Any, cast
 import pytest
 
 from videoscope.domain import VideoMetadata
+from videoscope.rescue import preview as preview_module
 from videoscope.rescue.commands import (
     build_improved_viewing_command,
     build_preview_commands,
@@ -1146,6 +1147,7 @@ def test_preview_records_only_actions_intersecting_an_issued_preview(
 
 def test_stabilization_preview_identity_requires_a_rendered_correction(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A range-only intersection cannot stand in for an actual anchor correction."""
     source_hash = "9" * 64
@@ -1208,6 +1210,18 @@ def test_stabilization_preview_identity_requires_a_rendered_correction(
     )
     rendered: list[tuple[MotionTransform, ...]] = []
     encode_configs: list[RescueEffectiveConfig] = []
+    replacements: list[tuple[Path, Path]] = []
+
+    def replace_preview(source: Path, destination: Path) -> None:
+        replacements.append((source, destination))
+        destination.write_bytes(source.read_bytes())
+        source.unlink()
+
+    monkeypatch.setattr(
+        preview_module,
+        "_retry_windows_replace",
+        replace_preview,
+    )
 
     def render_anchor(
         source: Path,
@@ -1235,6 +1249,9 @@ def test_stabilization_preview_identity_requires_a_rendered_correction(
         start <= correction.timestamp_seconds < end
         for start, end in plan.preview_ranges
     )
+    assert [
+        (source.name, destination.name) for source, destination in replacements
+    ] == [(".faithful-00.mp4.stabilize.partial.mp4", "faithful-00.mp4")]
     assert action.id in previews.previewed_action_ids
 
 
