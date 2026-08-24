@@ -910,6 +910,131 @@ def _renderer_probe() -> dict[str, object]:
     }
 
 
+@pytest.mark.parametrize(
+    "first_stdout",
+    (
+        '{"streams":[',
+        json.dumps({"streams": []}),
+    ),
+)
+def test_probe_audio_retries_once_after_zero_exit_unusable_payload(
+    first_stdout: str,
+) -> None:
+    expected = _renderer_probe()
+    attempts = 0
+
+    def runner(arguments: tuple[str, ...]) -> CommandResult:
+        nonlocal attempts
+        attempts += 1
+        stdout = first_stdout if attempts == 1 else json.dumps(expected)
+        return CommandResult(0, "", stdout)
+
+    payload = tonal_module._probe_audio(
+        Path("private candidate.mp4"), Path("ffprobe"), runner
+    )
+
+    assert payload == expected
+    assert attempts == 2
+
+
+def test_probe_audio_fails_closed_after_two_invalid_json_results() -> None:
+    attempts = 0
+    private_marker = "C:/x.mp4"
+    malformed_stdout = '{"format":{"filename":"C:/x.mp4"}'
+
+    def runner(arguments: tuple[str, ...]) -> CommandResult:
+        nonlocal attempts
+        attempts += 1
+        return CommandResult(0, "", malformed_stdout)
+
+    with pytest.raises(RescueMediaError) as caught:
+        tonal_module._probe_audio(
+            Path("private candidate.mp4"), Path("ffprobe"), runner
+        )
+
+    assert attempts == 2
+    assert caught.value.internal_message == (
+        "tonal media probe returned invalid JSON after 2 attempts (line 1, column 34)"
+    )
+    assert private_marker not in caught.value.internal_message
+    assert caught.value.__cause__ is None
+    assert caught.value.__context__ is None
+
+
+def test_probe_audio_fails_closed_after_two_incomplete_payloads() -> None:
+    attempts = 0
+
+    def runner(arguments: tuple[str, ...]) -> CommandResult:
+        nonlocal attempts
+        attempts += 1
+        return CommandResult(0, "", json.dumps({"streams": []}))
+
+    with pytest.raises(RescueMediaError) as caught:
+        tonal_module._probe_audio(
+            Path("private candidate.mp4"), Path("ffprobe"), runner
+        )
+
+    assert attempts == 2
+    assert caught.value.internal_message == (
+        "tonal media probe returned incomplete data after 2 attempts"
+    )
+
+
+def test_probe_audio_retries_once_after_zero_exit_non_text_stdout() -> None:
+    expected = _renderer_probe()
+    attempts = 0
+
+    def runner(arguments: tuple[str, ...]) -> CommandResult:
+        nonlocal attempts
+        attempts += 1
+        stdout: Any = None if attempts == 1 else json.dumps(expected)
+        return CommandResult(0, "", stdout)
+
+    payload = tonal_module._probe_audio(
+        Path("private candidate.mp4"), Path("ffprobe"), runner
+    )
+
+    assert payload == expected
+    assert attempts == 2
+
+
+def test_probe_audio_fails_closed_after_two_non_text_stdout_results() -> None:
+    attempts = 0
+
+    def runner(arguments: tuple[str, ...]) -> CommandResult:
+        nonlocal attempts
+        attempts += 1
+        stdout: Any = None
+        return CommandResult(0, "", stdout)
+
+    with pytest.raises(RescueMediaError) as caught:
+        tonal_module._probe_audio(
+            Path("private candidate.mp4"), Path("ffprobe"), runner
+        )
+
+    assert attempts == 2
+    assert caught.value.internal_message == (
+        "tonal media probe returned non-text JSON after 2 attempts"
+    )
+    assert caught.value.__cause__ is None
+    assert caught.value.__context__ is None
+
+
+def test_probe_audio_does_not_retry_nonzero_result() -> None:
+    attempts = 0
+
+    def runner(arguments: tuple[str, ...]) -> CommandResult:
+        nonlocal attempts
+        attempts += 1
+        return CommandResult(9, "private diagnostic", "{")
+
+    with pytest.raises(RescueMediaError) as caught:
+        tonal_module._probe_audio(Path("candidate.mp4"), Path("ffprobe"), runner)
+
+    assert attempts == 1
+    assert caught.value.internal_message == "tonal media probe failed"
+
+
 def test_renderer_uses_argv_streams_blocks_and_publishes_no_clobber(
     tmp_path: Path,
 ) -> None:

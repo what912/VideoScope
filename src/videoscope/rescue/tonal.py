@@ -32,6 +32,7 @@ if TYPE_CHECKING:
 _ALGORITHM_VERSION: Final = "tonal-interference-v1"
 _NOTCH_SETTLING_SAFETY_DB: Final = 3.0
 _RENDER_QUALIFICATION_WINDOW_SECONDS: Final = 0.05
+_TONAL_PROBE_ATTEMPTS: Final = 2
 
 
 class _TonalModel(BaseModel):
@@ -1050,27 +1051,58 @@ def _probe_audio(
     ffprobe_path: Path,
     runner: Callable[[tuple[str, ...]], CommandResult],
 ) -> dict[str, object]:
-    result = runner(
-        (
-            str(ffprobe_path),
-            "-v",
-            "error",
-            "-show_streams",
-            "-show_format",
-            "-of",
-            "json",
-            str(path),
-        )
+    command = (
+        str(ffprobe_path),
+        "-v",
+        "error",
+        "-show_streams",
+        "-show_format",
+        "-of",
+        "json",
+        str(path),
     )
-    if result.returncode != 0:
-        raise RescueMediaError("tonal media probe failed")
-    try:
-        payload = json.loads(result.stdout_summary)
-    except (json.JSONDecodeError, TypeError) as exc:
-        raise RescueMediaError("tonal media probe returned invalid JSON") from exc
-    if not isinstance(payload, dict):
-        raise RescueMediaError("tonal media probe returned invalid data")
-    return cast(dict[str, object], payload)
+    for attempt in range(1, _TONAL_PROBE_ATTEMPTS + 1):
+        result = runner(command)
+        if result.returncode != 0:
+            raise RescueMediaError("tonal media probe failed")
+        decode_position: tuple[int, int] | None = None
+        non_text_stdout = False
+        payload: object = None
+        try:
+            payload = json.loads(result.stdout_summary)
+        except json.JSONDecodeError as exc:
+            decode_position = (exc.lineno, exc.colno)
+        except TypeError:
+            non_text_stdout = True
+        if decode_position is not None:
+            if attempt < _TONAL_PROBE_ATTEMPTS:
+                continue
+            line, column = decode_position
+            raise RescueMediaError(
+                "tonal media probe returned invalid JSON after "
+                f"{attempt} attempts (line {line}, column {column})"
+            )
+        if non_text_stdout:
+            if attempt < _TONAL_PROBE_ATTEMPTS:
+                continue
+            raise RescueMediaError(
+                f"tonal media probe returned non-text JSON after {attempt} attempts"
+            )
+        if isinstance(payload, dict):
+            streams = payload.get("streams")
+            raw_format = payload.get("format")
+            if (
+                isinstance(streams, list)
+                and all(isinstance(stream, dict) for stream in streams)
+                and isinstance(raw_format, dict)
+            ):
+                return cast(dict[str, object], payload)
+        if attempt >= _TONAL_PROBE_ATTEMPTS:
+            raise RescueMediaError(
+                f"tonal media probe returned incomplete data after {attempt} attempts"
+            )
+
+    raise AssertionError("tonal media probe retry loop exhausted unexpectedly")
 
 
 def _audio_properties(
