@@ -98,7 +98,7 @@ def test_offline_install_command_denies_index_and_dependency_resolution(
     tmp_path: Path,
 ) -> None:
     python = tmp_path / "venv" / "python"
-    wheel = tmp_path / "genvideoscope-0.8.0-py3-none-any.whl"
+    wheel = tmp_path / "genvideoscope-0.8.1-py3-none-any.whl"
 
     command = smoke_test.wheel_install_command(
         python,
@@ -122,7 +122,7 @@ def test_clean_install_command_keeps_normal_dependency_resolution(
     tmp_path: Path,
 ) -> None:
     python = tmp_path / "venv" / "python"
-    wheel = tmp_path / "genvideoscope-0.8.0-py3-none-any.whl"
+    wheel = tmp_path / "genvideoscope-0.8.1-py3-none-any.whl"
 
     command = smoke_test.wheel_install_command(
         python,

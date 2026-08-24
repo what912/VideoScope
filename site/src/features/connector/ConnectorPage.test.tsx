@@ -8,7 +8,7 @@ import { ConnectorPage } from "./ConnectorPage";
 const readyStatus = {
   status: "ready",
   service: "VideoScope Local Connector",
-  version: "0.8.0",
+  version: "0.8.1",
   pairing_required: true,
   credentials_persisted: false,
   modes: ["publish_ready", "safe_sharing", "video_rescue", "useful_content", "advanced_ai"],

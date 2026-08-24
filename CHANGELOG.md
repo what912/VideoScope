@@ -6,6 +6,36 @@
 
 ## [Unreleased]
 
+### Added
+
+- Reproducible, project-authored public case studies and a deterministic local
+  four-mode demonstration with explicit media provenance and contract checks.
+- Bounded Video Rescue V15 qualification for measured tonal, clarity, audio,
+  and stabilization candidates while preserving preview, confirmation, source
+  immutability, and independent verification gates.
+
+### Changed
+
+- The public site now leads with verified rescue outcomes and exposes focused
+  download, examples, developer, community, roadmap, and case-study routes.
+- CI and native release validation pin FFmpeg and ffprobe 8.1.2 for the
+  version-sensitive media qualification gates.
+
+### Fixed
+
+- Hardened Windows atomic publication and bounded retry behavior across Safe
+  Sharing, Video Rescue, Long Video to Useful Content, demo verification, and
+  validation-controller paths without treating target collisions as success.
+- Removed a Publish Ready SSE test race by waiting for callback registration
+  before delivering the synthetic event.
+
+### Security and privacy
+
+- Updated the public-site lockfile to a non-vulnerable transitive `nanoid`
+  version without changing the declared dependency surface.
+- Tightened public-case provenance, allowlists, path containment, serialized
+  evidence, and no-clobber validation roots.
+
 ## [0.8.0] - 2026-08-11
 
 ### Added

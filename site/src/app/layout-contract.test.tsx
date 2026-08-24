@@ -22,7 +22,8 @@ const workspaceCss = readFileSync(
 describe("application shell layout contract", () => {
   let styles: HTMLStyleElement;
 
-  beforeAll(() => {
+  beforeAll(async () => {
+    await import("../features/workspace/WorkspacePage");
     styles = document.createElement("style");
     styles.textContent = `${tokensCss}\n${globalsCss}\n${workspaceCss}`;
     document.head.append(styles);

@@ -1,2 +1,3 @@
 src/videoscope/web/static/** text eol=lf
 web/public/** text eol=lf
+site/public/cases/**/public-report.json text eol=lf

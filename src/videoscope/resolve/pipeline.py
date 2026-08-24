@@ -8,6 +8,7 @@ import os
 import shutil
 import sys
 import tempfile
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
@@ -54,6 +55,8 @@ from videoscope.resolve.serialization import (
 )
 from videoscope.resolve.verification import PublishVerifier
 from videoscope.video import VideoProcessingError, compute_file_sha256
+
+_WINDOWS_NO_REPLACE_RETRY_DELAYS_SECONDS = (0.01, 0.02, 0.04, 0.08, 0.16)
 
 ProgressCallback = Callable[[str], None]
 CancellationCallback = Callable[[], bool]
@@ -625,12 +628,26 @@ class PublishReadyPipeline:
         if os.name == "nt":
             win_dll = getattr(ctypes, "WinDLL")
             kernel32 = win_dll("kernel32", use_last_error=True)
-            if kernel32.MoveFileExW(str(workspace), str(output), 0x00000008) == 0:
+            retry_delays: tuple[float | None, ...] = (
+                *_WINDOWS_NO_REPLACE_RETRY_DELAYS_SECONDS,
+                None,
+            )
+            for retry_delay in retry_delays:
+                if kernel32.MoveFileExW(str(workspace), str(output), 0x00000008) != 0:
+                    return
                 error_code = int(getattr(ctypes, "get_last_error")())
                 if error_code in {80, 183}:
                     raise FileExistsError(error_code, os.strerror(error_code), output)
-                raise OSError(error_code, os.strerror(error_code), output)
-            return
+                error = OSError(error_code, os.strerror(error_code), output)
+                if (
+                    error_code != 5
+                    or retry_delay is None
+                    or not os.path.lexists(workspace)
+                    or os.path.lexists(output)
+                ):
+                    raise error
+                time.sleep(retry_delay)
+            raise AssertionError("Windows directory rename retry loop exhausted")
         if sys.platform == "linux":
             libc = ctypes.CDLL(None, use_errno=True)
             renameat2 = getattr(libc, "renameat2", None)

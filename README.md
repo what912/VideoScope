@@ -98,7 +98,7 @@ VideoScope 可以把本地长视频整理成可复核、可追溯的成品，全
 **选定片段**（只导出用户明确选择的时刻）。
 
 ```powershell
-python -m pip install https://github.com/what912/VideoScope/releases/download/v0.8.0/genvideoscope-0.8.0-py3-none-any.whl
+python -m pip install https://github.com/what912/VideoScope/releases/download/v0.8.1/genvideoscope-0.8.1-py3-none-any.whl
 videoscope content meeting.mp4 `
   --goal faithful_clean `
   --exclude-range 120:148:"Long reviewed pause" `
@@ -127,7 +127,7 @@ video, and audio problems. It never overwrites the source. Install the base whee
 and provide local `ffmpeg` and `ffprobe` on `PATH`:
 
 ```powershell
-python -m pip install https://github.com/what912/VideoScope/releases/download/v0.8.0/genvideoscope-0.8.0-py3-none-any.whl
+python -m pip install https://github.com/what912/VideoScope/releases/download/v0.8.1/genvideoscope-0.8.1-py3-none-any.whl
 videoscope doctor
 videoscope rescue input.mp4 `
   --output runs\video-rescue `
@@ -336,7 +336,7 @@ brew install ffmpeg
 安装公开的 GitHub 开发候选版：
 
 ```powershell
-python -m pip install https://github.com/what912/VideoScope/releases/download/v0.8.0/genvideoscope-0.8.0-py3-none-any.whl
+python -m pip install https://github.com/what912/VideoScope/releases/download/v0.8.1/genvideoscope-0.8.1-py3-none-any.whl
 videoscope doctor
 ```
 
@@ -366,7 +366,7 @@ python scripts/validate.py
 
 ```powershell
 python -m build
-python -m pip install dist/genvideoscope-0.8.0-py3-none-any.whl
+python -m pip install dist/genvideoscope-0.8.1-py3-none-any.whl
 ```
 
 正式上传 PyPI 后，用户安装命令将是：
@@ -603,7 +603,8 @@ npm test
 npm run build
 ```
 
-发布检查见 [docs/release-checklist.md](docs/release-checklist.md)。当前
+`v0.8.1` 候选的发布检查见
+[docs/releases/v0.8.1-checklist.md](docs/releases/v0.8.1-checklist.md)。当前
 `0.8.0` Advanced AI 与 BYOK 连接器稳定版的最终实测结论记录在
 [release-audit.md](release-audit.md)；未执行的外部验证会明确标记为未验证。
 
