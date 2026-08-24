@@ -13,6 +13,7 @@ recursive-include examples *.py *.ps1 *.sh *.yaml *.json
 recursive-include scripts *.py
 recursive-include tests *.py *.json
 recursive-include src/videoscope/web/static *
+prune docs/superpowers
 prune runs
 prune videoscope-output
 prune tests/fixtures/generated

@@ -1799,11 +1799,16 @@ def _retry_windows_no_replace_rename(
         try:
             rename(source, target)
         except OSError as error:
+            if getattr(error, "winerror", None) == 5 and os.path.lexists(target):
+                raise FileExistsError(
+                    errno.EEXIST,
+                    "destination already exists",
+                    str(target),
+                ) from error
             if (
                 delay is None
                 or getattr(error, "winerror", None) != 5
                 or not os.path.lexists(source)
-                or os.path.lexists(target)
             ):
                 raise
             sleep(delay)

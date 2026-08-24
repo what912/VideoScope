@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import errno
 import hashlib
 import importlib
 import json
@@ -890,7 +891,7 @@ def test_bundle_rejects_private_paths_and_nonfinite_json(
 
 def _winerror_5() -> PermissionError:
     error = PermissionError("injected Windows sharing violation")
-    error.winerror = 5
+    setattr(error, "winerror", 5)
     return error
 
 
@@ -971,7 +972,7 @@ def test_verifier_windows_no_replace_rename_stops_when_target_appears(
         (observed_target / "winner.txt").write_bytes(b"race-winner")
         raise error
 
-    with pytest.raises(PermissionError) as caught:
+    with pytest.raises(FileExistsError) as caught:
         module._retry_windows_no_replace_rename(
             source,
             target,
@@ -979,7 +980,9 @@ def test_verifier_windows_no_replace_rename_stops_when_target_appears(
             sleep=delays.append,
         )
 
-    assert caught.value is error
+    assert caught.value.__cause__ is error
+    assert caught.value.errno == errno.EEXIST
+    assert caught.value.filename == str(target)
     assert attempts == 1
     assert delays == []
     assert (source / "metrics.json").read_bytes() == b"complete-bundle"
@@ -1028,7 +1031,7 @@ def test_verifier_windows_no_replace_rename_does_not_retry_other_os_errors(
     attempts = 0
     delays: list[float] = []
     error = OSError("injected non-Windows error")
-    error.winerror = 32
+    setattr(error, "winerror", 32)
 
     def rename(_source: Path, _target: Path) -> None:
         nonlocal attempts

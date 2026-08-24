@@ -131,6 +131,12 @@ SDIST_PERSONAL_PATH_SOURCE_LITERAL_EXEMPTIONS = {
             '"C:/Users/Alice/private.mp4"',
         }
     ),
+    "tests/rescue/test_v15_clarity_node_contract.py": frozenset(
+        {
+            r'r"C:\Users\person\audit.json"',
+            '"C:/Users/private/fixed-ffmpeg.exe"',
+        }
+    ),
 }
 STATIC_ASSET_REFERENCE = re.compile(
     r"(?:src|href)=[\"'](?P<path>/?assets/index-[A-Za-z0-9_-]+\.(?:js|css))[\"']"
