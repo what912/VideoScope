@@ -103,3 +103,9 @@ def test_public_case_reports_checkout_as_canonical_lf_bytes() -> None:
         payload = (REPOSITORY / "site" / "public" / repository_path).read_bytes()
         assert b"\r\n" not in payload
         assert sha256(payload).hexdigest() == hashes["publicReport"]
+
+
+def test_python_crlf_is_not_reported_as_trailing_whitespace() -> None:
+    """Default diff checks must accept inherited CRLF Python blobs."""
+    attributes = read_text(".gitattributes").splitlines()
+    assert "*.py whitespace=cr-at-eol" in attributes
