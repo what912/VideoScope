@@ -333,7 +333,7 @@ brew install ffmpeg
 
 ## 安装
 
-安装当前已发布的稳定版（currently published stable `v0.8.0` release, not the `v0.8.1` development candidate）：
+安装当前已发布的稳定版（currently published stable `v0.8.0` release）：
 
 ```powershell
 python -m pip install https://github.com/what912/VideoScope/releases/download/v0.8.0/genvideoscope-0.8.0-py3-none-any.whl
@@ -362,20 +362,21 @@ python -m pip install -e ".[dev]"
 python scripts/validate.py
 ```
 
-构建并安装本地候选 wheel：
+构建并安装本地 wheel：
 
 ```powershell
 python -m build
 python -m pip install dist/genvideoscope-0.8.1-py3-none-any.whl
 ```
 
-正式上传 PyPI 后，用户安装命令将是：
+v0.8.1 正式上传 PyPI 后，精确版本安装命令将是：
 
 ```text
-python -m pip install genvideoscope
+python -m pip install genvideoscope==0.8.1
 ```
 
-本仓库不会自动执行该发布操作。
+PyPI distribution 名称为 `genvideoscope`；Python import 和 CLI 名称仍为
+`videoscope`。在 PyPI 项目页显示该版本之前，不应执行这条命令。
 
 ## CLI
 
@@ -577,9 +578,10 @@ Benchmark 分 detector 报告 temporal IoU、event precision/recall/F1、起止
 
 ## Roadmap
 
-The `0.8.0` release adds grounded, human-reviewed local or BYOK AI assistance on top
-of the completed Check → A → D/B → C foundation. The base installation remains
-local-first, CPU-only and model-free. 后续方向是：
+The `0.8.1` finalization stabilizes the completed Check → A → D/B → C
+foundation, including bounded Video Rescue qualification and reproducible
+public evidence. The base installation remains local-first, CPU-only and
+model-free. 后续方向是：
 
 - 独立真实标注集校准和性能基准；
 - 更严格的 schema 迁移机制；
@@ -603,9 +605,9 @@ npm test
 npm run build
 ```
 
-`v0.8.1` 候选的发布检查见
+`v0.8.1` 的最终定稿与发布检查见
 [docs/releases/v0.8.1-checklist.md](docs/releases/v0.8.1-checklist.md)。当前
-`0.8.0` Advanced AI 与 BYOK 连接器稳定版的最终实测结论记录在
+`0.8.0` Advanced AI 与 BYOK 连接器的历史实测结论记录在
 [release-audit.md](release-audit.md)；未执行的外部验证会明确标记为未验证。
 
 ## 许可证与引用

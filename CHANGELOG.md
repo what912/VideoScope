@@ -6,6 +6,8 @@
 
 ## [Unreleased]
 
+## [0.8.1] - Pending publication
+
 ### Added
 
 - Reproducible, project-authored public case studies and a deterministic local
