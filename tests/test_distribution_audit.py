@@ -12,6 +12,39 @@ import pytest
 from scripts import audit_distribution
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+THIRD_PARTY_NOTICE_NAME = "THIRD_PARTY_NOTICES.txt"
+
+
+def clean_wheel_members(*, third_party_notice: str | None) -> dict[str, str]:
+    """Return one complete synthetic runtime wheel member set."""
+    members = {
+        "videoscope/__init__.py": '__version__ = "0.1.0"\n',
+        "videoscope/reporting/templates/report.html.j2": "<html></html>",
+        "videoscope/privacy/pipeline.py": "# Safe Sharing runtime\n",
+        "videoscope/privacy/verification.py": "# privacy verification\n",
+        "videoscope/rescue/models.py": "# Rescue models\n",
+        "videoscope/rescue/pipeline.py": "# Rescue pipeline\n",
+        "videoscope/rescue/verification.py": "# Rescue verification\n",
+        "videoscope/content/models.py": "# Content models\n",
+        "videoscope/content/pipeline.py": "# Content pipeline\n",
+        "videoscope/content/verification.py": "# Content verification\n",
+        "videoscope/intelligence/models.py": "# Advanced AI models\n",
+        "videoscope/intelligence/pipeline.py": "# Advanced AI pipeline\n",
+        "videoscope/intelligence/providers/ollama.py": "# Ollama provider\n",
+        "videoscope/reporting/templates/rescue_report.html.j2": "<html></html>",
+        "videoscope/reporting/templates/content_report.html.j2": "<html></html>",
+        "videoscope/web/static/index.html": (
+            '<link rel="stylesheet" href="/assets/index-a1.css">'
+            '<script type="module" src="/assets/index-b2.js"></script>'
+        ),
+        "videoscope/web/static/assets/index-a1.css": "body {}",
+        "videoscope/web/static/assets/index-b2.js": "export {};",
+    }
+    if third_party_notice is not None:
+        members["genvideoscope-0.1.0.dist-info/licenses/THIRD_PARTY_NOTICES.txt"] = (
+            third_party_notice
+        )
+    return members
 
 
 def make_wheel(path: Path, members: dict[str, str]) -> None:
@@ -21,36 +54,155 @@ def make_wheel(path: Path, members: dict[str, str]) -> None:
             archive.writestr(name, content)
 
 
-def test_clean_wheel_passes_audit(tmp_path: Path) -> None:
-    wheel = tmp_path / "videoscope-0.1.0-py3-none-any.whl"
+def add_dashboard_notice_to_sdist(
+    archive: tarfile.TarFile,
+    root_name: str,
+) -> None:
+    """Add the real frozen dashboard notice to a synthetic clean sdist."""
+    payload = audit_distribution.THIRD_PARTY_NOTICE_PATH.read_bytes()
+    info = tarfile.TarInfo(f"{root_name}/{THIRD_PARTY_NOTICE_NAME}")
+    info.size = len(payload)
+    archive.addfile(info, io.BytesIO(payload))
+
+
+def test_clean_wheel_passes_audit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    wheel = tmp_path / "genvideoscope-0.1.0-py3-none-any.whl"
+    expected_notice = tmp_path / THIRD_PARTY_NOTICE_NAME
+    expected_notice.write_text("reviewed dashboard notices\n", encoding="utf-8")
+    monkeypatch.setattr(
+        audit_distribution,
+        "THIRD_PARTY_NOTICE_PATH",
+        expected_notice,
+        raising=False,
+    )
     make_wheel(
         wheel,
-        {
-            "videoscope/__init__.py": '__version__ = "0.1.0"\n',
-            "videoscope/reporting/templates/report.html.j2": "<html></html>",
-            "videoscope/privacy/pipeline.py": "# Safe Sharing runtime\n",
-            "videoscope/privacy/verification.py": "# privacy verification\n",
-            "videoscope/rescue/models.py": "# Rescue models\n",
-            "videoscope/rescue/pipeline.py": "# Rescue pipeline\n",
-            "videoscope/rescue/verification.py": "# Rescue verification\n",
-            "videoscope/content/models.py": "# Content models\n",
-            "videoscope/content/pipeline.py": "# Content pipeline\n",
-            "videoscope/content/verification.py": "# Content verification\n",
-            "videoscope/intelligence/models.py": "# Advanced AI models\n",
-            "videoscope/intelligence/pipeline.py": "# Advanced AI pipeline\n",
-            "videoscope/intelligence/providers/ollama.py": "# Ollama provider\n",
-            "videoscope/reporting/templates/rescue_report.html.j2": "<html></html>",
-            "videoscope/reporting/templates/content_report.html.j2": "<html></html>",
-            "videoscope/web/static/index.html": (
-                '<link rel="stylesheet" href="/assets/index-a1.css">'
-                '<script type="module" src="/assets/index-b2.js"></script>'
-            ),
-            "videoscope/web/static/assets/index-a1.css": "body {}",
-            "videoscope/web/static/assets/index-b2.js": "export {};",
-        },
+        clean_wheel_members(third_party_notice="reviewed dashboard notices\r\n"),
     )
 
     assert audit_distribution.audit_archive(wheel) == ()
+
+
+def test_wheel_rejects_missing_dashboard_third_party_notice(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    expected_notice = tmp_path / THIRD_PARTY_NOTICE_NAME
+    expected_notice.write_text("reviewed dashboard notices\n", encoding="utf-8")
+    monkeypatch.setattr(
+        audit_distribution,
+        "THIRD_PARTY_NOTICE_PATH",
+        expected_notice,
+        raising=False,
+    )
+    wheel = tmp_path / "genvideoscope-0.1.0-py3-none-any.whl"
+    make_wheel(wheel, clean_wheel_members(third_party_notice=None))
+
+    violations = audit_distribution.audit_archive(wheel)
+
+    assert any("dashboard third-party notice is missing" in item for item in violations)
+
+
+def test_wheel_rejects_drifted_dashboard_third_party_notice(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    expected_notice = tmp_path / THIRD_PARTY_NOTICE_NAME
+    expected_notice.write_text("reviewed dashboard notices\n", encoding="utf-8")
+    monkeypatch.setattr(
+        audit_distribution,
+        "THIRD_PARTY_NOTICE_PATH",
+        expected_notice,
+        raising=False,
+    )
+    wheel = tmp_path / "genvideoscope-0.1.0-py3-none-any.whl"
+    make_wheel(wheel, clean_wheel_members(third_party_notice="drifted notices\n"))
+
+    violations = audit_distribution.audit_archive(wheel)
+
+    assert any(
+        "dashboard third-party notice digest mismatch" in item for item in violations
+    )
+
+
+def test_wheel_rejects_dashboard_notice_in_another_distribution(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    expected_notice = tmp_path / THIRD_PARTY_NOTICE_NAME
+    expected_notice.write_text("reviewed dashboard notices\n", encoding="utf-8")
+    monkeypatch.setattr(
+        audit_distribution,
+        "THIRD_PARTY_NOTICE_PATH",
+        expected_notice,
+        raising=False,
+    )
+    wheel = tmp_path / "genvideoscope-0.1.0-py3-none-any.whl"
+    members = clean_wheel_members(third_party_notice=None)
+    members["another_package-9.9.9.dist-info/licenses/THIRD_PARTY_NOTICES.txt"] = (
+        "reviewed dashboard notices\n"
+    )
+    make_wheel(wheel, members)
+
+    violations = audit_distribution.audit_archive(wheel)
+
+    assert any(
+        "dashboard third-party notice is misplaced" in item for item in violations
+    )
+
+
+def test_wheel_rejects_non_genvideoscope_distribution_identity(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    expected_notice = tmp_path / THIRD_PARTY_NOTICE_NAME
+    expected_notice.write_text("reviewed dashboard notices\n", encoding="utf-8")
+    monkeypatch.setattr(
+        audit_distribution,
+        "THIRD_PARTY_NOTICE_PATH",
+        expected_notice,
+        raising=False,
+    )
+    wheel = tmp_path / "another_package-0.1.0-py3-none-any.whl"
+    make_wheel(
+        wheel,
+        clean_wheel_members(third_party_notice="reviewed dashboard notices\n"),
+    )
+
+    violations = audit_distribution.audit_archive(wheel)
+
+    assert any(
+        "wheel filename does not identify genvideoscope" in item for item in violations
+    )
+
+
+def test_wheel_rejects_duplicate_dashboard_notices(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    expected_notice = tmp_path / THIRD_PARTY_NOTICE_NAME
+    expected_notice.write_text("reviewed dashboard notices\n", encoding="utf-8")
+    monkeypatch.setattr(
+        audit_distribution,
+        "THIRD_PARTY_NOTICE_PATH",
+        expected_notice,
+        raising=False,
+    )
+    wheel = tmp_path / "genvideoscope-0.1.0-py3-none-any.whl"
+    members = clean_wheel_members(third_party_notice="reviewed dashboard notices\n")
+    members["another_package-9.9.9.dist-info/licenses/THIRD_PARTY_NOTICES.txt"] = (
+        "reviewed dashboard notices\n"
+    )
+    make_wheel(wheel, members)
+
+    violations = audit_distribution.audit_archive(wheel)
+
+    assert any(
+        "dashboard third-party notice is ambiguous" in item for item in violations
+    )
 
 
 def test_sdist_requires_safe_sharing_docs_and_examples(tmp_path: Path) -> None:
@@ -67,6 +219,43 @@ def test_sdist_requires_safe_sharing_docs_and_examples(tmp_path: Path) -> None:
     assert any("docs/safe-sharing.md" in item for item in violations)
     assert any("examples/safe_sharing.ps1" in item for item in violations)
     assert any("examples/privacy-review.example.json" in item for item in violations)
+
+
+@pytest.mark.parametrize("notice_payload", [None, "drifted notices\n"])
+def test_sdist_requires_exact_dashboard_third_party_notice(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    notice_payload: str | None,
+) -> None:
+    expected_notice = tmp_path / THIRD_PARTY_NOTICE_NAME
+    expected_notice.write_text("reviewed dashboard notices\n", encoding="utf-8")
+    monkeypatch.setattr(
+        audit_distribution,
+        "THIRD_PARTY_NOTICE_PATH",
+        expected_notice,
+        raising=False,
+    )
+    source = tmp_path / "videoscope-0.1.0.tar.gz"
+    with tarfile.open(source, mode="w:gz") as archive:
+        for required in sorted(audit_distribution.REQUIRED_SDIST_MEMBERS):
+            payload = b"release asset\n"
+            info = tarfile.TarInfo(f"videoscope-0.1.0/{required}")
+            info.size = len(payload)
+            archive.addfile(info, io.BytesIO(payload))
+        if notice_payload is not None:
+            payload = notice_payload.encode("utf-8")
+            info = tarfile.TarInfo(f"videoscope-0.1.0/{THIRD_PARTY_NOTICE_NAME}")
+            info.size = len(payload)
+            archive.addfile(info, io.BytesIO(payload))
+
+    violations = audit_distribution.audit_archive(source)
+
+    expected = (
+        "dashboard third-party notice is missing"
+        if notice_payload is None
+        else "dashboard third-party notice digest mismatch"
+    )
+    assert any(expected in item for item in violations)
 
 
 def test_wheel_requires_video_rescue_runtime_and_report_template(
@@ -169,6 +358,12 @@ def test_manifest_packages_safe_sharing_json_example() -> None:
     assert "recursive-include examples *.py *.ps1 *.sh *.yaml *.json" in manifest
 
 
+def test_manifest_packages_dashboard_third_party_notices() -> None:
+    manifest = (REPOSITORY_ROOT / "MANIFEST.in").read_text(encoding="utf-8")
+
+    assert "include THIRD_PARTY_NOTICES.txt" in manifest.splitlines()
+
+
 def test_manifest_excludes_internal_superpowers_working_documents() -> None:
     """Internal plans with workstation evidence must not enter the public sdist."""
     manifest = (REPOSITORY_ROOT / "MANIFEST.in").read_text(encoding="utf-8")
@@ -195,7 +390,7 @@ def test_sdist_allows_only_declared_clarity_contract_path_literals() -> None:
 
 
 def test_generated_video_and_run_output_are_rejected(tmp_path: Path) -> None:
-    wheel = tmp_path / "videoscope-0.1.0-py3-none-any.whl"
+    wheel = tmp_path / "genvideoscope-0.1.0-py3-none-any.whl"
     make_wheel(
         wheel,
         {
@@ -261,7 +456,7 @@ def test_private_and_generated_rescue_artifacts_are_rejected(tmp_path: Path) -> 
 
 
 def test_missing_report_template_is_rejected(tmp_path: Path) -> None:
-    wheel = tmp_path / "videoscope-0.1.0-py3-none-any.whl"
+    wheel = tmp_path / "genvideoscope-0.1.0-py3-none-any.whl"
     make_wheel(wheel, {"videoscope/__init__.py": ""})
 
     violations = audit_distribution.audit_archive(wheel)
@@ -273,7 +468,7 @@ def test_missing_dashboard_asset_referenced_by_index_is_rejected(
     tmp_path: Path,
 ) -> None:
     """A stale wheel index must not point at an absent hashed bundle."""
-    wheel = tmp_path / "videoscope-0.3.0-py3-none-any.whl"
+    wheel = tmp_path / "genvideoscope-0.3.0-py3-none-any.whl"
     make_wheel(
         wheel,
         {
@@ -322,7 +517,7 @@ def test_ci_gates_public_site_and_bounds_windows_ffmpeg_install() -> None:
 
 
 def test_personal_absolute_path_is_rejected(tmp_path: Path) -> None:
-    wheel = tmp_path / "videoscope-0.1.0-py3-none-any.whl"
+    wheel = tmp_path / "genvideoscope-0.1.0-py3-none-any.whl"
     personal_path = "C:" + "\\Users\\" + "Example\\private.mp4"
     make_wheel(
         wheel,
@@ -338,7 +533,7 @@ def test_personal_absolute_path_is_rejected(tmp_path: Path) -> None:
 
 
 def test_root_home_absolute_path_is_rejected(tmp_path: Path) -> None:
-    wheel = tmp_path / "videoscope-0.1.0-py3-none-any.whl"
+    wheel = tmp_path / "genvideoscope-0.1.0-py3-none-any.whl"
     make_wheel(
         wheel,
         {
@@ -366,6 +561,7 @@ def test_sdist_allows_sanitizer_test_examples(tmp_path: Path) -> None:
             required_info = tarfile.TarInfo(f"videoscope-0.1.0/{required}")
             required_info.size = len(required_payload)
             archive.addfile(required_info, io.BytesIO(required_payload))
+        add_dashboard_notice_to_sdist(archive, "videoscope-0.1.0")
 
     assert audit_distribution.audit_archive(source) == ()
 
@@ -409,6 +605,7 @@ def test_sdist_allows_only_known_rescue_path_sanitizer_literals(
             required_info = tarfile.TarInfo(f"videoscope-0.5.0/{required}")
             required_info.size = len(required_payload)
             archive.addfile(required_info, io.BytesIO(required_payload))
+        add_dashboard_notice_to_sdist(archive, "videoscope-0.5.0")
 
     assert audit_distribution.audit_archive(source) == ()
 
@@ -597,7 +794,7 @@ def test_sdist_rejects_multiline_known_literal_concatenation(
 
 
 def test_distribution_path_filters_supported_archives(tmp_path: Path) -> None:
-    wheel = tmp_path / "videoscope-0.1.0-py3-none-any.whl"
+    wheel = tmp_path / "genvideoscope-0.1.0-py3-none-any.whl"
     source = tmp_path / "videoscope-0.1.0.tar.gz"
     ignored = tmp_path / "notes.txt"
     wheel.touch()

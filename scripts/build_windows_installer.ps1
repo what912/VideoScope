@@ -1,8 +1,7 @@
 [CmdletBinding()]
 param(
     [string]$PythonCommand = "python",
-    [string]$IsccPath = "",
-    [switch]$SkipDependencyInstall
+    [string]$IsccPath = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -15,17 +14,28 @@ $distRoot = Join-Path $buildRoot "dist"
 $workRoot = Join-Path $buildRoot "work"
 $installerRoot = Join-Path $buildRoot "installer"
 $bundleRoot = Join-Path $distRoot "VideoScopeConnector"
+$environmentRoot = Join-Path $buildRoot "packaging-venv"
 
 New-Item -ItemType Directory -Force -Path $buildRoot, $distRoot, $workRoot, $installerRoot | Out-Null
 
-if (-not $SkipDependencyInstall) {
-    & $PythonCommand -m pip install --disable-pip-version-check --requirement (Join-Path $packagingRoot "requirements-build.txt")
-    if ($LASTEXITCODE -ne 0) { throw "Windows build dependency installation failed." }
-    & $PythonCommand -m pip install --disable-pip-version-check -e "${repositoryRoot}[web]"
-    if ($LASTEXITCODE -ne 0) { throw "VideoScope Web runtime installation failed." }
+& $PythonCommand -m venv --clear $environmentRoot
+if ($LASTEXITCODE -ne 0) { throw "Fresh Windows packaging environment creation failed." }
+$buildPython = Join-Path $environmentRoot "Scripts\python.exe"
+if (-not (Test-Path -LiteralPath $buildPython -PathType Leaf)) {
+    throw "Fresh Windows packaging Python is missing."
 }
 
-$version = (& $PythonCommand -c "from videoscope import __version__; print(__version__)").Trim()
+& $buildPython -m pip install --disable-pip-version-check --requirement (Join-Path $packagingRoot "requirements-runtime.lock")
+if ($LASTEXITCODE -ne 0) { throw "Windows runtime dependency installation failed." }
+& $buildPython -m pip install --disable-pip-version-check --no-deps -e $repositoryRoot
+if ($LASTEXITCODE -ne 0) { throw "VideoScope project installation failed." }
+& $buildPython -m pip install --disable-pip-version-check --requirement (Join-Path $packagingRoot "requirements-build.txt")
+if ($LASTEXITCODE -ne 0) { throw "Windows build dependency installation failed." }
+
+& $buildPython (Join-Path $repositoryRoot "scripts\audit_dependency_licenses.py")
+if ($LASTEXITCODE -ne 0) { throw "Dependency license inventory audit failed." }
+
+$version = (& $buildPython -c "from videoscope import __version__; print(__version__)").Trim()
 if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($version)) {
     throw "Unable to read the VideoScope version."
 }
@@ -33,7 +43,7 @@ $numericParts = [regex]::Matches($version, "\d+") | ForEach-Object { $_.Value }
 while ($numericParts.Count -lt 4) { $numericParts += "0" }
 $versionInfoVersion = ($numericParts | Select-Object -First 4) -join "."
 
-& $PythonCommand -m PyInstaller `
+& $buildPython -m PyInstaller `
     --noconfirm `
     --clean `
     --log-level WARN `
@@ -42,7 +52,7 @@ $versionInfoVersion = ($numericParts | Select-Object -First 4) -join "."
     (Join-Path $packagingRoot "VideoScopeConnector.spec")
 if ($LASTEXITCODE -ne 0) { throw "PyInstaller build failed." }
 
-& $PythonCommand (Join-Path $repositoryRoot "scripts\audit_windows_bundle.py") $bundleRoot
+& $buildPython (Join-Path $repositoryRoot "scripts\audit_windows_bundle.py") $bundleRoot
 if ($LASTEXITCODE -ne 0) { throw "Frozen bundle audit failed." }
 
 if ([string]::IsNullOrWhiteSpace($IsccPath)) {

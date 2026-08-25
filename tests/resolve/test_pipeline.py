@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import ctypes
 import os
+import time
 from collections.abc import Callable
 from dataclasses import replace
 from datetime import UTC, datetime
@@ -638,6 +640,163 @@ def test_raced_destination_is_not_overwritten_during_publication(
         encoding="utf-8"
     ) == "keep"
     assert executor.execute_calls
+
+
+def _install_fake_windows_directory_rename(
+    monkeypatch: pytest.MonkeyPatch,
+    move_file_ex: Callable[[str, str, int], int],
+    *,
+    error_code: int,
+) -> None:
+    class FakeKernel32:
+        @staticmethod
+        def MoveFileExW(source: str, destination: str, flags: int) -> int:
+            return move_file_ex(source, destination, flags)
+
+    monkeypatch.setattr(os, "name", "nt")
+    monkeypatch.setattr(
+        ctypes,
+        "WinDLL",
+        lambda *_args, **_kwargs: FakeKernel32(),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        ctypes,
+        "get_last_error",
+        lambda: error_code,
+        raising=False,
+    )
+
+
+def test_windows_no_replace_directory_rename_retries_access_denied_then_succeeds(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    workspace = tmp_path / "staging"
+    output = tmp_path / "published"
+    workspace.mkdir()
+    calls: list[tuple[str, str, int]] = []
+    delays: list[float] = []
+
+    def move_file_ex(source: str, destination: str, flags: int) -> int:
+        calls.append((source, destination, flags))
+        if len(calls) == 1:
+            return 0
+        os.rename(source, destination)
+        return 1
+
+    _install_fake_windows_directory_rename(
+        monkeypatch,
+        move_file_ex,
+        error_code=5,
+    )
+    monkeypatch.setattr(time, "sleep", delays.append)
+
+    PublishReadyPipeline._rename_directory_no_replace(workspace, output)
+
+    assert len(calls) == 2
+    assert delays == [0.01]
+    assert output.is_dir()
+    assert not workspace.exists()
+
+
+def test_windows_no_replace_directory_rename_stops_after_retry_budget(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    workspace = tmp_path / "staging"
+    output = tmp_path / "published"
+    workspace.mkdir()
+    calls = 0
+    delays: list[float] = []
+
+    def move_file_ex(_source: str, _destination: str, _flags: int) -> int:
+        nonlocal calls
+        calls += 1
+        return 0
+
+    _install_fake_windows_directory_rename(
+        monkeypatch,
+        move_file_ex,
+        error_code=5,
+    )
+    monkeypatch.setattr(time, "sleep", delays.append)
+
+    with pytest.raises(OSError) as captured:
+        PublishReadyPipeline._rename_directory_no_replace(workspace, output)
+
+    assert captured.value.errno == 5
+    assert calls == 6
+    assert delays == [0.01, 0.02, 0.04, 0.08, 0.16]
+    assert workspace.is_dir()
+    assert not output.exists()
+
+
+@pytest.mark.parametrize("error_code", [32, 80, 183])  # type: ignore[untyped-decorator]
+def test_windows_no_replace_directory_rename_does_not_retry_other_errors(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    error_code: int,
+) -> None:
+    workspace = tmp_path / "staging"
+    output = tmp_path / "published"
+    workspace.mkdir()
+    calls = 0
+    delays: list[float] = []
+
+    def move_file_ex(_source: str, _destination: str, _flags: int) -> int:
+        nonlocal calls
+        calls += 1
+        return 0
+
+    _install_fake_windows_directory_rename(
+        monkeypatch,
+        move_file_ex,
+        error_code=error_code,
+    )
+    monkeypatch.setattr(time, "sleep", delays.append)
+
+    expected_error = FileExistsError if error_code in {80, 183} else OSError
+    with pytest.raises(expected_error):
+        PublishReadyPipeline._rename_directory_no_replace(workspace, output)
+
+    assert calls == 1
+    assert delays == []
+
+
+@pytest.mark.parametrize("changed_path", ["source", "destination"])  # type: ignore[untyped-decorator]
+def test_windows_no_replace_directory_rename_requires_stable_path_facts(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    changed_path: str,
+) -> None:
+    workspace = tmp_path / "staging"
+    output = tmp_path / "published"
+    workspace.mkdir()
+    calls = 0
+    delays: list[float] = []
+
+    def move_file_ex(_source: str, _destination: str, _flags: int) -> int:
+        nonlocal calls
+        calls += 1
+        if changed_path == "source":
+            workspace.rmdir()
+        else:
+            output.mkdir()
+        return 0
+
+    _install_fake_windows_directory_rename(
+        monkeypatch,
+        move_file_ex,
+        error_code=5,
+    )
+    monkeypatch.setattr(time, "sleep", delays.append)
+
+    with pytest.raises(OSError):
+        PublishReadyPipeline._rename_directory_no_replace(workspace, output)
+
+    assert calls == 1
+    assert delays == []
 
 
 def test_cancellation_after_verification_keeps_artifacts_unpublished(

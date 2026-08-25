@@ -52,7 +52,7 @@ describe("static deployment security", () => {
     );
   });
 
-  it("passes optional public Supabase settings into the Pages build", async () => {
+  it("passes optional public settings into the Pages build", async () => {
     const workflow = await readFile(
       path.resolve(siteRoot, "..", ".github", "workflows", "pages.yml"),
       "utf8",
@@ -66,6 +66,12 @@ describe("static deployment security", () => {
     );
     expect(workflow).toContain(
       "VITE_SUPABASE_SHARE_ENABLED: ${{ vars.VITE_SUPABASE_SHARE_ENABLED }}",
+    );
+    expect(workflow).toContain(
+      "VITE_WINDOWS_INSTALLER_URL: ${{ vars.VITE_WINDOWS_INSTALLER_URL }}",
+    );
+    expect(workflow).toContain(
+      "VITE_WINDOWS_INSTALLER_SHA256: ${{ vars.VITE_WINDOWS_INSTALLER_SHA256 }}",
     );
     expect(workflow).not.toMatch(/SERVICE_ROLE/iu);
   });

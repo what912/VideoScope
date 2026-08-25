@@ -1,0 +1,31 @@
+# Windows CPython 3.12 base + web runtime identity/license lock.
+# Artifact hashes are intentionally outside this identity lock.
+annotated-doc==0.0.4  # SPDX-License-Identifier: MIT
+annotated-types==0.8.0  # SPDX-License-Identifier: MIT
+anyio==4.14.2  # SPDX-License-Identifier: MIT
+click==8.4.2  # SPDX-License-Identifier: BSD-3-Clause
+colorama==0.4.6  # SPDX-License-Identifier: BSD-3-Clause
+fastapi==0.140.13  # SPDX-License-Identifier: MIT
+h11==0.16.0  # SPDX-License-Identifier: MIT
+idna==3.18  # SPDX-License-Identifier: BSD-3-Clause
+Jinja2==3.1.6  # SPDX-License-Identifier: BSD-3-Clause
+markdown-it-py==4.2.0  # SPDX-License-Identifier: MIT
+MarkupSafe==3.0.3  # SPDX-License-Identifier: BSD-3-Clause
+mdurl==0.1.2  # SPDX-License-Identifier: MIT
+numpy==2.4.6  # SPDX-License-Identifier: BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0
+opencv-python-headless==5.0.0.93  # SPDX-License-Identifier: Apache-2.0
+pillow==12.3.0  # SPDX-License-Identifier: MIT-CMU
+platformdirs==4.11.0  # SPDX-License-Identifier: MIT
+pydantic==2.13.4  # SPDX-License-Identifier: MIT
+pydantic-core==2.46.4  # SPDX-License-Identifier: MIT
+Pygments==2.20.0  # SPDX-License-Identifier: BSD-2-Clause
+python-multipart==0.0.32  # SPDX-License-Identifier: Apache-2.0
+rich==15.0.0  # SPDX-License-Identifier: MIT
+scenedetect-headless==0.7.1  # SPDX-License-Identifier: BSD-3-Clause
+shellingham==1.5.4  # SPDX-License-Identifier: ISC
+starlette==1.3.1  # SPDX-License-Identifier: BSD-3-Clause
+tqdm==4.70.0  # SPDX-License-Identifier: MPL-2.0 AND MIT
+typer==0.27.0  # SPDX-License-Identifier: MIT
+typing-extensions==4.16.0  # SPDX-License-Identifier: PSF-2.0
+typing-inspection==0.4.2  # SPDX-License-Identifier: MIT
+uvicorn==0.51.0  # SPDX-License-Identifier: BSD-3-Clause

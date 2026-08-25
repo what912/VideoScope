@@ -66,6 +66,7 @@ jobs:
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
           VITE_SUPABASE_SHARE_ENABLED: ${{ vars.VITE_SUPABASE_SHARE_ENABLED }}
           VITE_WINDOWS_INSTALLER_URL: ${{ vars.VITE_WINDOWS_INSTALLER_URL }}
+          VITE_WINDOWS_INSTALLER_SHA256: ${{ vars.VITE_WINDOWS_INSTALLER_SHA256 }}
         run: npm run build
 
       - name: Verify local media and build output

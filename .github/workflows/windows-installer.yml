@@ -5,21 +5,37 @@ on:
   pull_request:
     paths:
       - ".github/workflows/windows-installer.yml"
+      - "LICENSE"
+      - "NOTICE"
+      - "THIRD_PARTY_NOTICES.txt"
+      - "docs/third-party-licenses.md"
       - "packaging/windows/**"
+      - "pyproject.toml"
+      - "scripts/audit_dependency_licenses.py"
       - "scripts/*windows*"
+      - "site/package-lock.json"
       - "src/videoscope/windows/**"
       - "src/videoscope/web/**"
       - "tests/windows/**"
+      - "web/package-lock.json"
   push:
     branches:
       - main
     paths:
       - ".github/workflows/windows-installer.yml"
+      - "LICENSE"
+      - "NOTICE"
+      - "THIRD_PARTY_NOTICES.txt"
+      - "docs/third-party-licenses.md"
       - "packaging/windows/**"
+      - "pyproject.toml"
+      - "scripts/audit_dependency_licenses.py"
       - "scripts/*windows*"
+      - "site/package-lock.json"
       - "src/videoscope/windows/**"
       - "src/videoscope/web/**"
       - "tests/windows/**"
+      - "web/package-lock.json"
 
 permissions:
   contents: read
@@ -41,12 +57,13 @@ jobs:
           architecture: x64
           cache: pip
 
-      - name: Install frozen-runtime and test dependencies
+      - name: Install explicit launcher test dependencies
         shell: pwsh
         run: |
           python -m pip install --upgrade pip setuptools wheel
-          python -m pip install -e ".[web,dev]"
-          python -m pip install --requirement packaging/windows/requirements-build.txt
+          python -m pip install --requirement packaging/windows/requirements-runtime.lock
+          python -m pip install --no-deps -e .
+          python -m pip install pytest==9.1.1
 
       - name: Run Windows launcher unit tests
         run: python -m pytest tests/windows tests/test_cli.py -q
@@ -65,7 +82,7 @@ jobs:
 
       - name: Build audited installer
         shell: pwsh
-        run: ./scripts/build_windows_installer.ps1 -SkipDependencyInstall -IsccPath '${{ steps.inno.outputs.path }}'
+        run: ./scripts/build_windows_installer.ps1 -IsccPath '${{ steps.inno.outputs.path }}'
 
       - name: Smoke-test install, loopback service, and uninstall
         shell: pwsh

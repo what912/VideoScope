@@ -1,0 +1,116 @@
+{
+  "schema_version": 1,
+  "reviewed_license_identifiers": [
+    "0BSD",
+    "Apache-2.0",
+    "BlueOak-1.0.0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0",
+    "CC-BY-4.0",
+    "CC0-1.0",
+    "ISC",
+    "MIT",
+    "MIT-0",
+    "MIT-CMU",
+    "MPL-2.0",
+    "MPL-2.0 AND MIT",
+    "PSF-2.0",
+    "Python-2.0"
+  ],
+  "python_runtime_lock": "packaging/windows/requirements-runtime.lock",
+  "python_runtime_distributions": [
+    {"name":"annotated-doc","version":"0.0.4","license_identifier":"MIT","license_files":[{"path":"licenses/LICENSE","sha256":"fff170779a6acbf65abdb405c087f1cee1786691e4a96a4034517e4a504a0cdf"}]},
+    {"name":"annotated-types","version":"0.8.0","license_identifier":"MIT","license_files":[{"path":"licenses/LICENSE","sha256":"fe1049884b1a0d9342901e88e07f32925d24b3121d9972b6a6805fb9824b095d"}]},
+    {"name":"anyio","version":"4.14.2","license_identifier":"MIT","license_files":[{"path":"licenses/LICENSE","sha256":"5361ac9dc58f2ef5fd2e9b09c68297c17f04950909bbc8023bdb82eacf22c2b0"}]},
+    {"name":"click","version":"8.4.2","license_identifier":"BSD-3-Clause","license_files":[{"path":"licenses/LICENSE.txt","sha256":"9a8ad106a394e853bfe21f42f4e72d592819a22805d991b5f3275029292b658d"}]},
+    {"name":"colorama","version":"0.4.6","license_identifier":"BSD-3-Clause","license_files":[{"path":"licenses/LICENSE.txt","sha256":"cac35c02686e5d04a5a7140bfb3b36e73aed496656e891102e428886d7930318"}]},
+    {"name":"fastapi","version":"0.140.13","license_identifier":"MIT","license_files":[{"path":"licenses/LICENSE","sha256":"4ec89ffc81485b97fec584b2d4a961032eeffe834453894fd9c1274906cc744e"}]},
+    {"name":"h11","version":"0.16.0","license_identifier":"MIT","license_files":[{"path":"licenses/LICENSE.txt","sha256":"37db5bb85926db28a427a25867f10b1232003aea1be69ccb851138adb8e6f361"}]},
+    {"name":"idna","version":"3.18","license_identifier":"BSD-3-Clause","license_files":[{"path":"licenses/LICENSE.md","sha256":"1a9a4f0e3d479a27240ddd59a9137a66ab4a0f9dfdc8ca6188cc0bfd85187f04"}]},
+    {"name":"Jinja2","version":"3.1.6","license_identifier":"BSD-3-Clause","license_files":[{"path":"licenses/LICENSE.txt","sha256":"3b49dcee4105eb37bac10faf1be260408fe85d252b8e9df2e0979fc1e094437b"}]},
+    {"name":"markdown-it-py","version":"4.2.0","license_identifier":"MIT","license_files":[{"path":"licenses/LICENSE","sha256":"4a2260d6e2cd0f5a151a1e86dbfe7d3ed552b1e2beabf9941c1ba5c49cbce484"},{"path":"licenses/LICENSE.markdown-it","sha256":"792c48c5a849a15fdf9e37e8bcf9e6d1dd13b32b46c642a748a0a46a9919d473"}]},
+    {"name":"MarkupSafe","version":"3.0.3","license_identifier":"BSD-3-Clause","license_files":[{"path":"licenses/LICENSE.txt","sha256":"489a8e1108509ed98a37bb983e11e0f7e1d31f0bd8f99a79c8448e7ff37d07ea"}]},
+    {"name":"mdurl","version":"0.1.2","license_identifier":"MIT","license_files":[{"path":"LICENSE","sha256":"7c605df6e28667a9603118e98274f64a49ce3eed0d26fccce9534a345e0ef955"}]},
+    {"name":"numpy","version":"2.4.6","license_identifier":"BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0","license_files":[{"path":"licenses/LICENSE.txt","sha256":"dc97d59562c75c04557f1e9a68f3eae326699eb119d569cd4ed6a4eafe5f9abb"},{"path":"licenses/numpy/_core/include/numpy/libdivide/LICENSE.txt","sha256":"fbc539f47d0cf83bc61378080fb873d5c14630126cacbfe754035c3926daa5ec"},{"path":"licenses/numpy/_core/src/common/pythoncapi-compat/COPYING","sha256":"3f2c1ffa76383a55ae0aac01c9737cd70050dff63e1f026694fbe9d662573c98"},{"path":"licenses/numpy/_core/src/highway/LICENSE","sha256":"e340270d4f64384569a91d546acb5b094d69ce47f0c015db77abb74dc6f815af"},{"path":"licenses/numpy/_core/src/multiarray/dragon4_LICENSE.txt","sha256":"f7b14309e5f54e5022b26448eefd419988ada2aec01d3c1162d84a0ea8f21f2c"},{"path":"licenses/numpy/_core/src/npysort/x86-simd-sort/LICENSE.md","sha256":"211e7d737d6179a08f791ebb0a99897ce7cd2457410c542876d125576edfe910"},{"path":"licenses/numpy/_core/src/umath/svml/LICENSE","sha256":"c17011467b4fe6e20fbfbeda4df09e58c2bca5480a063e55735a4000a379aad9"},{"path":"licenses/numpy/fft/pocketfft/LICENSE.md","sha256":"a85ca13fdf90160b64a0698215868c13b74d835ad0a4e2ba44713b8c5058a056"},{"path":"licenses/numpy/linalg/lapack_lite/LICENSE.txt","sha256":"a14cc25e10d40a3aa705b7de2fb764a6535d8ee9b2db4e1724900585457dfd55"},{"path":"licenses/numpy/ma/LICENSE","sha256":"05f3b88351988ecfad10abe92c0c50e5875c6452d5009a0084cc291551ffcca6"},{"path":"licenses/numpy/random/LICENSE.md","sha256":"103166b62b80443afb9eb3488e052ea06be0cff566b908f199e561fde49af19f"},{"path":"licenses/numpy/random/src/distributions/LICENSE.md","sha256":"469778be8f33d54e1bcaab28c281cc472916d2d273f835e55bc487d30503face"},{"path":"licenses/numpy/random/src/mt19937/LICENSE.md","sha256":"0e111337b25494a773106695f0e799f642b8567aaacca4f116a74a8177179156"},{"path":"licenses/numpy/random/src/pcg64/LICENSE.md","sha256":"e7d4f4fb20358f314210a892ae17351e04993813646f697ec387385ca2a36918"},{"path":"licenses/numpy/random/src/philox/LICENSE.md","sha256":"6f5828a57223d4cc7f8ea505a2623e7b978b242752c1515e355f46ba2cec1800"},{"path":"licenses/numpy/random/src/sfc64/LICENSE.md","sha256":"9d4098846018319cd68e228ee6220361787f73bccbf00237a85e4fc9621b998f"},{"path":"licenses/numpy/random/src/splitmix64/LICENSE.md","sha256":"268b0ca06759d31ea3ca68dd35f20e877916e927b1c2a835e4592a3c4354b1f9"}]},
+    {"name":"opencv-python-headless","version":"5.0.0.93","license_identifier":"Apache-2.0","license_files":[{"path":"LICENSE-3RD-PARTY.txt","sha256":"2537f5653345db7231ff12f307bcfa4c89807d45ed1c4bb8ebfb6f26f61b160a"},{"path":"LICENSE.txt","sha256":"09d719058e782ac7bc71ba21c944e1136cde2bb957c0e888121f0218d6b5f02c"}]},
+    {"name":"pillow","version":"12.3.0","license_identifier":"MIT-CMU","license_files":[{"path":"licenses/LICENSE","sha256":"51ed379cf673c9676b7fa7e1bedbfc5d4ad63caac4f6f99eeec5ccab50c3e0ef"}]},
+    {"name":"platformdirs","version":"4.11.0","license_identifier":"MIT","license_files":[{"path":"licenses/LICENSE","sha256":"29e0fd62e929850e86eb28c3fdccf0cefdf4fa94879011cffb3d0d4bed6d4db6"}]},
+    {"name":"pydantic","version":"2.13.4","license_identifier":"MIT","license_files":[{"path":"licenses/LICENSE","sha256":"a9e186f3ca16b5eef84318e7a701721351a00cb7b8ae3a4394b67b49e3529ef3"}]},
+    {"name":"pydantic-core","version":"2.46.4","license_identifier":"MIT","license_files":[{"path":"licenses/LICENSE","sha256":"2afdd30d54b4d62b6f488a6bcc1546e84ec5061f13f4209c03d012348783795a"}]},
+    {"name":"Pygments","version":"2.20.0","license_identifier":"BSD-2-Clause","license_files":[{"path":"licenses/AUTHORS","sha256":"0db603a5f4499f690c4425477ff664c166da325d3acc3b5a8d4de3db072443d0"},{"path":"licenses/LICENSE","sha256":"a9d66f1d526df02e29dce73436d34e56e8632f46c275bbdffc70569e882f9f17"}]},
+    {"name":"python-multipart","version":"0.0.32","license_identifier":"Apache-2.0","license_files":[{"path":"licenses/LICENSE.txt","sha256":"cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"}]},
+    {"name":"rich","version":"15.0.0","license_identifier":"MIT","license_files":[{"path":"licenses/LICENSE","sha256":"deed7c17a4318158190a3ea239cc879a5a50271cebb98ae7025f48fbe58dca15"}]},
+    {"name":"scenedetect-headless","version":"0.7.1","license_identifier":"BSD-3-Clause","license_files":[{"path":"licenses/LICENSE","sha256":"e855ca89e457a7d0b6b7c92ad475d1120a9a5b5bf4e5048c706b1b3889fbc349"}]},
+    {"name":"shellingham","version":"1.5.4","license_identifier":"ISC","license_files":[{"path":"LICENSE","sha256":"f388fd38cad13112c1dc0f669bbe80e7f84541edbafb72f3030d2ca7642c3c9d"}]},
+    {"name":"starlette","version":"1.3.1","license_identifier":"BSD-3-Clause","license_files":[{"path":"licenses/LICENSE.md","sha256":"dcb95677a02240243187e964f941847d19b17821cf99e5afae684fab328c19bf"}]},
+    {"name":"tqdm","version":"4.70.0","license_identifier":"MPL-2.0 AND MIT","license_files":[{"path":"licenses/LICENCE","sha256":"fcff87c3a47ce8028a8512aa182d4fcf0ad1c90544ee75cf9b343684cac194de"}]},
+    {"name":"typer","version":"0.27.0","license_identifier":"MIT","license_files":[{"path":"licenses/LICENSE","sha256":"58992cebcf8dfb6e40c4e2112ed12126c243666dca3912a3d78b7ecac4859d49"}]},
+    {"name":"typing-extensions","version":"4.16.0","license_identifier":"PSF-2.0","license_files":[{"path":"licenses/LICENSE","sha256":"3b2f81fe21d181c499c59a256c8e1968455d6689d269aa85373bfb6af41da3bf"}]},
+    {"name":"typing-inspection","version":"0.4.2","license_identifier":"MIT","license_files":[{"path":"licenses/LICENSE","sha256":"804b59b25f2c31bd278f9202a19ae49a3945aa2664387e2d0a128c7cacc61ec3"}]},
+    {"name":"uvicorn","version":"0.51.0","license_identifier":"BSD-3-Clause","license_files":[{"path":"licenses/LICENSE.md","sha256":"efe1acf3e62fb99c288b0ec73e5a773b7268ef4320fe757ea994214e4b63c371"}]}
+  ],
+  "npm_lockfiles": [
+    {
+      "path": "web/package-lock.json",
+      "sha256": "261dd00a3b6ab2af8f80fa6478ca9d77e6061588411441ecf368526a851796bd",
+      "package_count": 217,
+      "license_counts": {
+        "Apache-2.0": 5,
+        "BlueOak-1.0.0": 3,
+        "BSD-2-Clause": 2,
+        "BSD-3-Clause": 2,
+        "CC-BY-4.0": 1,
+        "CC0-1.0": 1,
+        "ISC": 7,
+        "MIT": 194,
+        "MIT-0": 2
+      }
+    },
+    {
+      "path": "site/package-lock.json",
+      "sha256": "2656b753a635ce794039f91b51f075f45196b1738451b7f62190702f2153537f",
+      "package_count": 272,
+      "license_counts": {
+        "0BSD": 1,
+        "Apache-2.0": 19,
+        "BlueOak-1.0.0": 4,
+        "BSD-2-Clause": 9,
+        "BSD-3-Clause": 3,
+        "CC0-1.0": 1,
+        "ISC": 10,
+        "MIT": 210,
+        "MIT-0": 2,
+        "MPL-2.0": 12,
+        "Python-2.0": 1
+      }
+    }
+  ],
+  "bundle_materials": [
+    {
+      "source": "LICENSE",
+      "bundle_name": "LICENSE",
+      "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+    },
+    {
+      "source": "NOTICE",
+      "bundle_name": "NOTICE",
+      "sha256": "7f74feaf2166c3c9ee81c19a4ec7dddd124cb0c2441b7707c778e1a8c6b1cc27"
+    },
+    {
+      "source": "THIRD_PARTY_NOTICES.txt",
+      "bundle_name": "THIRD_PARTY_NOTICES.txt",
+      "sha256": "26cf7a9231c7269713ba43a2e72ea96fb257afd17bd0e05573984bdc4e24e854"
+    },
+    {
+      "source": "docs/third-party-licenses.md",
+      "bundle_name": "third-party-licenses.md",
+      "sha256": "7c8700852680d42cb1379b085378645578795d28d0d7696dfaae944bd1876d15"
+    },
+    {
+      "source": "packaging/windows/requirements-runtime.lock",
+      "bundle_name": "requirements-runtime.lock",
+      "sha256": "8a9922340443603851731db9e43c198cce4bb06cd59d41d36f8ec0dd4a51a33c"
+    }
+  ]
+}

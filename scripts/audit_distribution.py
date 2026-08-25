@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import hashlib
 import io
 import re
 import tarfile
@@ -49,6 +50,10 @@ PERSONAL_PATH_PATTERNS = (
     ),
 )
 MAX_TEXT_SCAN_BYTES = 2_000_000
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+THIRD_PARTY_NOTICE_NAME = "THIRD_PARTY_NOTICES.txt"
+THIRD_PARTY_NOTICE_PATH = REPOSITORY_ROOT / THIRD_PARTY_NOTICE_NAME
+WHEEL_DISTRIBUTION_NAME = "genvideoscope"
 REQUIRED_WHEEL_MEMBERS = {
     "videoscope/privacy/pipeline.py",
     "videoscope/privacy/verification.py",
@@ -168,6 +173,52 @@ def zip_members(path: Path) -> Iterable[tuple[str, bytes]]:
             if info.is_dir():
                 continue
             yield info.filename, archive.read(info)
+
+
+def canonical_text_sha256_bytes(data: bytes) -> str:
+    """Hash UTF-8 text after cross-platform newline normalization."""
+    text = data.decode("utf-8").replace("\r\n", "\n").replace("\r", "\n")
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _dashboard_notice_violations(
+    notice_members: list[tuple[str, bytes]],
+    *,
+    expected_member: str | None = None,
+) -> tuple[str, ...]:
+    if not notice_members:
+        return ("dashboard third-party notice is missing",)
+    if len(notice_members) != 1:
+        return ("dashboard third-party notice is ambiguous",)
+    if expected_member is not None and notice_members[0][0] != expected_member:
+        return ("dashboard third-party notice is misplaced",)
+    try:
+        expected_digest = canonical_text_sha256_bytes(
+            THIRD_PARTY_NOTICE_PATH.read_bytes()
+        )
+    except (OSError, UnicodeError) as error:
+        return (f"dashboard third-party notice source is unavailable: {error}",)
+    name, payload = notice_members[0]
+    try:
+        actual_digest = canonical_text_sha256_bytes(payload)
+    except UnicodeError:
+        return (f"{name}: dashboard third-party notice is not UTF-8",)
+    if actual_digest != expected_digest:
+        return (f"{name}: dashboard third-party notice digest mismatch",)
+    return ()
+
+
+def _expected_wheel_notice_member(path: Path) -> str | None:
+    """Return the notice path bound to this exact genvideoscope wheel identity."""
+    fields = path.name.removesuffix(".whl").split("-")
+    if (
+        len(fields) < 5
+        or fields[0].replace("_", "-").casefold() != WHEEL_DISTRIBUTION_NAME
+        or not fields[1]
+    ):
+        return None
+    dist_info = f"{fields[0]}-{fields[1]}.dist-info"
+    return f"{dist_info}/licenses/{THIRD_PARTY_NOTICE_NAME}"
 
 
 def tar_members(path: Path) -> Iterable[tuple[str, bytes]]:
@@ -347,6 +398,12 @@ def audit_archive(path: Path) -> tuple[str, ...]:
     member_names: set[str] = set()
     source_member_names: set[str] = set()
     static_index: bytes | None = None
+    third_party_notices: list[tuple[str, bytes]] = []
+    expected_notice_member = _expected_wheel_notice_member(path) if is_wheel else None
+    if is_wheel and expected_notice_member is None:
+        violations.append(
+            f"wheel filename does not identify {WHEEL_DISTRIBUTION_NAME} distribution"
+        )
     for name, data in archive_members(path):
         normalized_name = name.replace("\\", "/")
         member_names.add(normalized_name)
@@ -357,6 +414,13 @@ def audit_archive(path: Path) -> tuple[str, ...]:
             else normalized_name
         )
         source_member_names.add(source_member_name)
+        if (
+            is_wheel
+            and normalized_name.endswith(
+                f".dist-info/licenses/{THIRD_PARTY_NOTICE_NAME}"
+            )
+        ) or (not is_wheel and source_member_name == THIRD_PARTY_NOTICE_NAME):
+            third_party_notices.append((normalized_name, data))
         if normalized_name == STATIC_INDEX_MEMBER:
             static_index = data
         reason = prohibited_member_reason(name)
@@ -376,6 +440,12 @@ def audit_archive(path: Path) -> tuple[str, ...]:
                 known_test_source_literals=known_test_source_literals,
             ):
                 violations.append(f"{name}: personal absolute path {match!r}")
+    violations.extend(
+        _dashboard_notice_violations(
+            third_party_notices,
+            expected_member=expected_notice_member,
+        )
+    )
     if is_wheel:
         for required in sorted(REQUIRED_WHEEL_MEMBERS - member_names):
             violations.append(f"{required}: required runtime asset is missing")

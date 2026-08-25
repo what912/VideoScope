@@ -2,19 +2,22 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { I18nProvider } from "../../i18n/I18nProvider";
+import { connectorInstall, OFFICIAL_V081_INSTALLER_URL } from "../../config/connector-install";
 import { connectorClient } from "../../services/connector/connector-client";
 import { ConnectorPage } from "./ConnectorPage";
 
 const readyStatus = {
   status: "ready",
   service: "VideoScope Local Connector",
-  version: "0.8.0",
+  version: "0.8.1",
   pairing_required: true,
   credentials_persisted: false,
   modes: ["publish_ready", "safe_sharing", "video_rescue", "useful_content", "advanced_ai"],
   ffmpeg_available: true,
   ffprobe_available: true,
 };
+
+const installerSha256 = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
 describe("ConnectorPage", () => {
   afterEach(() => vi.restoreAllMocks());
@@ -32,6 +35,29 @@ describe("ConnectorPage", () => {
     expect(screen.getByRole("button", { name: "重新检查连接器" })).toBeEnabled();
     expect(screen.getByText("约 3 分钟 · 每台电脑只做一次")).toBeVisible();
     expect(screen.getByText("不会创建云账户、上传视频或自动安装 AI 模型。")).toBeVisible();
+  });
+
+  it("shows the configured checksum and unsigned warning for an enabled direct installer", async () => {
+    vi.spyOn(connectorClient, "status").mockRejectedValue(new TypeError("offline"));
+    vi.spyOn(connectorClient, "isPaired").mockReturnValue(false);
+
+    render(
+      <I18nProvider initialLocale="en">
+        <ConnectorPage install={{
+          ...connectorInstall,
+          hasDirectWindowsInstaller: true,
+          windowsInstallerSha256: installerSha256,
+          windowsInstallerUrl: OFFICIAL_V081_INSTALLER_URL,
+        }} />
+      </I18nProvider>,
+    );
+
+    expect(await screen.findByRole("link", { name: "Download Windows installer" })).toHaveAttribute(
+      "href",
+      OFFICIAL_V081_INSTALLER_URL,
+    );
+    expect(screen.getByText(installerSha256)).toBeVisible();
+    expect(screen.getAllByText(/Windows may warn once/u)[0]).toBeVisible();
   });
 
   it("explains the exact pairing-code location and pairs without preserving whitespace", async () => {
