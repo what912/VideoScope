@@ -91,7 +91,9 @@ graph. Production artifacts contain compiled first-party assets, not
 SHA-256, package count, and license counts in the reviewed policy. The reviewed
 graphs include MPL-2.0 packages in the public site and a CC-BY-4.0 package in
 the dashboard development graph; details are in
-`docs/third-party-licenses.md`.
+`docs/third-party-licenses.md`. The packaged dashboard production closure is
+React, React DOM and Scheduler; its exact versions, copyright notice and shared
+MIT license text are redistributed in `THIRD_PARTY_NOTICES.txt`.
 
 This automated inventory is a fail-closed release gate, not legal advice or a
 legal certification. Human review remains required before redistribution.

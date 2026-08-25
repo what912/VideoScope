@@ -159,7 +159,12 @@ reviewed identity.
 | `vitest` | 3.2.7 | development | MIT |
 
 Production wheels include compiled first-party dashboard assets and do not
-include `node_modules`.
+include `node_modules`. The compiled dashboard redistributes the exact
+production closure `react@19.2.8`, `react-dom@19.2.8` and `scheduler@0.27.0`.
+All three packages carry the same upstream MIT license file at these versions;
+its copyright notice and complete text are frozen in
+`THIRD_PARTY_NOTICES.txt`, which is included in the wheel, source archive and
+Windows Connector bundle.
 
 ## Public browser site packages
 

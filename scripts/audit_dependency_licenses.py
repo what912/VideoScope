@@ -21,6 +21,7 @@ EXPECTED_BUNDLE_MATERIALS = frozenset(
     {
         ("LICENSE", "LICENSE"),
         ("NOTICE", "NOTICE"),
+        ("THIRD_PARTY_NOTICES.txt", "THIRD_PARTY_NOTICES.txt"),
         ("docs/third-party-licenses.md", "third-party-licenses.md"),
         (
             "packaging/windows/requirements-runtime.lock",

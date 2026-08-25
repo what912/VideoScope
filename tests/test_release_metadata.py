@@ -72,6 +72,22 @@ def test_active_release_version_surfaces_agree() -> None:
     )
 
 
+def test_wheel_metadata_carries_dashboard_third_party_notices() -> None:
+    pyproject = tomllib.loads(read_text("pyproject.toml"))
+
+    assert pyproject["project"]["license-files"] == [
+        "LICENSE",
+        "NOTICE",
+        "THIRD_PARTY_NOTICES.txt",
+    ]
+
+
+def test_dashboard_third_party_notice_checkout_is_canonical_lf() -> None:
+    attributes = read_text(".gitattributes").splitlines()
+
+    assert "THIRD_PARTY_NOTICES.txt text eol=lf" in attributes
+
+
 def test_candidate_and_published_download_surfaces_are_separate() -> None:
     """A PREPARE candidate must not advertise assets that are not published."""
     readme = read_text("README.md")

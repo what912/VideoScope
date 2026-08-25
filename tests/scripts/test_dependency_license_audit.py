@@ -15,6 +15,7 @@ EXPECTED_NPM_LOCKS = ("web/package-lock.json", "site/package-lock.json")
 EXPECTED_BUNDLE_MATERIALS = (
     ("LICENSE", "LICENSE"),
     ("NOTICE", "NOTICE"),
+    ("THIRD_PARTY_NOTICES.txt", "THIRD_PARTY_NOTICES.txt"),
     ("docs/third-party-licenses.md", "third-party-licenses.md"),
     (
         "packaging/windows/requirements-runtime.lock",

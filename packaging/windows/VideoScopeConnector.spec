@@ -32,6 +32,7 @@ datas += collect_data_files("videoscope.reporting", includes=["templates/**"])
 datas += [
     (str(root / "LICENSE"), "licenses"),
     (str(root / "NOTICE"), "licenses"),
+    (str(root / "THIRD_PARTY_NOTICES.txt"), "licenses"),
     (str(root / "docs" / "third-party-licenses.md"), "licenses"),
     (str(runtime_lock), "licenses"),
     (str(license_root / "license-policy.json"), "licenses"),

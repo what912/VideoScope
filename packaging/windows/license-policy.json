@@ -95,12 +95,17 @@
     {
       "source": "NOTICE",
       "bundle_name": "NOTICE",
-      "sha256": "3be6d8cd91809edad63f1d5069c93498d71682653d72a89724a9161f1b6b5da2"
+      "sha256": "7f74feaf2166c3c9ee81c19a4ec7dddd124cb0c2441b7707c778e1a8c6b1cc27"
+    },
+    {
+      "source": "THIRD_PARTY_NOTICES.txt",
+      "bundle_name": "THIRD_PARTY_NOTICES.txt",
+      "sha256": "26cf7a9231c7269713ba43a2e72ea96fb257afd17bd0e05573984bdc4e24e854"
     },
     {
       "source": "docs/third-party-licenses.md",
       "bundle_name": "third-party-licenses.md",
-      "sha256": "940b3999cabc6be40f66c9b074708580a7415cb87d90fa4299ab1cb0991c842f"
+      "sha256": "7c8700852680d42cb1379b085378645578795d28d0d7696dfaae944bd1876d15"
     },
     {
       "source": "packaging/windows/requirements-runtime.lock",

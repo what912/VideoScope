@@ -39,6 +39,7 @@ def _valid_bundle(
     material_pairs = (
         ("LICENSE", "LICENSE"),
         ("NOTICE", "NOTICE"),
+        ("THIRD_PARTY_NOTICES.txt", "THIRD_PARTY_NOTICES.txt"),
         ("docs/third-party-licenses.md", "third-party-licenses.md"),
         (
             "packaging/windows/requirements-runtime.lock",
@@ -553,6 +554,7 @@ def test_windows_workflow_tracks_every_license_audit_input() -> None:
     for required_path in (
         "LICENSE",
         "NOTICE",
+        "THIRD_PARTY_NOTICES.txt",
         "docs/third-party-licenses.md",
         "pyproject.toml",
         "scripts/audit_dependency_licenses.py",
@@ -560,3 +562,11 @@ def test_windows_workflow_tracks_every_license_audit_input() -> None:
         "site/package-lock.json",
     ):
         assert workflow.count(f'      - "{required_path}"') == 2
+
+
+def test_windows_bundle_spec_carries_dashboard_third_party_notices() -> None:
+    spec = (
+        REPOSITORY_ROOT / "packaging" / "windows" / "VideoScopeConnector.spec"
+    ).read_text(encoding="utf-8")
+
+    assert '(str(root / "THIRD_PARTY_NOTICES.txt"), "licenses")' in spec
