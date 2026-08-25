@@ -1088,21 +1088,44 @@ def _probe_audio(
             raise RescueMediaError(
                 f"tonal media probe returned non-text JSON after {attempt} attempts"
             )
-        if isinstance(payload, dict):
-            streams = payload.get("streams")
-            raw_format = payload.get("format")
-            if (
-                isinstance(streams, list)
-                and all(isinstance(stream, dict) for stream in streams)
-                and isinstance(raw_format, dict)
-            ):
-                return cast(dict[str, object], payload)
+        if _is_usable_tonal_probe_payload(payload):
+            return cast(dict[str, object], payload)
         if attempt >= _TONAL_PROBE_ATTEMPTS:
             raise RescueMediaError(
                 f"tonal media probe returned incomplete data after {attempt} attempts"
             )
 
     raise AssertionError("tonal media probe retry loop exhausted unexpectedly")
+
+
+def _is_usable_tonal_probe_payload(payload: object) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    streams = payload.get("streams")
+    raw_format = payload.get("format")
+    if (
+        not isinstance(streams, list)
+        or not all(isinstance(stream, dict) for stream in streams)
+        or not isinstance(raw_format, dict)
+    ):
+        return False
+    audio = [stream for stream in streams if stream.get("codec_type") == "audio"]
+    video = [stream for stream in streams if stream.get("codec_type") == "video"]
+    if len(audio) != 1 or len(video) != 1:
+        return False
+    try:
+        duration = float(raw_format["duration"])
+        int(audio[0]["sample_rate"])
+        int(audio[0]["channels"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    channel_layout = audio[0].get("channel_layout")
+    return (
+        math.isfinite(duration)
+        and duration > 0
+        and isinstance(channel_layout, str)
+        and bool(channel_layout)
+    )
 
 
 def _audio_properties(

@@ -1,11 +1,12 @@
 # Third-party dependency and license inventory
 
-Audit date: 2026-07-29
+Audit date: 2026-08-25
 
-This inventory covers every direct dependency declared by `pyproject.toml` and
-`web/package.json`. Package metadata and upstream license files remain
-authoritative. Transitive dependencies are selected by installers; distributors
-must review the exact resolved environment they ship.
+This inventory covers direct declarations plus the frozen Windows Python 3.12
+base + `web` runtime closure and both complete npm lock graphs. Package metadata
+and upstream license files remain authoritative. The automated gate detects
+identity and reviewed-license drift; it is not legal advice or a legal
+certification. Human review remains an open release gate.
 
 ## Python base installation
 
@@ -35,7 +36,7 @@ Uvicorn, or Node dependency.
 | `build` | wheel and sdist build | MIT |
 | `setuptools` | build backend | MIT |
 | `wheel` | wheel support | MIT |
-| `httpx2` | in-process API test client | BSD-3-Clause |
+| `httpx2` | in-process API test client (the installed distribution is `httpx2`, not `httpx`) | BSD-3-Clause |
 | `fastapi` | Web API test runtime | MIT |
 | `uvicorn` | local server test runtime | BSD-3-Clause |
 | `python-multipart` | upload test runtime | Apache-2.0 |
@@ -75,9 +76,72 @@ redistribution.
 | `uvicorn` | local ASGI server | BSD-3-Clause |
 | `python-multipart` | streamed multipart parsing | Apache-2.0 |
 
+## Frozen Windows Connector Python 3.12 runtime
+
+The exact base + `web` closure below is the Windows runtime identity/license
+lock. It is not an artifact-hash lock. The installer first installs
+`packaging/windows/requirements-runtime.lock`, then installs this project with
+`--no-deps`. Every bundled distribution must include its metadata and non-empty
+license material. The Windows policy binds the normalized distribution name,
+exact version, reviewed license identifier, and the exact relative path set and
+canonical UTF-8 LF SHA-256 of every license-marked metadata file. Modern
+`License-Expression` metadata is preferred; the documented legacy `License`
+and classifier values use a deterministic, bounded normalization table.
+
+| Distribution | Exact version | Reviewed SPDX-style identifier |
+| --- | --- | --- |
+| `annotated-doc` | `0.0.4` | `MIT` |
+| `annotated-types` | `0.8.0` | `MIT` |
+| `anyio` | `4.14.2` | `MIT` |
+| `click` | `8.4.2` | `BSD-3-Clause` |
+| `colorama` | `0.4.6` | `BSD-3-Clause` |
+| `fastapi` | `0.140.13` | `MIT` |
+| `h11` | `0.16.0` | `MIT` |
+| `idna` | `3.18` | `BSD-3-Clause` |
+| `Jinja2` | `3.1.6` | `BSD-3-Clause` |
+| `markdown-it-py` | `4.2.0` | `MIT` |
+| `MarkupSafe` | `3.0.3` | `BSD-3-Clause` |
+| `mdurl` | `0.1.2` | `MIT` |
+| `numpy` | `2.4.6` | `BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0` |
+| `opencv-python-headless` | `5.0.0.93` | `Apache-2.0` |
+| `pillow` | `12.3.0` | `MIT-CMU` |
+| `platformdirs` | `4.11.0` | `MIT` |
+| `pydantic` | `2.13.4` | `MIT` |
+| `pydantic-core` | `2.46.4` | `MIT` |
+| `Pygments` | `2.20.0` | `BSD-2-Clause` |
+| `python-multipart` | `0.0.32` | `Apache-2.0` |
+| `rich` | `15.0.0` | `MIT` |
+| `scenedetect-headless` | `0.7.1` | `BSD-3-Clause` |
+| `shellingham` | `1.5.4` | `ISC` |
+| `starlette` | `1.3.1` | `BSD-3-Clause` |
+| `tqdm` | `4.70.0` | `MPL-2.0 AND MIT` |
+| `typer` | `0.27.0` | `MIT` |
+| `typing-extensions` | `4.16.0` | `PSF-2.0` |
+| `typing-inspection` | `0.4.2` | `MIT` |
+| `uvicorn` | `0.51.0` | `BSD-3-Clause` |
+
+The selected Windows candidate environment was CPython 3.12.1. The lock records
+version/license identity only; wheel filenames and artifact hashes are outside
+this bounded review.
+
+## Optional ASR group
+
+| Distribution | Purpose | Declared license |
+| --- | --- | --- |
+| `faster-whisper` | optional local transcription provider | MIT |
+| `ctranslate2` | faster-whisper inference runtime | MIT |
+
+Neither package nor any Whisper checkpoint is included in the base + `web`
+Windows runtime lock. Checkpoint/model terms are separate and must be reviewed
+for any explicitly selected model.
+
 ## Dashboard packages
 
-Resolved versions below come from `web/package-lock.json` on the audit date.
+Direct resolved versions below come from `web/package-lock.json` on the audit
+date. The complete transitive graph is frozen in the summary after the public
+site direct-dependency table. Text-file digests use canonical UTF-8 content
+with LF line endings, so an LF/CRLF checkout-only change does not alter the
+reviewed identity.
 
 | Package | Resolved version | Role | Declared license |
 | --- | --- | --- | --- |
@@ -100,8 +164,8 @@ include `node_modules`.
 ## Public browser site packages
 
 Resolved versions and SPDX identifiers below come from `site/package-lock.json`
-on the audit date. This table covers direct dependencies only; it is not an
-exhaustive transitive license report.
+on the audit date. This table lists direct dependencies; the complete graph is
+covered by the frozen summary below.
 
 ### Runtime
 
@@ -137,6 +201,23 @@ The public browser site deploys compiled first-party assets and project-authored
 media. It does not deploy `node_modules`. Missing optional Supabase configuration
 selects the unavailable adapter and leaves sign-in and sharing disabled.
 
+## Complete npm lock graph freeze
+
+The offline policy audits every non-root `packages` entry, not only the direct
+tables above. It rejects lockfile digest, package count, license count, missing
+version/license/integrity, and unreviewed-license drift.
+
+| Lockfile | SHA-256 | Non-root packages | Complete license counts |
+| --- | --- | ---: | --- |
+| `web/package-lock.json` | `261dd00a3b6ab2af8f80fa6478ca9d77e6061588411441ecf368526a851796bd` | 217 | Apache-2.0 5; BlueOak-1.0.0 3; BSD-2-Clause 2; BSD-3-Clause 2; CC-BY-4.0 1; CC0-1.0 1; ISC 7; MIT 194; MIT-0 2 |
+| `site/package-lock.json` | `2656b753a635ce794039f91b51f075f45196b1738451b7f62190702f2153537f` | 272 | 0BSD 1; Apache-2.0 19; BlueOak-1.0.0 4; BSD-2-Clause 9; BSD-3-Clause 3; CC0-1.0 1; ISC 10; MIT 210; MIT-0 2; MPL-2.0 12; Python-2.0 1 |
+
+The dashboard graph's CC-BY-4.0 occurrence is `caniuse-lite@1.0.30001806`.
+The public-site graph's twelve MPL-2.0 occurrences are `lightningcss@1.33.0`
+and its eleven platform packages. These are explicit reviewed occurrences, not
+a conclusion that no additional attribution or redistribution action is ever
+required.
+
 ## External FFmpeg boundary
 
 FFmpeg and ffprobe are user-installed external executables. VideoScope does not
@@ -150,8 +231,10 @@ exact build.
 Before publishing:
 
 1. Build in a clean environment.
-2. Record `python -m pip list` for each shipped installation profile.
-3. Run `npm ci` and retain `web/package-lock.json`.
-4. Review transitive licenses and model terms for the resolved versions.
+2. Audit `packaging/windows/requirements-runtime.lock` and the exact bundle
+   metadata/license material.
+3. Retain and audit both unchanged npm lockfiles against the committed policy.
+4. Complete human review of transitive licenses and model terms for any profile
+   being redistributed.
 5. Re-run the distribution audit to confirm no third-party binary, model, test
    video, cache, or personal path was bundled accidentally.

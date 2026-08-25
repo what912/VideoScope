@@ -12,13 +12,21 @@ from typing import Any, cast
 from scripts import smoke_test
 
 REPOSITORY = Path(__file__).resolve().parents[1]
-EXPECTED_VERSION = "0.8.1"
-EXPECTED_TAG = f"v{EXPECTED_VERSION}"
-EXPECTED_WHEEL = f"genvideoscope-{EXPECTED_VERSION}-py3-none-any.whl"
-EXPECTED_DOWNLOAD_URL = (
+CANDIDATE_VERSION = "0.8.1"
+PUBLISHED_ASSET_VERSION = "0.8.0"
+EXPECTED_TAG = f"v{CANDIDATE_VERSION}"
+EXPECTED_WHEEL = f"genvideoscope-{CANDIDATE_VERSION}-py3-none-any.whl"
+PUBLISHED_WHEEL = f"genvideoscope-{PUBLISHED_ASSET_VERSION}-py3-none-any.whl"
+PUBLISHED_DOWNLOAD_URL = (
     "https://github.com/what912/VideoScope/releases/download/"
-    f"{EXPECTED_TAG}/{EXPECTED_WHEEL}"
+    f"v{PUBLISHED_ASSET_VERSION}/{PUBLISHED_WHEEL}"
 )
+CANDIDATE_DOWNLOAD_PREFIX = (
+    "https://github.com/what912/VideoScope/releases/download/v0.8.1/"
+)
+CANDIDATE_WHEEL_DOWNLOAD_URL = f"{CANDIDATE_DOWNLOAD_PREFIX}{EXPECTED_WHEEL}"
+HISTORICAL_PREPARE_COMMIT = "a155c2cbdd14081682ea57493afc34b9d135f963"
+TONAL_FIX_COMMIT = "912fe467192f615e9ad3f6c338fbd388ac1a065a"
 
 
 def read_text(relative_path: str) -> str:
@@ -34,51 +42,77 @@ def read_json(relative_path: str) -> object:
 def test_active_release_version_surfaces_agree() -> None:
     """Every executable or build-facing version must identify v0.8.1."""
     pyproject = tomllib.loads(read_text("pyproject.toml"))
-    assert pyproject["project"]["version"] == EXPECTED_VERSION
+    assert pyproject["project"]["version"] == CANDIDATE_VERSION
 
     package_init = read_text("src/videoscope/__init__.py")
-    assert f'__version__ = "{EXPECTED_VERSION}"' in package_init
+    assert f'__version__ = "{CANDIDATE_VERSION}"' in package_init
 
     for package_path in ("web/package.json", "site/package.json"):
         package = read_json(package_path)
         assert isinstance(package, dict)
-        assert package["version"] == EXPECTED_VERSION
+        assert package["version"] == CANDIDATE_VERSION
 
     for lock_path in ("web/package-lock.json", "site/package-lock.json"):
         lock = read_json(lock_path)
         assert isinstance(lock, dict)
-        assert lock["version"] == EXPECTED_VERSION
-        assert lock["packages"][""]["version"] == EXPECTED_VERSION
+        assert lock["version"] == CANDIDATE_VERSION
+        assert lock["packages"][""]["version"] == CANDIDATE_VERSION
 
     installer = read_text("packaging/windows/VideoScope.iss")
-    assert f'#define MyAppVersion "{EXPECTED_VERSION}"' in installer
+    assert f'#define MyAppVersion "{CANDIDATE_VERSION}"' in installer
     assert '#define MyVersionInfoVersion "0.8.1.0"' in installer
 
     citation = read_text("CITATION.cff")
     assert re.search(r"(?m)^version: 0\.8\.1$", citation)
     assert "date-released:" not in citation
 
-    assert smoke_test.EXPECTED_VERSION == f"VideoScope {EXPECTED_VERSION}"
+    assert smoke_test.EXPECTED_VERSION == f"VideoScope {CANDIDATE_VERSION}"
     assert smoke_test.EXPECTED_DISTRIBUTION_PREFIX == (
-        f"genvideoscope-{EXPECTED_VERSION}-"
+        f"genvideoscope-{CANDIDATE_VERSION}-"
     )
 
 
-def test_candidate_download_and_release_documents_agree() -> None:
-    """Candidate-facing install and release documents must name v0.8.1."""
+def test_candidate_and_published_download_surfaces_are_separate() -> None:
+    """A PREPARE candidate must not advertise assets that are not published."""
     readme = read_text("README.md")
     connector_install = read_text("site/src/config/connector-install.ts")
-    assert EXPECTED_DOWNLOAD_URL in readme
-    assert EXPECTED_DOWNLOAD_URL in connector_install
+    assert PUBLISHED_DOWNLOAD_URL in readme
+    assert PUBLISHED_DOWNLOAD_URL in connector_install
+    assert CANDIDATE_DOWNLOAD_PREFIX not in readme
+    assert CANDIDATE_WHEEL_DOWNLOAD_URL not in connector_install
+    assert (
+        "currently published stable `v0.8.0` release, not the `v0.8.1` "
+        "development candidate"
+    ) in readme
+    assert "安装公开的 GitHub 开发候选版" not in readme
 
     notes = read_text("docs/releases/v0.8.1-notes.md")
     checklist = read_text("docs/releases/v0.8.1-checklist.md")
     assert "draft candidate; not tagged or published" in notes
-    assert "The automated PREPARE gates are green." in notes
+    assert "historical" in notes.lower()
+    assert "stale" in notes.lower()
+    assert "The automated PREPARE gates are green." not in notes
+    assert "The automated PREPARE gates are green." not in checklist
+    assert "current candidate is frozen" not in notes.lower()
+    assert "current candidate is frozen" not in checklist.lower()
     assert "Two Windows reliability blockers remain open" not in notes
     assert "PREPARE-ONLY; not tagged or published" in checklist
     assert EXPECTED_WHEEL in notes
+    assert "release-evidence.json" in notes
+    assert "release-evidence.json" in checklist
     assert f"Reserved tag: `{EXPECTED_TAG}`" in checklist
+    for document in (notes, checklist):
+        assert (
+            f"Historical PREPARE evidence commit: `{HISTORICAL_PREPARE_COMMIT}`."
+            in document
+        )
+        assert "This evidence does not cover any later commit." in document
+        assert (
+            f"The tonal probe retry fix is committed at `{TONAL_FIX_COMMIT}`; "
+            "the release-compliance changes are also committed in the current "
+            "candidate history."
+        ) in document
+        assert "remain uncommitted" not in document.lower()
 
 
 def test_v080_release_evidence_remains_historical() -> None:

@@ -1,5 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+import re
 from pathlib import Path
 
 from PyInstaller.utils.hooks import (
@@ -10,12 +11,33 @@ from PyInstaller.utils.hooks import (
 
 root = Path(SPECPATH).resolve().parents[1]
 entry = root / "src" / "videoscope" / "windows" / "launcher.py"
+license_root = root / "packaging" / "windows"
+runtime_lock = license_root / "requirements-runtime.lock"
+lock_entry = re.compile(
+    r"^(?P<name>[A-Za-z0-9][A-Za-z0-9._-]*)==(?P<version>[^\s#]+)"
+    r"\s+#\s+SPDX-License-Identifier:\s+(?P<license>.+)$"
+)
+runtime_distributions = []
+for line in runtime_lock.read_text(encoding="utf-8").splitlines():
+    if not line or line.startswith("#"):
+        continue
+    match = lock_entry.fullmatch(line)
+    if match is None:
+        raise ValueError(f"Invalid runtime lock entry: {line}")
+    runtime_distributions.append(match.group("name"))
 
 datas = []
 datas += collect_data_files("videoscope.web", includes=["static/**"])
 datas += collect_data_files("videoscope.reporting", includes=["templates/**"])
-datas += copy_metadata("scenedetect-headless")
-datas += copy_metadata("opencv-python-headless")
+datas += [
+    (str(root / "LICENSE"), "licenses"),
+    (str(root / "NOTICE"), "licenses"),
+    (str(root / "docs" / "third-party-licenses.md"), "licenses"),
+    (str(runtime_lock), "licenses"),
+    (str(license_root / "license-policy.json"), "licenses"),
+]
+for distribution in runtime_distributions:
+    datas += copy_metadata(distribution)
 
 hiddenimports = []
 hiddenimports += collect_submodules("uvicorn")

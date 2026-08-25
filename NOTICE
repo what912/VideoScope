@@ -4,11 +4,15 @@ Copyright 2026 VideoScope contributors
 This product includes software developed by the VideoScope contributors and is
 licensed under the Apache License, Version 2.0. See LICENSE.
 
-Direct runtime dependencies
----------------------------
+Windows Connector runtime dependency review
+-------------------------------------------
 
-VideoScope uses the following Python packages. Their own license files and
-package metadata remain authoritative:
+The Windows Connector freezes the exact Python 3.12 base plus `web` runtime
+closure in `packaging/windows/requirements-runtime.lock`. It includes the
+direct packages below and their locked transitives. The bundle carries the
+reviewed lock, policy, this notice, the third-party inventory, and each locked
+distribution's metadata/license material. Package metadata and upstream
+license files remain authoritative:
 
 - Typer — MIT License
 - Rich — MIT License
@@ -30,14 +34,14 @@ Development and release dependencies
 - build — MIT License
 - setuptools — MIT License
 - wheel — MIT License
-- HTTPX — BSD-3-Clause License
+- httpx2 — BSD-3-Clause License
 - PyInstaller — GPL-2.0-or-later with the PyInstaller bootloader exception
 - Inno Setup — custom redistribution terms; generated installer output is
   distributable subject to the licenses of the packaged application files
 
-Transitive dependencies are resolved by the Python package installer and retain
-their respective licenses. Distributors should review the licenses of the exact
-resolved dependency set they ship.
+Development dependencies are not part of the Windows runtime lock. Their
+transitive dependencies retain their respective licenses and require a separate
+review if redistributed.
 
 Optional extras
 ---------------
@@ -47,9 +51,10 @@ OpenCLIP, PaddleOCR, PaddlePaddle, FastAPI, Uvicorn, python-multipart, and their
 transitive dependencies. They are not part of the base installation and no
 model weights are bundled.
 
-The optional `asr` extra installs faster-whisper and CTranslate2. VideoScope
-does not bundle Whisper checkpoints. Checkpoint terms are separate from the
-Python packages and must be reviewed for the exact model selected by the user.
+The optional `asr` extra installs faster-whisper (MIT) and its CTranslate2
+runtime (MIT). VideoScope does not bundle Whisper checkpoints. Checkpoint terms
+are separate from the Python packages and must be reviewed for the exact model
+selected by the user.
 Ollama is an external local application; its models are never bundled or pulled
 by VideoScope and retain their individual terms.
 Downstream users must review the licenses and model-weight terms of the exact
@@ -76,10 +81,17 @@ copy, bundle, or redistribute FFmpeg binaries. FFmpeg licensing depends on how a
 particular build was configured; users and downstream distributors must review
 the license information supplied with their chosen FFmpeg build.
 
-Local dashboard
----------------
+JavaScript lock graphs
+----------------------
 
 The source dashboard directly uses React, React DOM, TypeScript, Vite, Vitest,
-jsdom, and Testing Library packages. Production wheels contain only the
-compiled local dashboard assets, not node_modules. Exact direct license
-identifiers and audit notes are recorded in docs/third-party-licenses.md.
+jsdom, and Testing Library packages. The public site has a separate dependency
+graph. Production artifacts contain compiled first-party assets, not
+`node_modules`. The complete non-root inventories are frozen by lockfile
+SHA-256, package count, and license counts in the reviewed policy. The reviewed
+graphs include MPL-2.0 packages in the public site and a CC-BY-4.0 package in
+the dashboard development graph; details are in
+`docs/third-party-licenses.md`.
+
+This automated inventory is a fail-closed release gate, not legal advice or a
+legal certification. Human review remains required before redistribution.

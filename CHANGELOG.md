@@ -13,6 +13,8 @@
 - Bounded Video Rescue V15 qualification for measured tonal, clarity, audio,
   and stabilization candidates while preserving preview, confirmation, source
   immutability, and independent verification gates.
+- Deterministic, no-clobber release evidence generation and verification for
+  the exact wheel, sdist, Windows installer, frozen commit and checksums.
 
 ### Changed
 
@@ -28,6 +30,9 @@
   validation-controller paths without treating target collisions as success.
 - Removed a Publish Ready SSE test race by waiting for callback registration
   before delivering the synthetic event.
+- Retries a bounded tonal probe only when a nominally successful result is
+  semantically unusable, while unsupported complete stream layouts still fail
+  closed without being reinterpreted.
 
 ### Security and privacy
 
@@ -35,6 +40,9 @@
   version without changing the declared dependency surface.
 - Tightened public-case provenance, allowlists, path containment, serialized
   evidence, and no-clobber validation roots.
+- Audits the frozen Python/npm license closure and requires Windows bundles to
+  carry and verify the project license, `NOTICE` and third-party license
+  materials; public installer links require an exact official URL/SHA pair.
 
 ## [0.8.0] - 2026-08-11
 

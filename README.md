@@ -98,7 +98,7 @@ VideoScope 可以把本地长视频整理成可复核、可追溯的成品，全
 **选定片段**（只导出用户明确选择的时刻）。
 
 ```powershell
-python -m pip install https://github.com/what912/VideoScope/releases/download/v0.8.1/genvideoscope-0.8.1-py3-none-any.whl
+python -m pip install https://github.com/what912/VideoScope/releases/download/v0.8.0/genvideoscope-0.8.0-py3-none-any.whl
 videoscope content meeting.mp4 `
   --goal faithful_clean `
   --exclude-range 120:148:"Long reviewed pause" `
@@ -127,7 +127,7 @@ video, and audio problems. It never overwrites the source. Install the base whee
 and provide local `ffmpeg` and `ffprobe` on `PATH`:
 
 ```powershell
-python -m pip install https://github.com/what912/VideoScope/releases/download/v0.8.1/genvideoscope-0.8.1-py3-none-any.whl
+python -m pip install https://github.com/what912/VideoScope/releases/download/v0.8.0/genvideoscope-0.8.0-py3-none-any.whl
 videoscope doctor
 videoscope rescue input.mp4 `
   --output runs\video-rescue `
@@ -333,10 +333,10 @@ brew install ffmpeg
 
 ## 安装
 
-安装公开的 GitHub 开发候选版：
+安装当前已发布的稳定版（currently published stable `v0.8.0` release, not the `v0.8.1` development candidate）：
 
 ```powershell
-python -m pip install https://github.com/what912/VideoScope/releases/download/v0.8.1/genvideoscope-0.8.1-py3-none-any.whl
+python -m pip install https://github.com/what912/VideoScope/releases/download/v0.8.0/genvideoscope-0.8.0-py3-none-any.whl
 videoscope doctor
 ```
 

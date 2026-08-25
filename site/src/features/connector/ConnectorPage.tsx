@@ -6,7 +6,10 @@ import {
   useState,
 } from "react";
 
-import { connectorInstall } from "../../config/connector-install";
+import {
+  connectorInstall,
+  type ConnectorInstall,
+} from "../../config/connector-install";
 import { useI18n } from "../../i18n/I18nProvider";
 import {
   connectorClient,
@@ -50,7 +53,11 @@ async function copyToClipboard(value: string): Promise<void> {
   textarea.remove();
 }
 
-export function ConnectorPage() {
+interface ConnectorPageProps {
+  install?: ConnectorInstall;
+}
+
+export function ConnectorPage({ install = connectorInstall }: ConnectorPageProps) {
   const { t } = useI18n();
   const [state, setState] = useState<State>("checking");
   const [status, setStatus] = useState<ConnectorStatus | null>(null);
@@ -177,20 +184,27 @@ export function ConnectorPage() {
                 <div className="connector-actions">
                   <a
                     className="button button--primary"
-                    href={connectorInstall.windowsInstallerUrl}
+                    href={install.windowsInstallerUrl}
                     rel="noreferrer"
                   >
-                    {connectorInstall.hasDirectWindowsInstaller
+                    {install.hasDirectWindowsInstaller
                       ? t.connector.downloadWindows
                       : t.connector.downloadFallback}
                   </a>
-                  <a className="button button--quiet" href={connectorInstall.releasesUrl} rel="noreferrer">
+                  <a className="button button--quiet" href={install.releasesUrl} rel="noreferrer">
                     {t.connector.allDownloads}
                   </a>
                 </div>
-                {!connectorInstall.hasDirectWindowsInstaller ? (
+                {!install.hasDirectWindowsInstaller ? (
                   <p className="connector-notice">{t.connector.installerPreviewNotice}</p>
-                ) : null}
+                ) : (
+                  <>
+                    <p className="connector-notice">
+                      SHA-256: <code>{install.windowsInstallerSha256}</code>
+                    </p>
+                    <p className="connector-notice">{t.connector.windowsWarningDescription}</p>
+                  </>
+                )}
               </div>
             </li>
 
@@ -214,7 +228,7 @@ export function ConnectorPage() {
                 <p className="connector-step__label">{t.connector.stepLabels.start}</p>
                 <h3>{t.connector.startTitle}</h3>
                 <p>{t.connector.startDescription}</p>
-                <a className="button button--quiet" href={connectorInstall.startProtocolUrl}>
+                <a className="button button--quiet" href={install.startProtocolUrl}>
                   {t.connector.startButton}
                 </a>
               </div>
@@ -252,10 +266,10 @@ export function ConnectorPage() {
             </div>
             <div className="connector-manual">
               <div><strong>{t.connector.manualTitle}</strong><p>{t.connector.manualDescription}</p></div>
-              <pre><code>{connectorInstall.legacyInstallCommands}</code></pre>
+              <pre><code>{install.legacyInstallCommands}</code></pre>
               <button
                 className="button button--quiet"
-                onClick={() => void copy("install", connectorInstall.legacyInstallCommands)}
+                onClick={() => void copy("install", install.legacyInstallCommands)}
                 type="button"
               >
                 {copied === "install" ? t.connector.copied : t.connector.copyCommands}
@@ -312,10 +326,10 @@ export function ConnectorPage() {
             <summary>{t.connector.cannotFindCode}</summary>
             <p>{t.connector.cannotFindCodeDescription}</p>
             <div className="connector-command-row">
-              <code>{connectorInstall.legacyStartCommand}</code>
+              <code>{install.legacyStartCommand}</code>
               <button
                 className="button button--quiet"
-                onClick={() => void copy("start", connectorInstall.legacyStartCommand)}
+                onClick={() => void copy("start", install.legacyStartCommand)}
                 type="button"
               >
                 {copied === "start" ? t.connector.copied : t.connector.copyCommand}
