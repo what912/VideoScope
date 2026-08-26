@@ -112,6 +112,7 @@ MAX_COMMAND_STDOUT_BYTES: Final = 64 * 1024
 MAX_COMMAND_STDERR_BYTES: Final = 8 * 1024
 PROCESS_POLL_SECONDS: Final = 0.02
 PROCESS_STOP_GRACE_SECONDS: Final = 0.5
+_MEDIA_TIMING_PROBE_ATTEMPTS: Final = 2
 _MEDIA_TIMING_TOLERANCE_SECONDS: Final = 0.002
 _STAGING_RELATIVE_PATH: Final = Path("staging")
 _FINAL_NAME: Final = "faithful-rescue.mp4"
@@ -2089,22 +2090,42 @@ class NativeRescueExecutor:
         work_root: Path,
         cancellation_callback: Callable[[], bool],
     ) -> tuple[float, int | None]:
-        result = self._run(
-            build_media_probe_command(candidate, ffprobe=self._ffprobe),
-            source,
-            work_root,
-            cancellation_callback,
-            extra_sensitive_paths=(candidate,),
-        )
-        if result.returncode != 0:
-            raise RescueMediaError(result.stderr_summary)
+        for attempt in range(1, _MEDIA_TIMING_PROBE_ATTEMPTS + 1):
+            result = self._run(
+                build_media_probe_command(candidate, ffprobe=self._ffprobe),
+                source,
+                work_root,
+                cancellation_callback,
+                extra_sensitive_paths=(candidate,),
+            )
+            if result.returncode != 0:
+                raise RescueMediaError(result.stderr_summary)
+            try:
+                payload = json.loads(result.stdout_summary)
+            except (json.JSONDecodeError, TypeError):
+                payload = None
+            if (
+                not isinstance(payload, dict)
+                or not isinstance(payload.get("streams"), list)
+                or not isinstance(payload.get("format"), dict)
+                or "duration" not in payload["format"]
+            ):
+                if attempt < _MEDIA_TIMING_PROBE_ATTEMPTS:
+                    continue
+                raise RescueMediaError(
+                    "media timing probe returned invalid JSON"
+                ) from None
+            streams = payload["streams"]
+            format_data = payload["format"]
+            break
+        else:
+            raise AssertionError("media timing probe retry loop exhausted unexpectedly")
         try:
-            payload = json.loads(result.stdout_summary)
-            streams = payload.get("streams", [])
-            format_data = payload.get("format", {})
-            container_duration = float(format_data.get("duration"))
-        except (AttributeError, json.JSONDecodeError, TypeError, ValueError):
-            raise RescueMediaError("media timing probe returned invalid JSON") from None
+            container_duration = float(format_data["duration"])
+        except (TypeError, ValueError):
+            raise RescueMediaError(
+                "media timing probe returned invalid timing"
+            ) from None
         videos = (
             tuple(
                 stream
