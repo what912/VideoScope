@@ -1285,6 +1285,157 @@ def test_media_probe_uses_cfr_video_timeline_when_audio_or_video_is_longer(
 
 
 @pytest.mark.parametrize(
+    "first_stdout",
+    (
+        '{"streams":[',
+        json.dumps({"streams": [], "format": {}}),
+        json.dumps({"format": {"duration": "42.021333"}}),
+        json.dumps({"streams": "truncated", "format": {"duration": "42.021333"}}),
+    ),
+)
+def test_media_probe_retries_once_after_zero_exit_unusable_payload(
+    tmp_path: Path,
+    first_stdout: str,
+) -> None:
+    expected = _media_probe_json(
+        container_duration=42.021333,
+        video_duration=42.0,
+        video_start=0.083008,
+        fps=24.0,
+        frame_count=1008,
+        audio_duration=42.021333,
+    )
+    attempts = 0
+
+    def runner(
+        arguments: tuple[str, ...],
+        *,
+        timeout_seconds: float,
+        sensitive_paths: tuple[Path, ...],
+        cancellation_callback: Callable[[], bool],
+    ) -> CommandResult:
+        nonlocal attempts
+        del arguments, timeout_seconds, sensitive_paths, cancellation_callback
+        attempts += 1
+        stdout = first_stdout if attempts == 1 else expected
+        return CommandResult(0, "", stdout)
+
+    duration, sample_rate = NativeRescueExecutor(runner=runner)._probe_media(
+        tmp_path / "候选.mp4",
+        tmp_path / "源.mp4",
+        tmp_path,
+        lambda: False,
+    )
+
+    assert duration == 42.0
+    assert sample_rate == 48000
+    assert attempts == 2
+
+
+def test_media_probe_fails_closed_after_two_zero_exit_invalid_payloads(
+    tmp_path: Path,
+) -> None:
+    attempts = 0
+
+    def runner(
+        arguments: tuple[str, ...],
+        *,
+        timeout_seconds: float,
+        sensitive_paths: tuple[Path, ...],
+        cancellation_callback: Callable[[], bool],
+    ) -> CommandResult:
+        nonlocal attempts
+        del arguments, timeout_seconds, sensitive_paths, cancellation_callback
+        attempts += 1
+        return CommandResult(0, "", '{"streams":[')
+
+    with pytest.raises(RescueMediaError) as exc_info:
+        NativeRescueExecutor(runner=runner)._probe_media(
+            tmp_path / "私有 候选.mp4",
+            tmp_path / "私有 源.mp4",
+            tmp_path,
+            lambda: False,
+        )
+
+    assert attempts == 2
+    assert exc_info.value.internal_message == "media timing probe returned invalid JSON"
+    assert str(tmp_path) not in str(exc_info.value)
+
+
+def test_media_probe_does_not_retry_nonzero_probe_result(tmp_path: Path) -> None:
+    attempts = 0
+
+    def runner(
+        arguments: tuple[str, ...],
+        *,
+        timeout_seconds: float,
+        sensitive_paths: tuple[Path, ...],
+        cancellation_callback: Callable[[], bool],
+    ) -> CommandResult:
+        nonlocal attempts
+        del arguments, timeout_seconds, sensitive_paths, cancellation_callback
+        attempts += 1
+        return CommandResult(1, "ffprobe failed", "")
+
+    with pytest.raises(RescueMediaError) as exc_info:
+        NativeRescueExecutor(runner=runner)._probe_media(
+            tmp_path / "candidate.mp4",
+            tmp_path / "source.mp4",
+            tmp_path,
+            lambda: False,
+        )
+
+    assert attempts == 1
+    assert exc_info.value.internal_message == "ffprobe failed"
+
+
+def test_media_probe_does_not_retry_runner_error(tmp_path: Path) -> None:
+    attempts = 0
+
+    def runner(
+        arguments: tuple[str, ...],
+        *,
+        timeout_seconds: float,
+        sensitive_paths: tuple[Path, ...],
+        cancellation_callback: Callable[[], bool],
+    ) -> CommandResult:
+        nonlocal attempts
+        del arguments, timeout_seconds, sensitive_paths, cancellation_callback
+        attempts += 1
+        raise RescueMediaError("media command could not start")
+
+    with pytest.raises(RescueMediaError) as exc_info:
+        NativeRescueExecutor(runner=runner)._probe_media(
+            tmp_path / "candidate.mp4",
+            tmp_path / "source.mp4",
+            tmp_path,
+            lambda: False,
+        )
+
+    assert attempts == 1
+    assert exc_info.value.internal_message == "media command could not start"
+
+
+def test_media_probe_does_not_retry_cancellation(tmp_path: Path) -> None:
+    cancellation_checks = 0
+
+    def cancellation_callback() -> bool:
+        nonlocal cancellation_checks
+        cancellation_checks += 1
+        return True
+
+    with pytest.raises(RescueCancelledError):
+        NativeRescueExecutor()._probe_media(
+            tmp_path / "candidate.mp4",
+            tmp_path / "source.mp4",
+            tmp_path,
+            cancellation_callback,
+        )
+
+    assert cancellation_checks == 1
+
+
+@pytest.mark.parametrize(
     ("update_stream", "remove_key"),
     (
         ({"avg_frame_rate": "24000/1001", "r_frame_rate": "24/1"}, None),
@@ -1314,6 +1465,7 @@ def test_media_probe_rejects_unverified_video_timeline_inventory(
     video.update(update_stream)
     if remove_key is not None:
         video.pop(remove_key)
+    attempts = 0
 
     def runner(
         arguments: tuple[str, ...],
@@ -1322,7 +1474,9 @@ def test_media_probe_rejects_unverified_video_timeline_inventory(
         sensitive_paths: tuple[Path, ...],
         cancellation_callback: Callable[[], bool],
     ) -> CommandResult:
+        nonlocal attempts
         del arguments, timeout_seconds, sensitive_paths, cancellation_callback
+        attempts += 1
         return CommandResult(0, "", json.dumps(payload))
 
     with pytest.raises(RescueMediaError) as exc_info:
@@ -1336,6 +1490,7 @@ def test_media_probe_rejects_unverified_video_timeline_inventory(
     assert exc_info.value.internal_message == (
         "media timing probe returned invalid timing"
     )
+    assert attempts == 1
 
 
 def test_multiple_deblur_operations_preserve_locked_and_removed_timeline() -> None:
