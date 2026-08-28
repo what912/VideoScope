@@ -6,7 +6,19 @@
 
 ## [Unreleased]
 
-## [0.8.1] - Pending publication
+## [0.8.2] - Pending publication
+
+### Fixed
+
+- Restores persisted Video Rescue damage-map access after preparation state is
+  reloaded, so the review page does not lose the issued plan context.
+- Keeps stabilization verification exact across generated control/candidate
+  siblings while binding the parent with its own timestamp digest and equal
+  frame count. This permits the confirmed full output to complete without
+  weakening source immutability, topology, preview, confirmation, or independent
+  verification gates.
+
+## [0.8.1] - 2026-08-27
 
 ### Added
 
