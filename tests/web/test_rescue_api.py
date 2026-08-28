@@ -1240,6 +1240,22 @@ def test_needs_review_survives_web_sse_and_persisted_restore(tmp_path: Path) -> 
         restored.shutdown()
 
 
+def test_persisted_damage_map_remains_readable_after_terminal_restart(
+    tmp_path: Path,
+) -> None:
+    config, _state_path, payload = _completed_contract_state(tmp_path)
+    restored = RescueJobManager(config, pipeline_factory=ContractRescuePipeline)
+    try:
+        record = restored.require(payload["job_id"])
+        assert record.preparation is None
+        assert (
+            restored.damage_map(record.job_id).model_dump(mode="json")
+            == payload["damage_map"]
+        )
+    finally:
+        restored.shutdown()
+
+
 def test_rescue_prepare_options_are_validated_persisted_and_exposed(
     tmp_path: Path,
 ) -> None:
