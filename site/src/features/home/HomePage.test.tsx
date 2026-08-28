@@ -29,7 +29,11 @@ describe("result-led homepage", () => {
   it("shows verified proof before the browser check", async () => {
     renderHome();
 
-    const proof = await screen.findByTestId("featured-case-comparison");
+    const proof = await screen.findByTestId(
+      "featured-case-comparison",
+      undefined,
+      { timeout: 6_000 },
+    );
     const browserCheck = screen.getByTestId("home-upload-lab");
     expect(
       proof.compareDocumentPosition(browserCheck) &

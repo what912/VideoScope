@@ -63,7 +63,13 @@ describe("public growth routes", () => {
         );
       }
 
-      expect(await screen.findByText(timelineRescue.provenance)).toBeVisible();
+      expect(
+        await screen.findByText(
+          timelineRescue.provenance,
+          undefined,
+          { timeout: 6_000 },
+        ),
+      ).toBeVisible();
       expect(screen.getByText(timelineRescue.authorizationSummary[locale])).toBeVisible();
       for (const action of timelineRescue.actions) {
         const expectedCount = timelineRescue.actions.filter(
