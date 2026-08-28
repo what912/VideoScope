@@ -53,7 +53,7 @@
   "npm_lockfiles": [
     {
       "path": "web/package-lock.json",
-      "sha256": "dfaaccd2acf3874f8e530230d6b224dafc11c1f1f333caf99f7d07dd326718d9",
+      "sha256": "5328cec00e3b174e09f512ff888d062b3cc9a71a2327574ada2736ea725562b0",
       "package_count": 217,
       "license_counts": {
         "Apache-2.0": 5,
