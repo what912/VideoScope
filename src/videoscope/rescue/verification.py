@@ -828,12 +828,15 @@ class NativeMediaMeasurementProvider:
             self._timeout,
             cancellation_callback,
         )
-        if not (
-            parent_inventory.timestamps
-            == control_inventory.timestamps
-            == candidate_inventory.timestamps
-        ):
-            raise ValueError("stabilization control/candidate PTS inventory differs")
+        (
+            control_pts_digest,
+            parent_pts_digest,
+            candidate_pts_digest,
+        ) = _stabilization_generation_pts_digests(
+            parent_inventory,
+            control_inventory,
+            candidate_inventory,
+        )
         _control_topology, control_topology_digest = _probe_sharpen_video_topology(
             Path(identity_control),
             self._ffprobe,
@@ -857,14 +860,6 @@ class NativeMediaMeasurementProvider:
         )
         if control_topology_digest != candidate_topology_digest:
             raise ValueError("stabilization control/candidate topology differs")
-        pts_digest = sha256(
-            json.dumps(
-                control_inventory.timestamps,
-                ensure_ascii=False,
-                allow_nan=False,
-                separators=(",", ":"),
-            ).encode("utf-8")
-        ).hexdigest()
         measured: dict[str, JsonValue] = dict(
             _measure_stabilization_freeze_attribution(
                 Path(source),
@@ -881,13 +876,13 @@ class NativeMediaMeasurementProvider:
         )
         measured.update(
             {
-                "control_normalized_pts_digest": pts_digest,
+                "control_normalized_pts_digest": control_pts_digest,
                 "control_stream_topology_digest": control_topology_digest,
                 "control_frame_count": len(control_inventory.timestamps),
-                "parent_normalized_pts_digest": pts_digest,
+                "parent_normalized_pts_digest": parent_pts_digest,
                 "parent_stream_topology_digest": parent_topology_digest,
                 "parent_frame_count": len(parent_inventory.timestamps),
-                "candidate_normalized_pts_digest": pts_digest,
+                "candidate_normalized_pts_digest": candidate_pts_digest,
                 "candidate_stream_topology_digest": candidate_topology_digest,
                 "candidate_frame_count": len(candidate_inventory.timestamps),
             }
@@ -3065,6 +3060,38 @@ def _aligned_timestamp_index_pairs(
 class _VideoTimestampInventory:
     timestamps: tuple[float, ...]
     stream_start_seconds: float
+
+
+def _timestamp_inventory_digest(inventory: _VideoTimestampInventory) -> str:
+    payload = json.dumps(
+        inventory.timestamps,
+        ensure_ascii=False,
+        allow_nan=False,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return sha256(payload).hexdigest()
+
+
+def _stabilization_generation_pts_digests(
+    parent: _VideoTimestampInventory,
+    control: _VideoTimestampInventory,
+    candidate: _VideoTimestampInventory,
+) -> tuple[str, str, str]:
+    """Bind one parent and require exact PTS only across generated siblings."""
+    frame_counts = (
+        len(parent.timestamps),
+        len(control.timestamps),
+        len(candidate.timestamps),
+    )
+    if len(set(frame_counts)) != 1:
+        raise ValueError("stabilization parent/control/candidate frame count differs")
+    if control.timestamps != candidate.timestamps:
+        raise ValueError("stabilization control/candidate PTS inventory differs")
+    return (
+        _timestamp_inventory_digest(control),
+        _timestamp_inventory_digest(parent),
+        _timestamp_inventory_digest(candidate),
+    )
 
 
 def _probe_video_timestamps(

@@ -22,6 +22,7 @@ from pydantic import JsonValue
 
 import videoscope.rescue as rescue
 from videoscope.domain import VideoMetadata
+from videoscope.rescue import verification as verification_module
 from videoscope.rescue.audio import AudioDenoiseConfig
 from videoscope.rescue.commands import build_decode_verification_command
 from videoscope.rescue.deblur import (
@@ -2947,6 +2948,116 @@ def test_faithful_restoration_applies_confirmed_native_stabilization(
         restored.output_path.read_bytes()
     )
     assert control_handle.recipe.candidate_frame_count == 20
+
+
+def test_stabilization_control_binds_cross_generation_parent_pts_independently(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A re-encoded sibling pair must not inherit the parent's rounded PTS digest."""
+    parent = tmp_path / "parent.mp4"
+    control = tmp_path / "control.mp4"
+    candidate = tmp_path / "candidate.mp4"
+    for path in (parent, control, candidate):
+        path.write_bytes(path.name.encode("ascii"))
+    parent_timestamps = (0.0, 0.041708, 0.083375)
+    generated_timestamps = (0.0, 0.041667, 0.083333)
+    inventories = {
+        parent: verification_module._VideoTimestampInventory(parent_timestamps, 0.0),
+        control: verification_module._VideoTimestampInventory(
+            generated_timestamps, 0.0
+        ),
+        candidate: verification_module._VideoTimestampInventory(
+            generated_timestamps, 0.0
+        ),
+    }
+    topologies = {
+        parent: ({"codec_name": "h264"}, "a" * 64),
+        control: ({"codec_name": "h264"}, "b" * 64),
+        candidate: ({"codec_name": "h264"}, "b" * 64),
+    }
+    monkeypatch.setattr(
+        verification_module,
+        "_probe_video_timestamp_inventory",
+        lambda path, *_args: inventories[Path(path)],
+    )
+    monkeypatch.setattr(
+        verification_module,
+        "_probe_sharpen_video_topology",
+        lambda path, *_args: topologies[Path(path)],
+    )
+
+    inspected = NativeRescueExecutor()._inspect_stabilization_control(
+        parent, control, candidate, lambda: False
+    )
+
+    def digest(timestamps: tuple[float, ...]) -> str:
+        payload = json.dumps(
+            timestamps,
+            ensure_ascii=False,
+            allow_nan=False,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        return sha256(payload).hexdigest()
+
+    assert inspected == (
+        digest(generated_timestamps),
+        "b" * 64,
+        3,
+        digest(parent_timestamps),
+        "a" * 64,
+        3,
+        digest(generated_timestamps),
+        "b" * 64,
+        3,
+    )
+
+
+@pytest.mark.parametrize(
+    ("candidate_timestamps", "expected_message"),
+    (
+        (
+            (0.0, 0.05, 0.1),
+            "stabilization control/candidate PTS inventory differs",
+        ),
+        (
+            (0.0, 0.041667),
+            "stabilization parent/control/candidate frame count differs",
+        ),
+    ),
+)
+def test_stabilization_control_rejects_generated_pts_or_frame_count_mismatch(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    candidate_timestamps: tuple[float, ...],
+    expected_message: str,
+) -> None:
+    parent = tmp_path / "parent.mp4"
+    control = tmp_path / "control.mp4"
+    candidate = tmp_path / "candidate.mp4"
+    for path in (parent, control, candidate):
+        path.write_bytes(path.name.encode("ascii"))
+    inventories = {
+        parent: verification_module._VideoTimestampInventory(
+            (0.0, 0.041708, 0.083375), 0.0
+        ),
+        control: verification_module._VideoTimestampInventory(
+            (0.0, 0.041667, 0.083333), 0.0
+        ),
+        candidate: verification_module._VideoTimestampInventory(
+            candidate_timestamps, 0.0
+        ),
+    }
+    monkeypatch.setattr(
+        verification_module,
+        "_probe_video_timestamp_inventory",
+        lambda path, *_args: inventories[Path(path)],
+    )
+
+    with pytest.raises(RescueMediaError) as exc_info:
+        NativeRescueExecutor()._inspect_stabilization_control(
+            parent, control, candidate, lambda: False
+        )
+    assert exc_info.value.internal_message == expected_message
 
 
 def test_improved_output_does_not_repeat_inherited_stabilization(

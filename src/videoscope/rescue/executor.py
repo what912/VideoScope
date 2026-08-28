@@ -1274,10 +1274,11 @@ class NativeRescueExecutor:
         candidate: Path,
         cancellation_callback: Callable[[], bool],
     ) -> tuple[str, str, int, str, str, int, str, str, int]:
-        """Require exact PTS and topology across the same-generation triple."""
+        """Bind the parent while requiring exact PTS across generated siblings."""
         from videoscope.rescue.verification import (
             _probe_sharpen_video_topology,
             _probe_video_timestamp_inventory,
+            _stabilization_generation_pts_digests,
         )
 
         parent_inventory = _probe_video_timestamp_inventory(
@@ -1301,14 +1302,18 @@ class NativeRescueExecutor:
             self._timeout_seconds,
             cancellation_callback,
         )
-        if not (
-            parent_inventory.timestamps
-            == control_inventory.timestamps
-            == candidate_inventory.timestamps
-        ):
-            raise RescueMediaError(
-                "stabilization control/candidate PTS inventory differs from its parent"
+        try:
+            (
+                pts_digest,
+                parent_pts_digest,
+                candidate_pts_digest,
+            ) = _stabilization_generation_pts_digests(
+                parent_inventory,
+                control_inventory,
+                candidate_inventory,
             )
+        except ValueError as exc:
+            raise RescueMediaError(str(exc)) from exc
         _topology, topology_digest = _probe_sharpen_video_topology(
             control,
             self._ffprobe,
@@ -1332,20 +1337,14 @@ class NativeRescueExecutor:
         )
         if topology_digest != candidate_topology_digest:
             raise RescueMediaError("stabilization control/candidate topology differs")
-        pts_payload = json.dumps(
-            control_inventory.timestamps,
-            ensure_ascii=False,
-            allow_nan=False,
-            separators=(",", ":"),
-        ).encode("utf-8")
         return (
-            sha256(pts_payload).hexdigest(),
+            pts_digest,
             topology_digest,
             len(control_inventory.timestamps),
-            sha256(pts_payload).hexdigest(),
+            parent_pts_digest,
             parent_topology_digest,
             len(parent_inventory.timestamps),
-            sha256(pts_payload).hexdigest(),
+            candidate_pts_digest,
             candidate_topology_digest,
             len(candidate_inventory.timestamps),
         )

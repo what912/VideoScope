@@ -4312,6 +4312,129 @@ def test_native_anchor_measurement_requires_every_exact_frame(tmp_path: Path) ->
     assert measured["residual_p90_pixels"] <= 0.1
 
 
+def test_stabilization_measurement_binds_cross_generation_parent_pts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = tmp_path / "source.mp4"
+    parent = tmp_path / "parent.mp4"
+    control = tmp_path / "control.mp4"
+    candidate = tmp_path / "candidate.mp4"
+    for path in (source, parent, control, candidate):
+        path.write_bytes(path.name.encode("ascii"))
+    parent_timestamps = (0.0, 0.041708, 0.083375)
+    generated_timestamps = (0.0, 0.041667, 0.083333)
+    inventories = {
+        parent: verification_module._VideoTimestampInventory(parent_timestamps, 0.0),
+        control: verification_module._VideoTimestampInventory(
+            generated_timestamps, 0.0
+        ),
+        candidate: verification_module._VideoTimestampInventory(
+            generated_timestamps, 0.0
+        ),
+    }
+    topologies = {
+        parent: ({"codec_name": "h264"}, "a" * 64),
+        control: ({"codec_name": "h264"}, "b" * 64),
+        candidate: ({"codec_name": "h264"}, "b" * 64),
+    }
+    monkeypatch.setattr(
+        verification_module,
+        "_probe_video_timestamp_inventory",
+        lambda path, *_args: inventories[Path(path)],
+    )
+    monkeypatch.setattr(
+        verification_module,
+        "_probe_sharpen_video_topology",
+        lambda path, *_args: topologies[Path(path)],
+    )
+    monkeypatch.setattr(
+        verification_module,
+        "_measure_stabilization_freeze_attribution",
+        lambda *_args, **_kwargs: {"expected_frames": 3.0},
+    )
+
+    provider = NativeMediaMeasurementProvider()
+    measured = provider.measure_stabilization_freeze_attribution_with_control(
+        source,
+        parent,
+        control,
+        candidate,
+        ((0.0, 0.1),),
+        ((0.0, 0.1),),
+        {},
+        lambda: False,
+    )
+
+    def digest(timestamps: tuple[float, ...]) -> str:
+        payload = json.dumps(
+            timestamps,
+            ensure_ascii=False,
+            allow_nan=False,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        return sha256(payload).hexdigest()
+
+    assert measured["control_normalized_pts_digest"] == digest(generated_timestamps)
+    assert measured["parent_normalized_pts_digest"] == digest(parent_timestamps)
+    assert measured["candidate_normalized_pts_digest"] == digest(generated_timestamps)
+
+
+@pytest.mark.parametrize(
+    ("candidate_timestamps", "expected_message"),
+    (
+        (
+            (0.0, 0.05, 0.1),
+            "stabilization control/candidate PTS inventory differs",
+        ),
+        (
+            (0.0, 0.041667),
+            "stabilization parent/control/candidate frame count differs",
+        ),
+    ),
+)
+def test_stabilization_measurement_rejects_generated_pts_or_frame_count_mismatch(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    candidate_timestamps: tuple[float, ...],
+    expected_message: str,
+) -> None:
+    source = tmp_path / "source.mp4"
+    parent = tmp_path / "parent.mp4"
+    control = tmp_path / "control.mp4"
+    candidate = tmp_path / "candidate.mp4"
+    for path in (source, parent, control, candidate):
+        path.write_bytes(path.name.encode("ascii"))
+    inventories = {
+        parent: verification_module._VideoTimestampInventory(
+            (0.0, 0.041708, 0.083375), 0.0
+        ),
+        control: verification_module._VideoTimestampInventory(
+            (0.0, 0.041667, 0.083333), 0.0
+        ),
+        candidate: verification_module._VideoTimestampInventory(
+            candidate_timestamps, 0.0
+        ),
+    }
+    monkeypatch.setattr(
+        verification_module,
+        "_probe_video_timestamp_inventory",
+        lambda path, *_args: inventories[Path(path)],
+    )
+
+    provider = NativeMediaMeasurementProvider()
+    with pytest.raises(ValueError, match=expected_message):
+        provider.measure_stabilization_freeze_attribution_with_control(
+            source,
+            parent,
+            control,
+            candidate,
+            ((0.0, 0.1),),
+            ((0.0, 0.1),),
+            {},
+            lambda: False,
+        )
+
+
 def test_native_anchor_accepts_renderer_scaled_translation_and_safe_crop(
     tmp_path: Path,
 ) -> None:

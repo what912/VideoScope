@@ -780,9 +780,11 @@ class RescueJobManager:
     def damage_map(self, job_id: str) -> MediaDamageMap:
         record = self.require(job_id)
         with record.lock:
-            if record.preparation is None:
-                raise RescueJobStateError("Damage map is not available")
-            return record.preparation.damage_map
+            if record.preparation is not None:
+                return record.preparation.damage_map
+            if record.persisted_damage_map is not None:
+                return record.persisted_damage_map
+            raise RescueJobStateError("Damage map is not available")
 
     def plan(self, job_id: str) -> RescuePlan:
         record = self.require(job_id)
