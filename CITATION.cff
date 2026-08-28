@@ -5,7 +5,7 @@ title: "VideoScope"
 abstract: "A local-first CPU tool for time-localized diagnostic analysis of generated videos."
 authors:
   - name: "VideoScope contributors"
-version: 0.8.1
+version: 0.8.2
 license: Apache-2.0
 keywords:
   - video quality

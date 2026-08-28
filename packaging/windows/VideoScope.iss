@@ -1,8 +1,8 @@
 #ifndef MyAppVersion
-  #define MyAppVersion "0.8.1"
+  #define MyAppVersion "0.8.2"
 #endif
 #ifndef MyVersionInfoVersion
-  #define MyVersionInfoVersion "0.8.1.0"
+  #define MyVersionInfoVersion "0.8.2.0"
 #endif
 #ifndef MyBundleDir
   #define MyBundleDir "..\..\build\windows\dist\VideoScopeConnector"

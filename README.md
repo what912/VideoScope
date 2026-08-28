@@ -98,7 +98,7 @@ VideoScope 可以把本地长视频整理成可复核、可追溯的成品，全
 **选定片段**（只导出用户明确选择的时刻）。
 
 ```powershell
-python -m pip install https://github.com/what912/VideoScope/releases/download/v0.8.0/genvideoscope-0.8.0-py3-none-any.whl
+python -m pip install https://github.com/what912/VideoScope/releases/download/v0.8.1/genvideoscope-0.8.1-py3-none-any.whl
 videoscope content meeting.mp4 `
   --goal faithful_clean `
   --exclude-range 120:148:"Long reviewed pause" `
@@ -127,7 +127,7 @@ video, and audio problems. It never overwrites the source. Install the base whee
 and provide local `ffmpeg` and `ffprobe` on `PATH`:
 
 ```powershell
-python -m pip install https://github.com/what912/VideoScope/releases/download/v0.8.0/genvideoscope-0.8.0-py3-none-any.whl
+python -m pip install https://github.com/what912/VideoScope/releases/download/v0.8.1/genvideoscope-0.8.1-py3-none-any.whl
 videoscope doctor
 videoscope rescue input.mp4 `
   --output runs\video-rescue `
@@ -333,10 +333,10 @@ brew install ffmpeg
 
 ## 安装
 
-安装当前已发布的稳定版（currently published stable `v0.8.0` release）：
+安装当前已发布的稳定版（currently published stable `v0.8.1` release）：
 
 ```powershell
-python -m pip install https://github.com/what912/VideoScope/releases/download/v0.8.0/genvideoscope-0.8.0-py3-none-any.whl
+python -m pip install https://github.com/what912/VideoScope/releases/download/v0.8.1/genvideoscope-0.8.1-py3-none-any.whl
 videoscope doctor
 ```
 
@@ -366,13 +366,13 @@ python scripts/validate.py
 
 ```powershell
 python -m build
-python -m pip install dist/genvideoscope-0.8.1-py3-none-any.whl
+python -m pip install dist/genvideoscope-0.8.2-py3-none-any.whl
 ```
 
-v0.8.1 正式上传 PyPI 后，精确版本安装命令将是：
+v0.8.2 正式上传 PyPI 后，精确版本安装命令将是：
 
 ```text
-python -m pip install genvideoscope==0.8.1
+python -m pip install genvideoscope==0.8.2
 ```
 
 PyPI distribution 名称为 `genvideoscope`；Python import 和 CLI 名称仍为
@@ -578,10 +578,9 @@ Benchmark 分 detector 报告 temporal IoU、event precision/recall/F1、起止
 
 ## Roadmap
 
-The `0.8.1` finalization stabilizes the completed Check → A → D/B → C
-foundation, including bounded Video Rescue qualification and reproducible
-public evidence. The base installation remains local-first, CPU-only and
-model-free. 后续方向是：
+The `0.8.2` PREPARE-only candidate carries the merged Video Rescue full-output
+flow correction on top of the immutable `v0.8.1` release. The base installation
+remains local-first, CPU-only and model-free. 后续方向是：
 
 - 独立真实标注集校准和性能基准；
 - 更严格的 schema 迁移机制；
@@ -605,7 +604,9 @@ npm test
 npm run build
 ```
 
-`v0.8.1` 的最终定稿与发布检查见
+`v0.8.2` 的 PREPARE-only 检查见
+[docs/releases/v0.8.2-checklist.md](docs/releases/v0.8.2-checklist.md)；已发布且
+不可变的 `v0.8.1` 记录见
 [docs/releases/v0.8.1-checklist.md](docs/releases/v0.8.1-checklist.md)。当前
 `0.8.0` Advanced AI 与 BYOK 连接器的历史实测结论记录在
 [release-audit.md](release-audit.md)；未执行的外部验证会明确标记为未验证。

@@ -1,4 +1,4 @@
-"""Keep the v0.8.1 finalization metadata synchronized."""
+"""Keep the v0.8.2 PREPARE-only metadata synchronized."""
 
 from __future__ import annotations
 
@@ -9,22 +9,27 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Any, cast
 
-from scripts import smoke_test
+from scripts import release_assets, smoke_test
 
 REPOSITORY = Path(__file__).resolve().parents[1]
-RELEASE_VERSION = "0.8.1"
-PREVIOUS_ASSET_VERSION = "0.8.0"
+RELEASE_VERSION = "0.8.2"
+PUBLISHED_STABLE_VERSION = "0.8.1"
 EXPECTED_TAG = f"v{RELEASE_VERSION}"
 EXPECTED_WHEEL = f"genvideoscope-{RELEASE_VERSION}-py3-none-any.whl"
-PREVIOUS_WHEEL = f"genvideoscope-{PREVIOUS_ASSET_VERSION}-py3-none-any.whl"
-PREVIOUS_DOWNLOAD_URL = (
+PUBLISHED_STABLE_WHEEL = f"genvideoscope-{PUBLISHED_STABLE_VERSION}-py3-none-any.whl"
+PUBLISHED_STABLE_DOWNLOAD_URL = (
     "https://github.com/what912/VideoScope/releases/download/"
-    f"v{PREVIOUS_ASSET_VERSION}/{PREVIOUS_WHEEL}"
+    f"v{PUBLISHED_STABLE_VERSION}/{PUBLISHED_STABLE_WHEEL}"
+)
+PUBLISHED_STABLE_INSTALLER_URL = (
+    "https://github.com/what912/VideoScope/releases/download/v0.8.1/"
+    "VideoScope-Setup-x64.exe"
 )
 RELEASE_DOWNLOAD_PREFIX = (
-    "https://github.com/what912/VideoScope/releases/download/v0.8.1/"
+    "https://github.com/what912/VideoScope/releases/download/v0.8.2/"
 )
 RELEASE_WHEEL_DOWNLOAD_URL = f"{RELEASE_DOWNLOAD_PREFIX}{EXPECTED_WHEEL}"
+RELEASE_INSTALLER_DOWNLOAD_URL = f"{RELEASE_DOWNLOAD_PREFIX}VideoScope-Setup-x64.exe"
 
 
 def read_text(relative_path: str) -> str:
@@ -38,7 +43,7 @@ def read_json(relative_path: str) -> object:
 
 
 def test_active_release_version_surfaces_agree() -> None:
-    """Every executable or build-facing version must identify v0.8.1."""
+    """Every executable or build-facing version must identify v0.8.2."""
     pyproject = tomllib.loads(read_text("pyproject.toml"))
     assert pyproject["project"]["version"] == RELEASE_VERSION
 
@@ -58,16 +63,17 @@ def test_active_release_version_surfaces_agree() -> None:
 
     installer = read_text("packaging/windows/VideoScope.iss")
     assert f'#define MyAppVersion "{RELEASE_VERSION}"' in installer
-    assert '#define MyVersionInfoVersion "0.8.1.0"' in installer
+    assert '#define MyVersionInfoVersion "0.8.2.0"' in installer
 
     citation = read_text("CITATION.cff")
-    assert re.search(r"(?m)^version: 0\.8\.1$", citation)
+    assert re.search(r"(?m)^version: 0\.8\.2$", citation)
     assert "date-released:" not in citation
 
     assert smoke_test.EXPECTED_VERSION == f"VideoScope {RELEASE_VERSION}"
     assert smoke_test.EXPECTED_DISTRIBUTION_PREFIX == (
         f"genvideoscope-{RELEASE_VERSION}-"
     )
+    assert release_assets.RELEASE_VERSION == RELEASE_VERSION
 
 
 def test_wheel_metadata_carries_dashboard_third_party_notices() -> None:
@@ -86,45 +92,63 @@ def test_dashboard_third_party_notice_checkout_is_canonical_lf() -> None:
     assert "THIRD_PARTY_NOTICES.txt text eol=lf" in attributes
 
 
-def test_prepublication_and_finalization_surfaces_are_explicit() -> None:
-    """Finalized docs must not advertise assets before publication."""
+def test_published_stable_and_v082_prepare_surfaces_are_explicit() -> None:
+    """Live v0.8.1 links and unpublished v0.8.2 boundaries stay distinct."""
     readme = read_text("README.md")
     connector_install = read_text("site/src/config/connector-install.ts")
-    assert PREVIOUS_DOWNLOAD_URL in readme
-    assert PREVIOUS_DOWNLOAD_URL in connector_install
+    assert PUBLISHED_STABLE_DOWNLOAD_URL in readme
+    assert PUBLISHED_STABLE_DOWNLOAD_URL in connector_install
+    assert PUBLISHED_STABLE_INSTALLER_URL in connector_install
     assert RELEASE_WHEEL_DOWNLOAD_URL not in readme
     assert RELEASE_WHEEL_DOWNLOAD_URL not in connector_install
-    assert "currently published stable `v0.8.0` release" in readme
+    assert RELEASE_INSTALLER_DOWNLOAD_URL not in connector_install
+    assert "currently published stable `v0.8.1` release" in readme
     assert "development candidate" not in readme
-    assert "v0.8.1 正式上传 PyPI 后" in readme
+    assert "v0.8.2 正式上传 PyPI 后" in readme
     assert "安装公开的 GitHub 开发候选版" not in readme
 
-    notes = read_text("docs/releases/v0.8.1-notes.md")
-    checklist = read_text("docs/releases/v0.8.1-checklist.md")
-    assert "Status: **final release notes; publication pending**" in notes
-    assert "draft candidate" not in notes.lower()
-    assert "stale" not in notes.lower()
-    assert "PREPARE-only" not in notes
-    assert checklist.startswith("# GenVideoScope v0.8.1 finalization checklist")
-    assert "Status: **FINALIZATION COMPLETE; PUBLICATION PENDING**" in checklist
-    assert "candidate is **not release-ready**" not in checklist
-    assert "PREPARE-only" not in checklist
+    published_notes = read_text("docs/releases/v0.8.1-notes.md")
+    published_checklist = read_text("docs/releases/v0.8.1-checklist.md")
+    assert "Status: **published and immutable**" in published_notes
+    assert "Released: `2026-08-27`" in published_notes
+    assert "Tag: `v0.8.1`" in published_notes
+    assert "https://github.com/what912/VideoScope/releases/tag/v0.8.1" in (
+        published_notes
+    )
+    assert "python -m pip install genvideoscope==0.8.1" in published_notes
+    assert published_checklist.startswith(
+        "# GenVideoScope v0.8.1 published release record"
+    )
+    assert "Status: **PUBLISHED AND IMMUTABLE**" in published_checklist
+    assert "Tag: `v0.8.1`" in published_checklist
+    assert "publication pending" not in published_notes.lower()
+    assert "publication pending" not in published_checklist.lower()
+
+    notes = read_text("docs/releases/v0.8.2-notes.md")
+    checklist = read_text("docs/releases/v0.8.2-checklist.md")
+    assert "Status: **PREPARE-only; publication pending**" in notes
+    assert "Planned release: `0.8.2`" in notes
+    assert "Reserved tag: `v0.8.2` (not created)" in notes
+    assert "Previous immutable release: [`v0.8.1`]" in notes
+    assert checklist.startswith("# GenVideoScope v0.8.2 PREPARE-only checklist")
+    assert "Status: **PREPARE-ONLY; PUBLICATION PENDING**" in checklist
+    assert f"Reserved tag: `{EXPECTED_TAG}` (not created)" in checklist
+    assert "Previous immutable release: `v0.8.1`" in checklist
     assert EXPECTED_WHEEL in notes
+    assert EXPECTED_WHEEL in checklist
     assert "release-evidence.json" in notes
     assert "release-evidence.json" in checklist
-    assert f"Reserved tag: `{EXPECTED_TAG}` (not created)" in checklist
     assert "six expected release files" in checklist.lower()
-    assert "live publication state" in checklist.lower()
     for pending_gate in (
         "- [ ] Dashboard `npm test` and `npm run build` pass.",
         "- [ ] Public-site `npm audit --audit-level=high` and `npm run check` pass.",
         "- [ ] `python scripts/validate.py` passes from the exact merged commit.",
         (
-            "- [ ] `python -m build --no-isolation` produces only the 0.8.1 "
+            "- [ ] `python -m build --no-isolation` produces only the 0.8.2 "
             "wheel and sdist."
         ),
         "- [ ] `python scripts/audit_distribution.py dist` passes both archives.",
-        "- [ ] The exact 0.8.1 wheel passes the offline base-wheel smoke.",
+        "- [ ] The exact 0.8.2 wheel passes the offline base-wheel smoke.",
         "- [ ] The Windows bundle audit, pinned Inno Setup installer build and",
         "- [ ] Independent review confirms the rebuilt asset and release boundary.",
         "- [ ] Windows bundle LICENSE/NOTICE content and the Python/npm transitive",

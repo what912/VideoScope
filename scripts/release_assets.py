@@ -1,4 +1,4 @@
-"""Prepare and verify deterministic, no-clobber v0.8.1 release evidence."""
+"""Prepare and verify deterministic, no-clobber v0.8.2 release evidence."""
 
 from __future__ import annotations
 
@@ -15,9 +15,10 @@ from typing import Any
 GIT_TIMEOUT_SECONDS = 10
 MAX_GIT_ERROR_CHARS = 2_000
 COMMIT_PATTERN = re.compile(r"[0-9a-f]{40}\Z")
+RELEASE_VERSION = "0.8.2"
 PRIMARY_ASSET_NAMES = (
-    "genvideoscope-0.8.1-py3-none-any.whl",
-    "genvideoscope-0.8.1.tar.gz",
+    f"genvideoscope-{RELEASE_VERSION}-py3-none-any.whl",
+    f"genvideoscope-{RELEASE_VERSION}.tar.gz",
     "VideoScope-Setup-x64.exe",
 )
 INSTALLER_NAME = "VideoScope-Setup-x64.exe"
@@ -124,7 +125,7 @@ def _canonical_paths(primary_assets: Sequence[Path | str]) -> dict[str, Path]:
     by_name = {path.name: path for path in paths}
     if set(by_name) != set(PRIMARY_ASSET_NAMES):
         raise ReleaseAssetError(
-            "primary assets must use the exact canonical v0.8.1 filenames"
+            f"primary assets must use the exact canonical v{RELEASE_VERSION} filenames"
         )
     for name in PRIMARY_ASSET_NAMES:
         path = by_name[name]

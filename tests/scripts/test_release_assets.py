@@ -1,4 +1,4 @@
-"""Fail-closed tests for deterministic v0.8.1 release evidence."""
+"""Fail-closed tests for deterministic v0.8.2 release evidence."""
 
 from __future__ import annotations
 
@@ -14,8 +14,8 @@ from scripts import release_assets
 COMMIT = "0123456789abcdef0123456789abcdef01234567"
 OTHER_COMMIT = "fedcba9876543210fedcba9876543210fedcba98"
 PRIMARY_NAMES = (
-    "genvideoscope-0.8.1-py3-none-any.whl",
-    "genvideoscope-0.8.1.tar.gz",
+    "genvideoscope-0.8.2-py3-none-any.whl",
+    "genvideoscope-0.8.2.tar.gz",
     "VideoScope-Setup-x64.exe",
 )
 OUTPUT_NAMES = {
@@ -233,7 +233,7 @@ def test_prepare_is_no_clobber_canonical_and_deterministic(tmp_path: Path) -> No
         (lambda paths, root: [paths[0], paths[0], paths[2]], "duplicate"),
         (
             lambda paths, root: [
-                paths[0].with_name("GENVIDEOSCOPE-0.8.1-py3-none-any.whl"),
+                paths[0].with_name("GENVIDEOSCOPE-0.8.2-py3-none-any.whl"),
                 paths[1],
                 paths[2],
             ],
@@ -249,7 +249,7 @@ def test_prepare_rejects_noncanonical_asset_sets_before_creating_output(
     assets = make_primary_assets(tmp_path)
     extra = tmp_path / "extra.bin"
     extra.write_bytes(b"extra")
-    wrong_case = assets[0].with_name("GENVIDEOSCOPE-0.8.1-py3-none-any.whl")
+    wrong_case = assets[0].with_name("GENVIDEOSCOPE-0.8.2-py3-none-any.whl")
     wrong_case.write_bytes(b"wrong")
     output = tmp_path / "release"
 
@@ -472,7 +472,7 @@ def test_verify_rejects_missing_extra_mutated_or_noncanonical_evidence(
 ) -> None:
     output, _, _ = prepare(tmp_path)
     if mutation == "missing":
-        (output / "genvideoscope-0.8.1.tar.gz").unlink()
+        (output / "genvideoscope-0.8.2.tar.gz").unlink()
     elif mutation == "extra":
         (output / "unexpected.txt").write_text("extra\n", encoding="utf-8")
     elif mutation == "primary":

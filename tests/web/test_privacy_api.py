@@ -309,13 +309,14 @@ def test_privacy_job_windows_replace_retries_transient_access_denial(
     destination.write_bytes(b"old")
     attempts = 0
     delays: list[float] = []
+    calls: list[tuple[Path, Path]] = []
 
     def replace(observed_source: Path, observed_destination: Path) -> None:
         nonlocal attempts
         attempts += 1
+        calls.append((observed_source, observed_destination))
         if attempts == 1:
             raise _winerror(5)
-        os.replace(observed_source, observed_destination)
 
     privacy_jobs_module._retry_windows_replace(
         source,
@@ -326,8 +327,7 @@ def test_privacy_job_windows_replace_retries_transient_access_denial(
 
     assert attempts == 2
     assert delays == [0.01]
-    assert destination.read_bytes() == b"new"
-    assert not source.exists()
+    assert calls == [(source, destination), (source, destination)]
 
 
 def test_privacy_job_windows_replace_surfaces_exhausted_access_denial(

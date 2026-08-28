@@ -98,6 +98,7 @@ describe("ContentAIReview", () => {
     render(<ContentAIReview jobId={"1".repeat(32)} revision={1} locale="en" busy={false} api={fake} onApplied={vi.fn(async () => undefined)} />);
 
     const providerSelect = await screen.findByLabelText("Content intelligence provider");
+    expect(await screen.findByRole("option", { name: "My remote AI · user-paid-model" })).toHaveValue("my-ai");
     await user.selectOptions(providerSelect, "my-ai");
     expect(screen.getByText(/provider charges are paid by your own account/)).toBeVisible();
     await user.click(screen.getByRole("button", { name: "Prepare private AI suggestions" }));
