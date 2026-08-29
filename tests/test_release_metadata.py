@@ -161,6 +161,17 @@ def test_published_stable_and_v082_prepare_surfaces_are_explicit() -> None:
         assert pending_gate in checklist
 
 
+def test_documented_npm_lock_digests_match_reviewed_policy() -> None:
+    """The human-readable inventory must identify the reviewed lock graphs."""
+    policy = cast(dict[str, Any], read_json("packaging/windows/license-policy.json"))
+    inventory = read_text("docs/third-party-licenses.md")
+
+    lockfiles = cast(list[dict[str, Any]], policy["npm_lockfiles"])
+    for lockfile in lockfiles:
+        expected_row_prefix = f"| `{lockfile['path']}` | `{lockfile['sha256']}` |"
+        assert expected_row_prefix in inventory
+
+
 def test_v080_release_evidence_remains_historical() -> None:
     """The patch candidate must not rewrite v0.8.0's release evidence."""
     old_checklist = read_text("docs/release-checklist.md")
