@@ -1,6 +1,6 @@
 # Third-party dependency and license inventory
 
-Audit date: 2026-08-25
+Audit date: 2026-08-30
 
 This inventory covers direct declarations plus the frozen Windows Python 3.12
 base + `web` runtime closure and both complete npm lock graphs. Package metadata
@@ -214,8 +214,8 @@ version/license/integrity, and unreviewed-license drift.
 
 | Lockfile | SHA-256 | Non-root packages | Complete license counts |
 | --- | --- | ---: | --- |
-| `web/package-lock.json` | `261dd00a3b6ab2af8f80fa6478ca9d77e6061588411441ecf368526a851796bd` | 217 | Apache-2.0 5; BlueOak-1.0.0 3; BSD-2-Clause 2; BSD-3-Clause 2; CC-BY-4.0 1; CC0-1.0 1; ISC 7; MIT 194; MIT-0 2 |
-| `site/package-lock.json` | `2656b753a635ce794039f91b51f075f45196b1738451b7f62190702f2153537f` | 272 | 0BSD 1; Apache-2.0 19; BlueOak-1.0.0 4; BSD-2-Clause 9; BSD-3-Clause 3; CC0-1.0 1; ISC 10; MIT 210; MIT-0 2; MPL-2.0 12; Python-2.0 1 |
+| `web/package-lock.json` | `5328cec00e3b174e09f512ff888d062b3cc9a71a2327574ada2736ea725562b0` | 217 | Apache-2.0 5; BlueOak-1.0.0 3; BSD-2-Clause 2; BSD-3-Clause 2; CC-BY-4.0 1; CC0-1.0 1; ISC 7; MIT 194; MIT-0 2 |
+| `site/package-lock.json` | `beba389c915ce24c355f5b3112804428a1a3a5853ec0c0c82bef2be3fa71543e` | 272 | 0BSD 1; Apache-2.0 19; BlueOak-1.0.0 4; BSD-2-Clause 9; BSD-3-Clause 3; CC0-1.0 1; ISC 10; MIT 210; MIT-0 2; MPL-2.0 12; Python-2.0 1 |
 
 The dashboard graph's CC-BY-4.0 occurrence is `caniuse-lite@1.0.30001806`.
 The public-site graph's twelve MPL-2.0 occurrences are `lightningcss@1.33.0`

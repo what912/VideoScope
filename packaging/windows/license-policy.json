@@ -105,7 +105,7 @@
     {
       "source": "docs/third-party-licenses.md",
       "bundle_name": "third-party-licenses.md",
-      "sha256": "7c8700852680d42cb1379b085378645578795d28d0d7696dfaae944bd1876d15"
+      "sha256": "0def76a64e5964ffb02053cd49fb1ac1fdfc157dc05aecdf0913164bc0a38885"
     },
     {
       "source": "packaging/windows/requirements-runtime.lock",
