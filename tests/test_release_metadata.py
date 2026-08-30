@@ -1,4 +1,4 @@
-"""Keep the v0.8.2 PREPARE-only metadata synchronized."""
+"""Keep the v0.8.2 finalization metadata synchronized."""
 
 from __future__ import annotations
 
@@ -92,9 +92,10 @@ def test_dashboard_third_party_notice_checkout_is_canonical_lf() -> None:
     assert "THIRD_PARTY_NOTICES.txt text eol=lf" in attributes
 
 
-def test_published_stable_and_v082_prepare_surfaces_are_explicit() -> None:
-    """Live v0.8.1 links and unpublished v0.8.2 boundaries stay distinct."""
+def test_published_stable_and_v082_finalization_surfaces_are_explicit() -> None:
+    """Live v0.8.1 links and finalized v0.8.2 boundaries stay distinct."""
     readme = read_text("README.md")
+    changelog = read_text("CHANGELOG.md")
     connector_install = read_text("site/src/config/connector-install.ts")
     assert PUBLISHED_STABLE_DOWNLOAD_URL in readme
     assert PUBLISHED_STABLE_DOWNLOAD_URL in connector_install
@@ -106,6 +107,10 @@ def test_published_stable_and_v082_prepare_surfaces_are_explicit() -> None:
     assert "development candidate" not in readme
     assert "v0.8.2 正式上传 PyPI 后" in readme
     assert "安装公开的 GitHub 开发候选版" not in readme
+    assert "The `0.8.2` finalization packages" in readme
+    assert "0.8.2` PREPARE-only" not in readme
+    assert "## [0.8.2] - Pending publication" in changelog
+    assert "## [0.8.2] - 2026-" not in changelog
 
     published_notes = read_text("docs/releases/v0.8.1-notes.md")
     published_checklist = read_text("docs/releases/v0.8.1-checklist.md")
@@ -126,14 +131,19 @@ def test_published_stable_and_v082_prepare_surfaces_are_explicit() -> None:
 
     notes = read_text("docs/releases/v0.8.2-notes.md")
     checklist = read_text("docs/releases/v0.8.2-checklist.md")
-    assert "Status: **PREPARE-only; publication pending**" in notes
+    assert "Status: **final release notes; publication pending**" in notes
     assert "Planned release: `0.8.2`" in notes
     assert "Reserved tag: `v0.8.2` (not created)" in notes
     assert "Previous immutable release: [`v0.8.1`]" in notes
-    assert checklist.startswith("# GenVideoScope v0.8.2 PREPARE-only checklist")
-    assert "Status: **PREPARE-ONLY; PUBLICATION PENDING**" in checklist
+    assert "PREPARE-only" not in notes
+    assert "exact merged `main` commit" in notes
+    assert checklist.startswith("# GenVideoScope v0.8.2 finalization checklist")
+    assert "Status: **FINALIZATION COMPLETE; PUBLICATION PENDING**" in checklist
     assert f"Reserved tag: `{EXPECTED_TAG}` (not created)" in checklist
     assert "Previous immutable release: `v0.8.1`" in checklist
+    assert "PREPARE-only" not in checklist
+    assert "## Finalization-branch validation" in checklist
+    assert "## Publication sequence" in checklist
     assert EXPECTED_WHEEL in notes
     assert EXPECTED_WHEEL in checklist
     assert "release-evidence.json" in notes
