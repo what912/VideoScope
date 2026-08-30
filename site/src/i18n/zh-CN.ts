@@ -392,7 +392,7 @@ export const zhCN = {
     downloadWindows: "下载 Windows 安装包",
     downloadFallback: "查看 Windows 下载",
     allDownloads: "查看全部版本",
-    installerPreviewNotice: "Windows 安装包尚未附加到正式 Release。当前按钮只打开官方发布页；如未看到 VideoScope-Setup-x64.exe，请展开下方“开发者备用方式”，不要从第三方网站下载。",
+    installerPreviewNotice: "此构建未配置已核验的 Windows 安装包直链。请使用官方发布页，或展开下方“开发者备用方式”；不要从第三方网站下载 VideoScope。",
     runInstallerTitle: "双击 VideoScope-Setup-x64.exe",
     runInstallerDescription: "保留推荐选项即可。安装器只为当前 Windows 账户添加本地连接器和卸载入口。",
     noPythonNeeded: "Windows 安装包自带所需 Python 运行环境。",

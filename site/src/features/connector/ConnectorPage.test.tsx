@@ -2,14 +2,14 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { I18nProvider } from "../../i18n/I18nProvider";
-import { connectorInstall, OFFICIAL_V081_INSTALLER_URL } from "../../config/connector-install";
+import { connectorInstall, OFFICIAL_V082_INSTALLER_URL } from "../../config/connector-install";
 import { connectorClient } from "../../services/connector/connector-client";
 import { ConnectorPage } from "./ConnectorPage";
 
 const readyStatus = {
   status: "ready",
   service: "VideoScope Local Connector",
-  version: "0.8.1",
+  version: "0.8.2",
   pairing_required: true,
   credentials_persisted: false,
   modes: ["publish_ready", "safe_sharing", "video_rescue", "useful_content", "advanced_ai"],
@@ -47,14 +47,14 @@ describe("ConnectorPage", () => {
           ...connectorInstall,
           hasDirectWindowsInstaller: true,
           windowsInstallerSha256: installerSha256,
-          windowsInstallerUrl: OFFICIAL_V081_INSTALLER_URL,
+          windowsInstallerUrl: OFFICIAL_V082_INSTALLER_URL,
         }} />
       </I18nProvider>,
     );
 
     expect(await screen.findByRole("link", { name: "Download Windows installer" })).toHaveAttribute(
       "href",
-      OFFICIAL_V081_INSTALLER_URL,
+      OFFICIAL_V082_INSTALLER_URL,
     );
     expect(screen.getByText(installerSha256)).toBeVisible();
     expect(screen.getAllByText(/Windows may warn once/u)[0]).toBeVisible();
