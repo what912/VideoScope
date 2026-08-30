@@ -578,9 +578,10 @@ Benchmark 分 detector 报告 temporal IoU、event precision/recall/F1、起止
 
 ## Roadmap
 
-The `0.8.2` PREPARE-only candidate carries the merged Video Rescue full-output
-flow correction on top of the immutable `v0.8.1` release. The base installation
-remains local-first, CPU-only and model-free. 后续方向是：
+The `0.8.2` finalization packages the merged Video Rescue full-output flow
+correction on top of the immutable `v0.8.1` release. Publication remains gated
+by an exact-commit rebuild and verification of all six release assets. The base
+installation remains local-first, CPU-only and model-free. 后续方向是：
 
 - 独立真实标注集校准和性能基准；
 - 更严格的 schema 迁移机制；
@@ -604,7 +605,7 @@ npm test
 npm run build
 ```
 
-`v0.8.2` 的 PREPARE-only 检查见
+`v0.8.2` 的最终定稿与发布检查见
 [docs/releases/v0.8.2-checklist.md](docs/releases/v0.8.2-checklist.md)；已发布且
 不可变的 `v0.8.1` 记录见
 [docs/releases/v0.8.1-checklist.md](docs/releases/v0.8.1-checklist.md)。当前
