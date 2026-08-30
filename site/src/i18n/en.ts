@@ -407,7 +407,7 @@ export const en = {
     downloadWindows: "Download Windows installer",
     downloadFallback: "View Windows download",
     allDownloads: "All releases",
-    installerPreviewNotice: "The Windows installer is not attached to a final Release yet. This button currently opens the official Releases page. If VideoScope-Setup-x64.exe is absent, expand Developer fallback below and never download it from a third-party site.",
+    installerPreviewNotice: "A verified direct Windows installer is not configured for this build. Use the official Releases page, or expand Developer fallback below; never download VideoScope from a third-party site.",
     runInstallerTitle: "Double-click VideoScope-Setup-x64.exe",
     runInstallerDescription: "Keep the recommended options. The installer adds only the local connector and an uninstall entry for your Windows account.",
     noPythonNeeded: "The Windows installer includes the required Python runtime.",

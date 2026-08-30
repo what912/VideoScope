@@ -1,7 +1,8 @@
 export const RELEASES_URL = "https://github.com/what912/VideoScope/releases";
-export const OFFICIAL_V081_INSTALLER_URL =
-  "https://github.com/what912/VideoScope/releases/download/v0.8.1/VideoScope-Setup-x64.exe";
-const SHA256 = /^[0-9a-f]{64}$/u;
+export const OFFICIAL_V082_INSTALLER_URL =
+  "https://github.com/what912/VideoScope/releases/download/v0.8.2/VideoScope-Setup-x64.exe";
+export const OFFICIAL_V082_INSTALLER_SHA256 =
+  "20027848361ce133ce15563603bcf2afa47ef793c90d3680714244ee441556db";
 
 export interface WindowsInstallerResolution {
   hasDirectWindowsInstaller: boolean;
@@ -14,9 +15,8 @@ export function resolveWindowsInstaller(
   configuredSha256: string | undefined,
 ): WindowsInstallerResolution {
   if (
-    configuredUrl === OFFICIAL_V081_INSTALLER_URL
-    && configuredSha256 !== undefined
-    && SHA256.test(configuredSha256)
+    configuredUrl === OFFICIAL_V082_INSTALLER_URL
+    && configuredSha256 === OFFICIAL_V082_INSTALLER_SHA256
   ) {
     return {
       hasDirectWindowsInstaller: true,
@@ -45,7 +45,7 @@ export const connectorInstall = {
     '$videoScopeRoot = Join-Path $env:LOCALAPPDATA "VideoScope"',
     'py -3.12 -m venv "$videoScopeRoot\\.venv"',
     '& "$videoScopeRoot\\.venv\\Scripts\\python.exe" -m pip install --upgrade pip',
-    '& "$videoScopeRoot\\.venv\\Scripts\\python.exe" -m pip install "genvideoscope[web] @ https://github.com/what912/VideoScope/releases/download/v0.8.1/genvideoscope-0.8.1-py3-none-any.whl"',
+    '& "$videoScopeRoot\\.venv\\Scripts\\python.exe" -m pip install "genvideoscope[web] @ https://github.com/what912/VideoScope/releases/download/v0.8.2/genvideoscope-0.8.2-py3-none-any.whl"',
     '& "$videoScopeRoot\\.venv\\Scripts\\python.exe" -m videoscope serve --port 8765',
   ].join("\n"),
 } as const;

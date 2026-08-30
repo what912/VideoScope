@@ -6,7 +6,7 @@
 
 ## [Unreleased]
 
-## [0.8.2] - Pending publication
+## [0.8.2] - 2026-08-30
 
 ### Fixed
 
