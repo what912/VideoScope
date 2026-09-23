@@ -24,7 +24,7 @@
     "@supabase/supabase-js": "2.57.4",
     "hash-wasm": "4.12.0",
     "idb": "8.0.3",
-    "motion": "12.23.12",
+    "motion": "13.1.1",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "react-router": "8.3.0"
